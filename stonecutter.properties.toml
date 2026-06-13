@@ -1,7 +1,7 @@
 mod.id = "mc2_interactivefoliage"
 mod.name = "MC2 - Interactive Foliage"
 mod.group = "net.karto.mc2"
-mod.version = "1.1.0"
+mod.version = "1.1.1"
 mod.channel_tag = ""
 mod.description = "Physics-based visual interaction between entities and foliage blocks."
 mod.authors = ["KartO"]
@@ -25,26 +25,26 @@ deps.fabric-loader = "0.19.2"
 [fabric."1.20.1"]
 deps.minecraft = "1.20.1"
 deps.fabric-api = "0.92.7+1.20.1"
-deps.sway = "iZviZU5a"
+deps.sway = "1.1.1"
 deps.modmenu = "7.2.2"
 
 [fabric."1.21.1"]
 deps.minecraft = "1.21.1"
 deps.fabric-api = "0.116.7+1.21.1"
-deps.sway = "mCSekHhi"
+deps.sway = "1.1.1"
 deps.modmenu = "11.0.4"
 
 [fabric."1.21.11"]
 deps.minecraft = "1.21.11"
 deps.fabric-api = "0.141.3+1.21.11"
-deps.sway = "1zOfdCYW"
+deps.sway = "1.1.1"
 deps.modmenu = "17.0.0"
 publish.additionalVersions = ["1.21.10"]
 
 [fabric."26.1.2"]
 deps.minecraft = "26.1.2"
 deps.fabric-api = "0.146.1+26.1.2"
-deps.sway = "qr3s6iO6"
+deps.sway = "1.1.1"
 deps.modmenu = "18.0.0-alpha.8"
 publish.additionalVersions = ["26.1.1", "26.1"]
 
