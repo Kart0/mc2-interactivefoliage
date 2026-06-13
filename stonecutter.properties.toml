@@ -1,7 +1,7 @@
 mod.id = "mc2_interactivefoliage"
 mod.name = "MC2 - Interactive Foliage"
 mod.group = "net.karto.mc2"
-mod.version = "1.1.0"
+mod.version = "1.1.1"
 mod.channel_tag = ""
 mod.description = "Physics-based visual interaction between entities and foliage blocks."
 mod.authors = ["KartO"]
