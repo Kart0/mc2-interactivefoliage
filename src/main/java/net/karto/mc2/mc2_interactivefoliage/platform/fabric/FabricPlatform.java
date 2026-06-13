@@ -2,7 +2,7 @@ package net.karto.mc2.mc2_interactivefoliage.platform.fabric;
 
 //? fabric {
 
-import net.karto.mc2.mc2_interactivefoliage.platform.Platform;
+/*import net.karto.mc2.mc2_interactivefoliage.platform.Platform;
 import net.fabricmc.loader.api.FabricLoader;
 
 public class FabricPlatform implements Platform {
@@ -27,4 +27,4 @@ public class FabricPlatform implements Platform {
 		return FabricLoader.getInstance().isDevelopmentEnvironment();
 	}
 }
-//?}
+*///?}
