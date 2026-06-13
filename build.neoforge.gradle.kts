@@ -18,6 +18,7 @@ platform {
 			forgeLikeVersionRange.set("[1,)")
 		}
 		required("sway") {
+			slug("sway")
 			forgeLikeVersionRange.set("[1,)")
 		}
 	}

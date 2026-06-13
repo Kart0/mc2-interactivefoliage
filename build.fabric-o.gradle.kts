@@ -22,7 +22,8 @@ platform {
 			fabricLikeVersionRange = ">=${prop("deps.fabric-loader")}"
 		}
 		required("sway") {
-			fabricLikeVersionRange = ">=${prop("deps.sway")}"
+			slug("sway")
+			fabricLikeVersionRange = "*"
 		}
 		optional("modmenu") {}
 	}
