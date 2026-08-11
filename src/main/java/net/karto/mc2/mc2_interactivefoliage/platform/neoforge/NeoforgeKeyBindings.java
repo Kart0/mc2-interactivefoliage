@@ -56,9 +56,11 @@ public class NeoforgeKeyBindings {
 	public static void tick(Minecraft mc) {
 
 		while (openConfig.consumeClick()) {
-			if (mc.screen == null) {
-				mc.setScreen(new FoliageConfigScreen(null));
-			}
+			//? >=26.2{
+			mc.setScreenAndShow(new FoliageConfigScreen(null));
+			//?}else{
+			//mc.setScreen(new FoliageConfigScreen(null));
+			//?}
 		}
 
 		while (toggleMod.consumeClick()) {
