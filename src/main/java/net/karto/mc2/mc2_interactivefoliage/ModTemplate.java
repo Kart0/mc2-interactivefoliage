@@ -26,7 +26,6 @@ public class ModTemplate {
 	public static void onInitialize() {
 		LOGGER.info("Initializing {} on {}", MOD_ID, ModTemplate.xplat().loader());
 		LOGGER.debug("{}: { version: {}; friendly_name: {} }", MOD_ID, MOD_VERSION, MOD_FRIENDLY_NAME);
-		Registry.initialize();
 	}
 
 	public static void onInitializeClient() {
