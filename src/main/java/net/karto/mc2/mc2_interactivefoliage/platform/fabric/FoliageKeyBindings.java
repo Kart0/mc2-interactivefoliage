@@ -11,7 +11,7 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.resources./*? >= 1.21.11 {*/ Identifier /*?} else {*/ /*ResourceLocation *//*?} */;
 //? <=1.21.11{
 /*import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
-*///?}
+ *///?}
 //? >1.21.11{
 import net.fabricmc.fabric.api.client.keymapping.v1.KeyMappingHelper;
 //?}
@@ -33,7 +33,7 @@ public class FoliageKeyBindings {
 				InputConstants.UNKNOWN.getValue(),
 				//? <= 1.21.1{
 				/*"key.category.mc2_interactivefoliage.general"
-				*///?}
+				 *///?}
 				//? > 1.21.1{
 				category
 				//?}
@@ -44,7 +44,7 @@ public class FoliageKeyBindings {
 				InputConstants.UNKNOWN.getValue(),
 				//? <= 1.21.1{
 				/*"key.category.mc2_interactivefoliage.general"
-				*///?}
+				 *///?}
 				//? > 1.21.1{
 				category
 				//?}
@@ -53,9 +53,11 @@ public class FoliageKeyBindings {
 
 	public static void tick(Minecraft mc) {
 		while (openConfig.consumeClick()) {
-			if (mc.screen == null) {
-				mc.setScreen(new FoliageConfigScreen(null));
-			}
+			//? >=26.2{
+			mc.setScreenAndShow(new FoliageConfigScreen(null));
+			//?}else{
+			//mc.setScreen(new FoliageConfigScreen(null));
+			//?}
 		}
 
 		while (toggleMod.consumeClick()) {
@@ -64,10 +66,10 @@ public class FoliageKeyBindings {
 			if (mc.player != null) {
 				//? <=1.21.11{
 				/*mc.player.displayClientMessage(
-				*///?}
+				 *///?}
 				//? >1.21.11{
 				mc.player.sendSystemMessage(
-				//?}
+						//?}
 						Component.translatable(
 								SwayConfig.INSTANCE.enabled
 										? "key.mc2_interactivefoliage.toggle.on"
@@ -75,7 +77,7 @@ public class FoliageKeyBindings {
 						)
 						//? <=1.21.11{
 						/*,true
-						*///?}
+						 *///?}
 				);
 			}
 		}
