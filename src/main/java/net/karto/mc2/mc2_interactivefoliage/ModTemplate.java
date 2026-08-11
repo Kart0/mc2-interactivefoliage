@@ -1,15 +1,16 @@
 package net.karto.mc2.mc2_interactivefoliage;
 
+import com.github.razorplay01.sway.registry.SwayRegistry;
 import net.karto.mc2.mc2_interactivefoliage.platform.Platform;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 //? fabric {
-/*import net.karto.mc2.mc2_interactivefoliage.platform.fabric.FabricPlatform;
-*///?} neoforge {
-import net.karto.mc2.mc2_interactivefoliage.platform.neoforge.NeoforgePlatform;
- //?} forge {
+import net.karto.mc2.mc2_interactivefoliage.platform.fabric.FabricPlatform;
+//?} neoforge {
+/*import net.karto.mc2.mc2_interactivefoliage.platform.neoforge.NeoforgePlatform;
+ *///?} forge {
 /*import net.karto.mc2.mc2_interactivefoliage.platform.forge.ForgePlatform;
  *///?}
 
@@ -17,7 +18,7 @@ import net.karto.mc2.mc2_interactivefoliage.platform.neoforge.NeoforgePlatform;
 public class ModTemplate {
 
 	public static final String MOD_ID = /*$ mod_id*/ "mc2_interactivefoliage";
-	public static final String MOD_VERSION = /*$ mod_version*/ "1.1.0";
+	public static final String MOD_VERSION = /*$ mod_version*/ "1.2.0";
 	public static final String MOD_FRIENDLY_NAME = /*$ mod_name*/ "MC2 - Interactive Foliage";
 	public static final Logger LOGGER = LoggerFactory.getLogger(MOD_ID);
 
@@ -26,6 +27,7 @@ public class ModTemplate {
 	public static void onInitialize() {
 		LOGGER.info("Initializing {} on {}", MOD_ID, ModTemplate.xplat().loader());
 		LOGGER.debug("{}: { version: {}; friendly_name: {} }", MOD_ID, MOD_VERSION, MOD_FRIENDLY_NAME);
+		SwayRegistry.initialize();
 	}
 
 	public static void onInitializeClient() {
@@ -39,10 +41,10 @@ public class ModTemplate {
 
 	private static Platform createPlatformInstance() {
 		//? fabric {
-		/*return new FabricPlatform();
-		*///?} neoforge {
-		return new NeoforgePlatform();
-		 //?} forge {
+		return new FabricPlatform();
+		//?} neoforge {
+		/*return new NeoforgePlatform();
+		 *///?} forge {
 		/*return new ForgePlatform();
 		 *///?}
 	}
