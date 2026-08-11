@@ -2,13 +2,13 @@ package net.karto.mc2.mc2_interactivefoliage.platform.neoforge;
 
 //? neoforge {
 
-import com.github.razorplay01.sway.config.SwayConfig;
+/*import com.github.razorplay01.sway.config.SwayConfig;
 import com.mojang.blaze3d.platform.InputConstants;
 import net.karto.mc2.mc2_interactivefoliage.FoliageConfigScreen;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources./*? >= 1.21.11 {*/ Identifier /*?} else {*/ /*ResourceLocation *//*?} */;
+import net.minecraft.resources./^? >= 1.21.11 {^/ Identifier /^?} else {^/ /^ResourceLocation ^//^?} ^/;
 
 import java.util.function.Consumer;
 
@@ -17,8 +17,8 @@ public class NeoforgeKeyBindings {
 	public static KeyMapping openConfig;
 	public static KeyMapping toggleMod;
 
-	public static /*? >= 1.21.11 {*/ Identifier /*?} else {*/ /*ResourceLocation *//*?} */ resourceLocation =
-			/*? >= 1.21.11 {*/ Identifier /*?} else {*/ /*ResourceLocation *//*?} */
+	public static /^? >= 1.21.11 {^/ Identifier /^?} else {^/ /^ResourceLocation ^//^?} ^/ resourceLocation =
+			/^? >= 1.21.11 {^/ Identifier /^?} else {^/ /^ResourceLocation ^//^?} ^/
 			.fromNamespaceAndPath("mc2_interactivefoliage", "general");
 
 	public static void register(Consumer<KeyMapping> registrar) {
@@ -31,8 +31,8 @@ public class NeoforgeKeyBindings {
 				"key.mc2_interactivefoliage.open_config",
 				InputConstants.UNKNOWN.getValue(),
 				//? <= 1.21.1 {
-				/*"key.category.mc2_interactivefoliage.general"
-				*///?}
+				/^"key.category.mc2_interactivefoliage.general"
+				^///?}
 				//? > 1.21.1 {
 				category
 				//?}
@@ -42,8 +42,8 @@ public class NeoforgeKeyBindings {
 				"key.mc2_interactivefoliage.toggle",
 				InputConstants.UNKNOWN.getValue(),
 				//? <= 1.21.1 {
-				/*"key.category.mc2_interactivefoliage.general"
-				*///?}
+				/^"key.category.mc2_interactivefoliage.general"
+				^///?}
 				//? > 1.21.1 {
 				category
 				//?}
@@ -68,8 +68,8 @@ public class NeoforgeKeyBindings {
 
 			if (mc.player != null) {
 				//? <=1.21.11 {
-				/*mc.player.displayClientMessage(
-						*///?}
+				/^mc.player.displayClientMessage(
+						^///?}
 						//? >1.21.11 {
 						mc.player.sendSystemMessage(
 						//?}
@@ -79,11 +79,11 @@ public class NeoforgeKeyBindings {
 										: "key.mc2_interactivefoliage.toggle.off"
 						)
 						//? <=1.21.11 {
-						/*, true
-						*///?}
+						/^, true
+						^///?}
 				);
 			}
 		}
 	}
 }
-//?}
+*///?}

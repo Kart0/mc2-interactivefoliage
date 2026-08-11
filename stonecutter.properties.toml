@@ -1,7 +1,7 @@
 mod.id = "mc2_interactivefoliage"
 mod.name = "MC2 - Interactive Foliage"
 mod.group = "net.karto.mc2"
-mod.version = "1.1.1"
+mod.version = "1.2.0"
 mod.channel_tag = ""
 mod.description = "Physics-based visual interaction between entities and foliage blocks."
 mod.authors = ["KartO"]
@@ -25,28 +25,34 @@ deps.fabric-loader = "0.19.2"
 [fabric."1.20.1"]
 deps.minecraft = "1.20.1"
 deps.fabric-api = "0.92.7+1.20.1"
-deps.sway = "iZviZU5a"
+deps.sway = "2FQmVoW6"
 deps.modmenu = "7.2.2"
 
 [fabric."1.21.1"]
 deps.minecraft = "1.21.1"
 deps.fabric-api = "0.116.7+1.21.1"
-deps.sway = "mCSekHhi"
+deps.sway = "XpbRGWZJ"
 deps.modmenu = "11.0.4"
 
 [fabric."1.21.11"]
 deps.minecraft = "1.21.11"
 deps.fabric-api = "0.141.3+1.21.11"
-deps.sway = "1zOfdCYW"
+deps.sway = "kxTZlAPu"
 deps.modmenu = "17.0.0"
 publish.additionalVersions = ["1.21.10"]
 
 [fabric."26.1.2"]
 deps.minecraft = "26.1.2"
 deps.fabric-api = "0.146.1+26.1.2"
-deps.sway = "qr3s6iO6"
+deps.sway = "Kg0qdW7i"
 deps.modmenu = "18.0.0-alpha.8"
 publish.additionalVersions = ["26.1.1", "26.1"]
+
+[fabric."26.2"]
+deps.minecraft = "26.2"
+deps.fabric-api = "0.156.0+26.2"
+deps.sway = "k2SuHntP"
+deps.modmenu = "20.0.1"
 
 [forge]
 
@@ -59,16 +65,21 @@ deps.forge = "47.4.10"
 [neoforge."1.21.1"]
 deps.minecraft = "1.21.1"
 deps.neoforge = "21.1.213"
-deps.sway = "Fxgc0o4R"
+deps.sway = "qE5UNiat"
 
 [neoforge."1.21.11"]
 deps.minecraft = "1.21.11"
 deps.neoforge = "21.11.42"
-deps.sway = "yCg9q6sZ"
+deps.sway = "OJSuJDXa"
 publish.additionalVersions = ["1.21.10"]
 
 [neoforge."26.1.2"]
 deps.minecraft = "26.1.2"
 deps.neoforge = "26.1.2.29-beta"
-deps.sway = "ylZqZ7YV"
+deps.sway = "h7ZtoEfj"
 publish.additionalVersions = ["26.1.1", "26.1"]
+
+[neoforge."26.2"]
+deps.minecraft = "26.2"
+deps.sway = "wW3EyhJc"
+deps.neoforge = "26.2.0.8-beta"
