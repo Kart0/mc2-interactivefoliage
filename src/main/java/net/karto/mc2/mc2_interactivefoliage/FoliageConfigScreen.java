@@ -77,7 +77,11 @@ public class FoliageConfigScreen extends Screen {
 				btn -> {
 					// FIX: asignar el valor primero, luego recrear la pantalla
 					config.intensity = DEFAULT_INTENSITY;
-					this.minecraft.setScreen(new FoliageConfigScreen(parent));
+					//? >=26.2{
+					this.minecraft.setScreenAndShow(new FoliageConfigScreen(parent));
+					//?} else{
+					//this.minecraft.setScreen(new FoliageConfigScreen(parent));
+					//?}
 				}
 		).bounds(cx + 82, intensityY, 18, 20).build();
 		resetIntensityBtn.visible =
@@ -118,7 +122,11 @@ public class FoliageConfigScreen extends Screen {
 				btn -> {
 					// FIX: asignar el valor primero, luego recrear la pantalla
 					config.maxDistance = DEFAULT_RADIUS;
-					this.minecraft.setScreen(new FoliageConfigScreen(parent));
+					//? >=26.2{
+					this.minecraft.setScreenAndShow(new FoliageConfigScreen(parent));
+					//?} else{
+					//this.minecraft.setScreen(new FoliageConfigScreen(parent));
+					//?}
 				}
 		).bounds(cx + 82, radiusY, 18, 20).build();
 		resetRadiusBtn.visible =
@@ -132,7 +140,11 @@ public class FoliageConfigScreen extends Screen {
 				Component.translatable("config.mc2_interactivefoliage.save"),
 				btn -> {
 					SwayConfig.save();
-					this.minecraft.setScreen(parent);
+					//? >=26.2{
+					this.minecraft.setScreenAndShow(parent);
+					//?} else{
+					//this.minecraft.setScreen(parent);
+					//?}
 				}
 		).bounds(cx - 100, y, 200, 20).build());
 	}
@@ -140,7 +152,11 @@ public class FoliageConfigScreen extends Screen {
 	@Override
 	public void onClose() {
 		SwayConfig.save();
-		this.minecraft.setScreen(parent);
+		//? >=26.2{
+		this.minecraft.setScreenAndShow(parent);
+		//?} else{
+		//this.minecraft.setScreen(parent);
+		//?}
 	}
 
 	//? <= 1.21.11 {
