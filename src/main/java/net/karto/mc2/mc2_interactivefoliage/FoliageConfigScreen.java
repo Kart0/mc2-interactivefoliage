@@ -6,7 +6,6 @@ import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.CycleButton;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
-import org.jetbrains.annotations.NotNull;
 
 public class FoliageConfigScreen extends Screen {
 
@@ -162,7 +161,7 @@ public class FoliageConfigScreen extends Screen {
 	//? <= 1.21.11 {
 	/*@Override
 	public void render(
-			@NotNull net.minecraft.client.gui.GuiGraphics graphics,
+			net.minecraft.client.gui.GuiGraphics graphics,
 			int mouseX, int mouseY, float delta
 	) {
 		super.render(graphics, mouseX, mouseY, delta);
