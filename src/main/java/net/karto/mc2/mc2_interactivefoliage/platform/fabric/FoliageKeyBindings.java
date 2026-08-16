@@ -56,8 +56,8 @@ public class FoliageKeyBindings {
 			//? >=26.2{
 			mc.setScreenAndShow(new FoliageConfigScreen(null));
 			//?}else{
-			//mc.setScreen(new FoliageConfigScreen(null));
-			//?}
+			/*mc.setScreen(new FoliageConfigScreen(null));
+			*///?}
 		}
 
 		while (toggleMod.consumeClick()) {

@@ -63,7 +63,7 @@ repositories {
 
 dependencies {
 	annotationProcessor("org.spongepowered:mixin:${libs.versions.mixin.get()}:processor")
-
+	modImplementation("maven.modrinth:sway:${prop("deps.sway")}")
 	// implementation(libs.moulberry.mixinconstraints)
 	// jarJar(libs.moulberry.mixinconstraints)
 }
