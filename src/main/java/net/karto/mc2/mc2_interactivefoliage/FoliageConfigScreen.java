@@ -6,7 +6,6 @@ import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.CycleButton;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
-import org.jetbrains.annotations.NotNull;
 
 public class FoliageConfigScreen extends Screen {
 
@@ -14,7 +13,7 @@ public class FoliageConfigScreen extends Screen {
 	private final SwayConfig config = SwayConfig.INSTANCE;
 
 	private static final float DEFAULT_INTENSITY = 1.0f;
-	private static final float DEFAULT_RADIUS    = 6.0f;
+	private static final float DEFAULT_RADIUS = 6.0f;
 
 	private Button resetIntensityBtn;
 	private Button resetRadiusBtn;
@@ -27,7 +26,7 @@ public class FoliageConfigScreen extends Screen {
 	@Override
 	protected void init() {
 		int cx = this.width / 2;
-		int y  = this.height / 4;
+		int y = this.height / 4;
 
 		// ── Toggle ON/OFF ──────────────────────────────────────────────────────
 		this.addRenderableWidget(
@@ -36,7 +35,7 @@ public class FoliageConfigScreen extends Screen {
 						Component.translatable("config.mc2_interactivefoliage.off")
 						//? > 1.21.1 {
 						,config.enabled
-						//?}
+						 //?}
 				).create(cx - 100, y, 200, 20,
 						Component.translatable("config.mc2_interactivefoliage.enabled"),
 						(btn, val) -> config.enabled = val
@@ -47,30 +46,9 @@ public class FoliageConfigScreen extends Screen {
 
 		// ── Intensidad ─────────────────────────────────────────────────────────
 		final int intensityY = y;
-		this.addRenderableWidget(new AbstractSliderButton(
-				cx - 100, y, 178, 20,
-				Component.empty(),
+		this.addRenderableWidget(new IntensitySlider(cx - 100, y, 178, 20,
 				(config.intensity - 0.1f) / (2.0f - 0.1f)
-		) {
-			{ updateMessage(); }
-
-			@Override
-			protected void updateMessage() {
-				setMessage(Component.translatable(
-						"config.mc2_interactivefoliage.intensity",
-						String.format("%.1f", config.intensity)
-				));
-				if (resetIntensityBtn != null) {
-					resetIntensityBtn.visible =
-							Math.abs(config.intensity - DEFAULT_INTENSITY) > 0.01f;
-				}
-			}
-
-			@Override
-			protected void applyValue() {
-				config.intensity = 0.1f + (float) value * (2.0f - 0.1f);
-			}
-		});
+		));
 
 		resetIntensityBtn = Button.builder(
 				Component.translatable("config.mc2_interactivefoliage.reset"),
@@ -79,9 +57,9 @@ public class FoliageConfigScreen extends Screen {
 					config.intensity = DEFAULT_INTENSITY;
 					//? >=26.2{
 					this.minecraft.setScreenAndShow(new FoliageConfigScreen(parent));
-					//?} else{
-					//this.minecraft.setScreen(new FoliageConfigScreen(parent));
-					//?}
+					 //?} else{
+					/*this.minecraft.setScreen(new FoliageConfigScreen(parent));
+					*///?}
 				}
 		).bounds(cx + 82, intensityY, 18, 20).build();
 		resetIntensityBtn.visible =
@@ -92,30 +70,9 @@ public class FoliageConfigScreen extends Screen {
 
 		// ── Radio de visibilidad ───────────────────────────────────────────────
 		final int radiusY = y;
-		this.addRenderableWidget(new AbstractSliderButton(
-				cx - 100, y, 178, 20,
-				Component.empty(),
+		this.addRenderableWidget(new RadiusSlider(cx - 100, y, 178, 20,
 				(config.maxDistance - 6.0f) / (32.0f - 6.0f)
-		) {
-			{ updateMessage(); }
-
-			@Override
-			protected void updateMessage() {
-				setMessage(Component.translatable(
-						"config.mc2_interactivefoliage.radius",
-						String.format("%.0f", config.maxDistance)
-				));
-				if (resetRadiusBtn != null) {
-					resetRadiusBtn.visible =
-							Math.abs(config.maxDistance - DEFAULT_RADIUS) > 0.1f;
-				}
-			}
-
-			@Override
-			protected void applyValue() {
-				config.maxDistance = 6.0f + (float) value * (32.0f - 6.0f);
-			}
-		});
+		));
 
 		resetRadiusBtn = Button.builder(
 				Component.translatable("config.mc2_interactivefoliage.reset"),
@@ -124,9 +81,9 @@ public class FoliageConfigScreen extends Screen {
 					config.maxDistance = DEFAULT_RADIUS;
 					//? >=26.2{
 					this.minecraft.setScreenAndShow(new FoliageConfigScreen(parent));
-					//?} else{
-					//this.minecraft.setScreen(new FoliageConfigScreen(parent));
-					//?}
+					 //?} else{
+					/*this.minecraft.setScreen(new FoliageConfigScreen(parent));
+					*///?}
 				}
 		).bounds(cx + 82, radiusY, 18, 20).build();
 		resetRadiusBtn.visible =
@@ -142,9 +99,9 @@ public class FoliageConfigScreen extends Screen {
 					SwayConfig.save();
 					//? >=26.2{
 					this.minecraft.setScreenAndShow(parent);
-					//?} else{
-					//this.minecraft.setScreen(parent);
-					//?}
+					 //?} else{
+					/*this.minecraft.setScreen(parent);
+					*///?}
 				}
 		).bounds(cx - 100, y, 200, 20).build());
 	}
@@ -154,15 +111,15 @@ public class FoliageConfigScreen extends Screen {
 		SwayConfig.save();
 		//? >=26.2{
 		this.minecraft.setScreenAndShow(parent);
-		//?} else{
-		//this.minecraft.setScreen(parent);
-		//?}
+		 //?} else{
+		/*this.minecraft.setScreen(parent);
+		*///?}
 	}
 
 	//? <= 1.21.11 {
 	/*@Override
 	public void render(
-			@NotNull net.minecraft.client.gui.GuiGraphics graphics,
+			net.minecraft.client.gui.GuiGraphics graphics,
 			int mouseX, int mouseY, float delta
 	) {
 		super.render(graphics, mouseX, mouseY, delta);
@@ -182,4 +139,52 @@ public class FoliageConfigScreen extends Screen {
 				0xFFFFFF);
 	}
 	//?}
+
+
+	private class IntensitySlider extends AbstractSliderButton {
+		public IntensitySlider(int x, int y, int w, int h, double initialValue) {
+			super(x, y, w, h, Component.empty(), initialValue);
+			updateMessage();
+		}
+
+		@Override
+		protected void updateMessage() {
+			setMessage(Component.translatable(
+					"config.mc2_interactivefoliage.intensity",
+					String.format("%.1f", config.intensity)
+			));
+			if (resetIntensityBtn != null) {
+				resetIntensityBtn.visible =
+						Math.abs(config.intensity - DEFAULT_INTENSITY) > 0.01f;
+			}
+		}
+
+		@Override
+		protected void applyValue() {
+			config.intensity = 0.1f + (float) value * (2.0f - 0.1f);
+		}
+	}
+	private class RadiusSlider extends AbstractSliderButton {
+		public RadiusSlider(int x, int y, int w, int h, double initialValue) {
+			super(x, y, w, h, Component.empty(), initialValue);
+			updateMessage();
+		}
+
+		@Override
+		protected void updateMessage() {
+			setMessage(Component.translatable(
+					"config.mc2_interactivefoliage.radius",
+					String.format("%.0f", config.maxDistance)
+			));
+			if (resetRadiusBtn != null) {
+				resetRadiusBtn.visible =
+						Math.abs(config.maxDistance - DEFAULT_RADIUS) > 0.1f;
+			}
+		}
+
+		@Override
+		protected void applyValue() {
+			config.maxDistance = 6.0f + (float) value * (32.0f - 6.0f);
+		}
+	}
 }
