@@ -71,7 +71,23 @@ jobs:
           REPO_URL="https://github.com/${{ github.repository }}"
           sed -i "s|%%%repo_url%%%|${REPO_URL}|g" cliff.toml
 
+      # A hand-written changelogs/<tag>.md wins over the generated one. The tag always equals
+      # mod.version + mod.channel_tag, so 1.3.1 looks for changelogs/1.3.1.md. Without that file
+      # the release falls back to git-cliff exactly as before.
+      - name: Use hand-written changelog if present
+        id: manual_changelog
+        run: |
+          if [[ -f "changelogs/${GITHUB_REF_NAME}.md" ]]; then
+            cp "changelogs/${GITHUB_REF_NAME}.md" CHANGELOG.md
+            echo "Using hand-written changelogs/${GITHUB_REF_NAME}.md"
+            echo "manual=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "No changelogs/${GITHUB_REF_NAME}.md, falling back to git-cliff"
+            echo "manual=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Generate changelog with git-cliff
+        if: steps.manual_changelog.outputs.manual == 'false'
         uses: orhun/git-cliff-action@v4
         with:
           args: --latest --strip header --output CHANGELOG.md

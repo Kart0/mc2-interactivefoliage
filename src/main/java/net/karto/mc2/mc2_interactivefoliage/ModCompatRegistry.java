@@ -9,6 +9,8 @@ import net.minecraft.resources./*? >= 1.21.11 {*/ Identifier /*?} else {*/ /*Res
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 
@@ -17,15 +19,40 @@ import java.util.Optional;
  * Every block is looked up by id and silently skipped when the mod is not present.
  */
 public class ModCompatRegistry {
+	private static final List<Block> REGISTERED = new ArrayList<>();
+
+	private static boolean initialized;
+	private static int found;
+	private static int missing;
+
 	private ModCompatRegistry() {
 	}
 
 	public static void initialize() {
+		if (initialized) {
+			return;
+		}
+		initialized = true;
+		found = 0;
+		missing = 0;
+		REGISTERED.clear();
+
 		registerBiomesOPlenty();
 		registerFarmersDelight();
 		registerSereneShrubbery();
 		registerNoMansLand();
 		registerExtraVanilla();
+
+		ModTemplate.LOGGER.info("Foliage compat: {} blocks registered, {} not present", found, missing);
+	}
+
+	/**
+	 * Blocks that were actually found and handed to Sway, in registration order.
+	 * <p>
+	 * Only meaningful once {@link #initialize()} has run.
+	 */
+	public static List<Block> registeredBlocks() {
+		return Collections.unmodifiableList(REGISTERED);
 	}
 
 	// ------------------------------------------------------------------
@@ -46,6 +73,7 @@ public class ModCompatRegistry {
 				"biomesoplenty:pine_sapling",
 				"biomesoplenty:fir_sapling",
 				"biomesoplenty:origin_oak_sapling",
+				"biomesoplenty:origin_sapling",
 				"biomesoplenty:snowblossom_sapling",
 				"biomesoplenty:cypress_sapling",
 				"biomesoplenty:flowering_oak_sapling",
@@ -92,20 +120,45 @@ public class ModCompatRegistry {
 				"biomesoplenty:blue_hydrangea",
 				"biomesoplenty:tall_lavender",
 				"biomesoplenty:icy_iris",
-				"biomesoplenty:brimstone_cluster",
+				"biomesoplenty:brimstone_cluster"
+		);
+
+		// Same random-variant problem as the cobwebs below: eyebulb's closed state uses
+		// eyebulb_bottom_closed / eyebulb_top_closed, whose names Sway's path parsing cannot map
+		// back to the block, so on Fabric up to 1.21.1 only the open state would animate.
+		//? !fabric || >1.21.1 {
+		registerPlant(
 				"biomesoplenty:eyebulb"
 		);
+		//?}
 
 		registerStackable(
 				"biomesoplenty:lumaloop",
-				"biomesoplenty:high_grass"
+				"biomesoplenty:lumaloop_plant",
+				"biomesoplenty:high_grass",
+				"biomesoplenty:high_grass_plant"
 		);
 
 		registerHanging(
 				"biomesoplenty:spanish_moss",
-				"biomesoplenty:flesh_tendons",
-				"biomesoplenty:hanging_cobweb"
+				"biomesoplenty:spanish_moss_plant"
 		);
+
+		// Cobwebs and tendons use blockstates that pick one of several models at random per
+		// position. Up to and including Fabric 1.21.1, Sway identifies a model's block by parsing
+		// the model file path, so every variant whose file name carries an extra suffix
+		// (_broken, _single, _alt) is never wrapped: only one model in three animates and a strand
+		// ends up with motionless blocks between bending ones. Leaving them unregistered there
+		// looks better than animating them in pieces. Every other platform and version resolves
+		// the block reliably, so they stay registered.
+		//? !fabric || >1.21.1 {
+		registerHanging(
+				"biomesoplenty:flesh_tendons",
+				"biomesoplenty:flesh_tendons_strand",
+				"biomesoplenty:hanging_cobweb",
+				"biomesoplenty:hanging_cobweb_strand"
+		);
+		//?}
 	}
 
 	// ------------------------------------------------------------------
@@ -125,13 +178,16 @@ public class ModCompatRegistry {
 				"farmersdelight:budding_tomatoes",
 				"farmersdelight:cabbages",
 				"farmersdelight:brown_mushroom_colony",
-				"farmersdelight:red_mushroom_colony",
-				"farmersdelight:rice",
-				"farmersdelight:rice_panicles"
+				"farmersdelight:red_mushroom_colony"
 		);
 
 		registerPlant(
 				"farmersdelight:wild_rice"
+		);
+
+		registerStackable(
+				"farmersdelight:rice",
+				"farmersdelight:rice_panicles"
 		);
 	}
 
@@ -293,9 +349,18 @@ public class ModCompatRegistry {
 			Identifier /*?} else {*/
 					/*ResourceLocation *//*?} */ identifier = /*? >= 1.21.11 {*/ Identifier /*?} else {*/ /*ResourceLocation *//*?} */
 					./*? >1.20.1 {*/parse/*?} else { */ /*tryParse*//*?} */(id);
-			Optional<Block> block = BuiltInRegistries.BLOCK.getOptional(identifier);
-			return block.filter(b -> b != Blocks.AIR);
+			Optional<Block> block = BuiltInRegistries.BLOCK.getOptional(identifier)
+					.filter(b -> b != Blocks.AIR);
+			if (block.isPresent()) {
+				found++;
+				REGISTERED.add(block.get());
+			} else {
+				missing++;
+				ModTemplate.LOGGER.debug("Foliage compat: {} not present, skipping", id);
+			}
+			return block;
 		} catch (Exception e) {
+			missing++;
 			return Optional.empty();
 		}
 	}

@@ -53,3 +53,6 @@ bin/
 !.idea/icon.svg
 !.idea/runConfigurations/Run_Active_Client.xml
 !.idea/runConfigurations/Run_Active_Server.xml
+
+# Third-party mod jars used only for local dev runs
+devmods/

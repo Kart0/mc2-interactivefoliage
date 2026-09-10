@@ -67,6 +67,8 @@ dependencies {
 	// implementation(libs.moulberry.mixinconstraints)
 	// include(libs.moulberry.mixinconstraints)
 	implementation("net.fabricmc.fabric-api:fabric-api:${prop("deps.fabric-api")}")
+	// Optional dependency: compiled against for the Mod Menu entrypoint, shipped by nobody.
+	compileOnly("com.terraformersmc:modmenu:${prop("deps.modmenu")}")
 	localRuntime("com.terraformersmc:modmenu:${prop("deps.modmenu")}")
 	implementation("maven.modrinth:sway:${prop("deps.sway")}")
 }

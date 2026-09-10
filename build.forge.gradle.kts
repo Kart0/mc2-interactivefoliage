@@ -68,6 +68,15 @@ dependencies {
 	// jarJar(libs.moulberry.mixinconstraints)
 }
 
+// To exercise ModCompatRegistry against real blocks in the dev client, add third-party mods here
+// rather than dropping them into run/mods:
+//
+//     dependencies { modRuntimeOnly("maven.modrinth:farmers-delight:1.20.1-1.3.4") }
+//
+// Production jars ship SRG names while the Forge dev runtime uses named mappings, and only the
+// "mod" prefixed configurations get remapped; an unremapped jar fails to apply its own mixins and
+// kills the client during the FML loading screen, before the main menu appears.
+
 sourceSets {
 	main {
 		resources.srcDir(
