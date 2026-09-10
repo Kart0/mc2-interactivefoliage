@@ -38,6 +38,8 @@ import org.joml.Matrix4f;
 import org.joml.Vector3f;
 import org.joml.Vector4f;
 
+import java.util.HashMap;
+import java.util.Map;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.Optional;
@@ -68,6 +70,13 @@ public final class GpuFoliageRenderer {
 	 * of whipping at the tip.
 	 */
 	private static final float SWAY_SPAN = 3.0F;
+
+	/**
+	 * How much of its sway a column loses per block of length, and how far that can go: a strand of
+	 * five blocks or more keeps only a fifth of its movement.
+	 */
+	private static final float LENGTH_DAMPING_PER_BLOCK = 0.2F;
+	private static final float MAX_LENGTH_DAMPING = 0.8F;
 
 	/**
 	 * A second vertex binding carrying one float per vertex: how freely it may sway, from 0 at the
@@ -127,16 +136,26 @@ public final class GpuFoliageRenderer {
 	 * own, which is how it would look if the weight came from the height within a single block.
 	 */
 	private static final class SwayAnchor {
+		/** Column length is shared by every block of a strand, so it is resolved once per anchor. */
+		private final Map<BlockPos, Float> dampingByAnchor = new HashMap<>();
+
 		private float anchorY;
 		private boolean hanging;
+		private float damping = 1.0F;
 
-		void prepare(BlockState state, BlockPos pos) {
+		void reset() {
+			dampingByAnchor.clear();
+		}
+
+		void prepare(BlockState state, BlockPos pos, ClientLevel level) {
 			hanging = HangingVineMultiblockBehavior.isHangingVine(state);
 			BlockPos anchor = pos;
+			MultiBlockContributor multiblock = null;
 			BehaviorPipeline pipeline = SwayAPI.getBehaviorPipeline(state.getBlock());
 			if (pipeline != null) {
 				for (MultiBlockContributor contributor : pipeline.getMultiBlockContributors()) {
 					if (contributor.appliesTo(state)) {
+						multiblock = contributor;
 						anchor = contributor.getAnchorPosition(pos, state);
 						break;
 					}
@@ -144,11 +163,31 @@ public final class GpuFoliageRenderer {
 			}
 			// Hanging plants are held at the top of their anchor block, everything else at the base.
 			anchorY = hanging ? anchor.getY() + 1 : anchor.getY();
+			damping = multiblock == null ? 1.0F : dampingFor(multiblock, anchor, level);
+		}
+
+		/**
+		 * Long strands sway less as a whole.
+		 * <p>
+		 * Past the span the weight saturates, so without this every block above it moves at full
+		 * strength and a tall cane or vine thrashes rather than drifts. Damping the column by its
+		 * length keeps short plants lively while long ones stay heavy.
+		 */
+		private float dampingFor(MultiBlockContributor multiblock, BlockPos anchor, ClientLevel level) {
+			Float cached = dampingByAnchor.get(anchor);
+			if (cached != null) {
+				return cached;
+			}
+			BlockState anchorState = level.getBlockState(anchor);
+			int length = multiblock.getLinkedBlocks(anchor, anchorState, level).size() + 1;
+			float value = 1.0F - Math.min(MAX_LENGTH_DAMPING, (length - 1) * LENGTH_DAMPING_PER_BLOCK);
+			dampingByAnchor.put(anchor.immutable(), value);
+			return value;
 		}
 
 		float weightAt(float worldY) {
 			float distance = hanging ? anchorY - worldY : worldY - anchorY;
-			return Math.clamp(distance / SWAY_SPAN, 0.0F, 1.0F);
+			return Math.clamp(distance / SWAY_SPAN, 0.0F, 1.0F) * damping;
 		}
 	}
 
@@ -229,6 +268,7 @@ public final class GpuFoliageRenderer {
 			// Vanilla writes the standard attributes; alongside each quad we append the sway weight
 			// of its four vertices, so both bindings stay in step without touching its output.
 			SwayAnchor anchor = new SwayAnchor();
+			anchor.reset();
 			BlockQuadOutput output = (x, y, z, quad, instance) -> {
 				builder.putBlockBakedQuad(x, y, z, quad, instance);
 				if (weights.remaining() >= Float.BYTES * 4) {
@@ -248,7 +288,7 @@ public final class GpuFoliageRenderer {
 						if (!GpuFoliagePrototype.rendersItself(state)) {
 							continue;
 						}
-						anchor.prepare(state, pos);
+						anchor.prepare(state, pos, level);
 						modelRenderer.tesselateBlock(
 								output, dx, dy, dz, level, pos, state, models.get(state), state.getSeed(pos));
 					}
