@@ -56,7 +56,13 @@ sealed class Loader(val id: String) {
 					// Only queried when Mod Menu is installed, so it costs nothing when it is not.
 					"modmenu" to listOf("${ctx.modGroup}.${ctx.modId}.platform.fabric.FabricModMenuIntegration")
 				),
-				mixins = listOf("${ctx.modId}.mixins.json"),
+				// The GPU foliage mixins target classes that only exist from 26.2 onwards, so the
+				// config listing them is only declared where those classes are there to be found.
+				mixins = if (ctx.stonecutter.eval(ctx.currentMcVersion, ">=26.2")) {
+					listOf("${ctx.modId}.mixins.json", "${ctx.modId}.gpu.mixins.json")
+				} else {
+					listOf("${ctx.modId}.mixins.json")
+				},
 				depends = ctx.extension.dependencies.required.associate { it.modid.get() to it.fabricLikeVersionRange.get() },
 				recommends = ctx.extension.dependencies.optional.associate { it.modid.get() to it.fabricLikeVersionRange.get() },
 				breaks = ctx.extension.dependencies.incompatible.associate { it.modid.get() to it.fabricLikeVersionRange.get() })

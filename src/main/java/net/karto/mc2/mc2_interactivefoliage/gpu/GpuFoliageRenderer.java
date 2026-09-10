@@ -20,49 +20,67 @@ import com.mojang.blaze3d.vertex.ByteBufferBuilder;
 import com.mojang.blaze3d.vertex.DefaultVertexFormat;
 import com.mojang.blaze3d.vertex.MeshData;
 import com.mojang.blaze3d.vertex.VertexFormat;
+import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientChunkEvents;
 import net.fabricmc.fabric.api.client.rendering.v1.level.LevelRenderEvents;
+import net.fabricmc.fabric.api.client.rendering.v1.level.LevelTerrainRenderContext;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.karto.mc2.mc2_interactivefoliage.ModTemplate;
+import net.minecraft.client.renderer.DynamicUniforms;
 import net.minecraft.client.renderer.RenderPipelines;
+import net.minecraft.client.renderer.culling.Frustum;
+import net.minecraft.client.renderer.state.level.CameraRenderState;
 import net.minecraft.client.renderer.block.BlockQuadOutput;
 import net.minecraft.client.renderer.block.BlockStateModelSet;
 import net.minecraft.client.renderer.block.ModelBlockRenderer;
 import net.minecraft.client.renderer.texture.AbstractTexture;
 import net.minecraft.client.renderer.texture.TextureAtlas;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.SectionPos;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.chunk.LevelChunk;
+import net.minecraft.world.level.chunk.LevelChunkSection;
+import net.minecraft.world.level.chunk.status.ChunkStatus;
+import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 import org.joml.Matrix4f;
 import org.joml.Vector3f;
 import org.joml.Vector4f;
 
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
+import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.function.Predicate;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.Optional;
 import java.util.OptionalDouble;
 
 /**
- * Prototype step 2a: draws the blocks that {@link GpuFoliagePrototype} removed from the chunk mesh.
+ * Draws the blocks that {@link GpuFoliagePrototype} removed from the chunk mesh.
  * <p>
  * Geometry comes from {@link ModelBlockRenderer#tesselateBlock}, the very method the section
  * compiler uses, so ambient occlusion, light coordinates and biome tint are produced by vanilla and
- * not reimplemented here. The pipeline is vanilla's {@code CUTOUT_BLOCK}, whose vertex shader is
- * line-for-line the terrain one except for how the model offset is applied, so this pass should be
- * indistinguishable from the chunk mesh it replaces.
+ * not reimplemented here.
  * <p>
- * Everything here is deliberately crude: one buffer rebuilt whenever the player crosses a block
- * boundary, covering a small box around them, with no frustum culling and no reaction to block or
- * light updates. The only question it answers is whether the result looks identical -- scope comes
- * later.
+ * It is held one buffer per chunk section, mirroring how the game stores terrain. That is what lets
+ * a single section be rebuilt when something in it changes, and it means the sections to draw can
+ * be taken straight from {@code LevelRenderer.visibleSections()} -- so render distance, frustum and
+ * occlusion culling are inherited from vanilla, and the foliage appears and disappears in step with
+ * the terrain around it.
  */
 public final class GpuFoliageRenderer {
 
-	private static final int RADIUS_XZ = 24;
-	private static final int RADIUS_Y = 12;
+	/** Rebuilds run on the render thread, so only a few are allowed per frame. */
+	private static final int REBUILD_BUDGET = 6;
+	/** Padding on a section's cull box so foliage leaning into view is not culled away. */
+	private static final double SWAY_MARGIN = 1.0D;
+	private static final int SECTION_SIZE = 16;
 
 	/**
 	 * How far from its anchor a vertex has to be before it sways at full strength, in blocks.
@@ -102,28 +120,28 @@ public final class GpuFoliageRenderer {
 			.withShaderDefine("ALPHA_CUTOUT", 0.5F)
 			.build();
 
+	private static final int WAVE_BUFFER_BYTES = Float.BYTES * 4 * 16384;
+
+	private static final Map<Long, Section> SECTIONS = new HashMap<>();
+	private static final Set<Long> DIRTY = new LinkedHashSet<>();
+
+	private static final Predicate<BlockState> FOLIAGE = GpuFoliagePrototype::rendersItself;
+
 	private static ModelBlockRenderer modelRenderer;
-	private static GpuBuffer vertexBuffer;
-	private static GpuBuffer waveBuffer;
-	private static int indexCount;
+	/** Set when every buffer was thrown away, so the chunks already loaded get queued again. */
+	private static boolean reseedPending;
 
-	/** World position the buffered vertices are relative to, keeping their values small. */
-	private static BlockPos origin = BlockPos.ZERO;
-	private static BlockPos builtAround;
-
-	private static final int WAVE_BUFFER_BYTES = Float.BYTES * 4 * 65536;
+	// Temporary instrumentation while the section pipeline is being brought up.
+	private static long lastReport;
 
 	private GpuFoliageRenderer() {
 	}
 
-	private static void close() {
-		if (vertexBuffer != null) {
-			vertexBuffer.close();
-			vertexBuffer = null;
-		}
-		if (waveBuffer != null) {
-			waveBuffer.close();
-			waveBuffer = null;
+	/** Geometry for one chunk section, its vertices relative to that section's own corner. */
+	private record Section(GpuBuffer vertices, GpuBuffer weights, int indexCount, BlockPos origin, AABB bounds) {
+		void close() {
+			vertices.close();
+			weights.close();
 		}
 	}
 
@@ -192,38 +210,198 @@ public final class GpuFoliageRenderer {
 	}
 
 	public static void register() {
-		LevelRenderEvents.AFTER_OPAQUE_TERRAIN.register(context -> draw());
+		LevelRenderEvents.AFTER_OPAQUE_TERRAIN.register(GpuFoliageRenderer::draw);
+		// Sodium overwrites every vanilla route that marks a section dirty when a chunk arrives, so
+		// chunk loads are followed through Fabric's own event, which fires whichever renderer is used.
+		ClientChunkEvents.CHUNK_LOAD.register(GpuFoliageRenderer::discoverChunk);
+		ClientChunkEvents.CHUNK_UNLOAD.register(GpuFoliageRenderer::forgetChunk);
 	}
 
-	private static void draw() {
+	/** Light arrived or changed in a section. Only sections already holding foliage care. */
+	public static void onLightChanged(int sectionX, int sectionY, int sectionZ) {
+		long key = SectionPos.asLong(sectionX, sectionY, sectionZ);
+		if (SECTIONS.containsKey(key)) {
+			DIRTY.add(key);
+		}
+	}
+
+	/**
+	 * A block changed. The sections above and below are rebuilt with its own because a column's sway
+	 * depends on its length and anchor, and a column can cross a section boundary; sideways
+	 * neighbours are only touched when the block sits on that edge.
+	 */
+	public static void onBlockChanged(BlockPos pos) {
+		int sectionX = SectionPos.blockToSectionCoord(pos.getX());
+		int sectionY = SectionPos.blockToSectionCoord(pos.getY());
+		int sectionZ = SectionPos.blockToSectionCoord(pos.getZ());
+		int localX = pos.getX() & (SECTION_SIZE - 1);
+		int localZ = pos.getZ() & (SECTION_SIZE - 1);
+		for (int dy = -1; dy <= 1; dy++) {
+			DIRTY.add(SectionPos.asLong(sectionX, sectionY + dy, sectionZ));
+		}
+		if (localX == 0) {
+			DIRTY.add(SectionPos.asLong(sectionX - 1, sectionY, sectionZ));
+		} else if (localX == SECTION_SIZE - 1) {
+			DIRTY.add(SectionPos.asLong(sectionX + 1, sectionY, sectionZ));
+		}
+		if (localZ == 0) {
+			DIRTY.add(SectionPos.asLong(sectionX, sectionY, sectionZ - 1));
+		} else if (localZ == SECTION_SIZE - 1) {
+			DIRTY.add(SectionPos.asLong(sectionX, sectionY, sectionZ + 1));
+		}
+	}
+
+	/** Everything changed: resource packs reloaded, a video option altered, world swapped. */
+	public static void discardAll() {
+		SECTIONS.values().forEach(Section::close);
+		SECTIONS.clear();
+		DIRTY.clear();
+		// The renderer snapshots options such as smooth lighting, which are among the things that
+		// land here, so it is rebuilt from the current options on next use.
+		modelRenderer = null;
+		// Nothing queues the chunks that are already loaded again: with Sodium in charge a resource
+		// reload rebuilds its own meshes without passing any hook. They are rediscovered on next draw.
+		reseedPending = true;
+	}
+
+	/** Queues the sections of a chunk whose palette could hold foliage. */
+	private static void discoverChunk(ClientLevel level, LevelChunk chunk) {
+		if (!GpuFoliagePrototype.enabled) {
+			return;
+		}
+		int chunkX = SectionPos.blockToSectionCoord(chunk.getPos().getMinBlockX());
+		int chunkZ = SectionPos.blockToSectionCoord(chunk.getPos().getMinBlockZ());
+		LevelChunkSection[] sections = chunk.getSections();
+		for (int index = 0; index < sections.length; index++) {
+			if (mayHoldFoliage(sections[index])) {
+				DIRTY.add(SectionPos.asLong(chunkX, level.getSectionYFromSectionIndex(index), chunkZ));
+			}
+		}
+	}
+
+	private static void forgetChunk(ClientLevel level, LevelChunk chunk) {
+		int chunkX = SectionPos.blockToSectionCoord(chunk.getPos().getMinBlockX());
+		int chunkZ = SectionPos.blockToSectionCoord(chunk.getPos().getMinBlockZ());
+		for (int sectionY = level.getMinSectionY(); sectionY <= level.getMaxSectionY(); sectionY++) {
+			long key = SectionPos.asLong(chunkX, sectionY, chunkZ);
+			DIRTY.remove(key);
+			Section stored = SECTIONS.remove(key);
+			if (stored != null) {
+				stored.close();
+			}
+		}
+	}
+
+	private static void reseedLoadedChunks(Minecraft minecraft, ClientLevel level) {
+		int radius = minecraft.options.renderDistance().get() + 1;
+		int centerX = SectionPos.blockToSectionCoord(minecraft.player.getBlockX());
+		int centerZ = SectionPos.blockToSectionCoord(minecraft.player.getBlockZ());
+		for (int chunkX = centerX - radius; chunkX <= centerX + radius; chunkX++) {
+			for (int chunkZ = centerZ - radius; chunkZ <= centerZ + radius; chunkZ++) {
+				LevelChunk chunk = level.getChunkSource().getChunk(chunkX, chunkZ, ChunkStatus.FULL, false);
+				if (chunk != null) {
+					discoverChunk(level, chunk);
+				}
+			}
+		}
+	}
+
+	/**
+	 * Whether a section is worth scanning block by block. The palette check is conservative -- it may
+	 * answer yes for a block that has since gone, never no for one that is there -- and it skips whole
+	 * sections of stone or air without looking at a single block.
+	 */
+	private static boolean mayHoldFoliage(LevelChunkSection section) {
+		return !section.hasOnlyAir() && section.maybeHas(FOLIAGE);
+	}
+
+	private static boolean mayHoldFoliage(ClientLevel level, long key) {
+		int sectionY = SectionPos.y(key);
+		if (sectionY < level.getMinSectionY() || sectionY > level.getMaxSectionY()) {
+			return false;
+		}
+		return mayHoldFoliage(level.getChunk(SectionPos.x(key), SectionPos.z(key))
+				.getSection(level.getSectionIndexFromSectionY(sectionY)));
+	}
+
+	private static void draw(LevelTerrainRenderContext context) {
 		Minecraft minecraft = Minecraft.getInstance();
-		if (!GpuFoliagePrototype.enabled || minecraft.level == null || minecraft.player == null) {
+		if (!GpuFoliagePrototype.enabled || minecraft.level == null) {
 			return;
 		}
 
-		BlockPos around = minecraft.player.blockPosition();
-		if (!around.equals(builtAround)) {
-			rebuild(minecraft, minecraft.level, around);
-			builtAround = around;
+		// The render state carries the camera and the cull frustum vanilla already prepared this
+		// frame, which is available whether or not Sodium owns the terrain renderer.
+		CameraRenderState cameraState = context.levelState().cameraRenderState;
+		if (cameraState == null || cameraState.pos == null) {
+			return;
 		}
-		if (vertexBuffer == null || waveBuffer == null || indexCount == 0) {
+		Vec3 camera = cameraState.pos;
+		if (reseedPending && minecraft.player != null) {
+			reseedPending = false;
+			reseedLoadedChunks(minecraft, minecraft.level);
+		}
+		buildNearest(minecraft, camera);
+
+		// Sodium replaces the terrain renderer and never fills vanilla's visible section list, so
+		// the sections to draw are chosen here instead. Walking our own map is cheap because only
+		// sections that actually contain foliage are ever stored, and dropping the ones that have
+		// fallen out of range doubles as eviction so their buffers do not pile up.
+		Frustum frustum = cameraState.cullFrustum;
+		List<Section> visible = new ArrayList<>();
+		int longestSection = 0;
+		var stored = SECTIONS.entrySet().iterator();
+		while (stored.hasNext()) {
+			var entry = stored.next();
+			Section section = entry.getValue();
+			if (!withinRange(minecraft, entry.getKey())) {
+				section.close();
+				stored.remove();
+				continue;
+			}
+			if (frustum != null && !frustum.isVisible(section.bounds())) {
+				continue;
+			}
+			visible.add(section);
+			longestSection = Math.max(longestSection, section.indexCount());
+		}
+
+		long now = System.currentTimeMillis();
+		if (now - lastReport > 5000L) {
+			lastReport = now;
+			ModTemplate.LOGGER.info("Foliage GPU: stored={} drawn={} dirtyQueue={}",
+					SECTIONS.size(), visible.size(), DIRTY.size());
+		}
+
+		if (visible.isEmpty()) {
 			return;
 		}
 
-		Vec3 camera = minecraft.gameRenderer.mainCamera().position();
-		GpuBufferSlice transforms = RenderSystem.getDynamicUniforms()
-				.writeTransform(
-						RenderSystem.getModelViewMatrixCopy(),
-						new Vector4f(1.0F, 1.0F, 1.0F, 1.0F),
-						new Vector3f(
-								(float) (origin.getX() - camera.x),
-								(float) (origin.getY() - camera.y),
-								(float) (origin.getZ() - camera.z)),
-						new Matrix4f());
+		// Every section's offset is written in one mapping of the uniform ring buffer. The singular
+		// writeTransform maps and unmaps it per call, so calling it once per section was costing a
+		// GPU round trip for each one and is what made thousands of sections crawl.
+		Matrix4f modelView = RenderSystem.getModelViewMatrixCopy();
+		Vector4f noModulation = new Vector4f(1.0F, 1.0F, 1.0F, 1.0F);
+		Matrix4f noTextureTransform = new Matrix4f();
+		DynamicUniforms.Transform[] transforms = new DynamicUniforms.Transform[visible.size()];
+		for (int i = 0; i < transforms.length; i++) {
+			// Vertices are relative to their own section, so the offset brings it into view and
+			// their values stay small however far from the world origin the section sits.
+			BlockPos sectionOrigin = visible.get(i).origin();
+			transforms[i] = new DynamicUniforms.Transform(
+					modelView,
+					noModulation,
+					new Vector3f(
+							(float) (sectionOrigin.getX() - camera.x),
+							(float) (sectionOrigin.getY() - camera.y),
+							(float) (sectionOrigin.getZ() - camera.z)),
+					noTextureTransform);
+		}
+		GpuBufferSlice[] offsets = RenderSystem.getDynamicUniforms().writeTransforms(transforms);
 
 		AbstractTexture atlas = minecraft.getTextureManager().getTexture(TextureAtlas.LOCATION_BLOCKS);
 		RenderSystem.AutoStorageIndexBuffer indices = RenderSystem.getSequentialBuffer(PrimitiveTopology.QUADS);
-		GpuBuffer indexBuffer = indices.getBuffer(indexCount);
+		GpuBuffer indexBuffer = indices.getBuffer(longestSection);
 		RenderTarget target = minecraft.gameRenderer.mainRenderTarget();
 
 		try (RenderPass pass = RenderSystem.getDevice()
@@ -236,18 +414,79 @@ public final class GpuFoliageRenderer {
 						OptionalDouble.empty())) {
 			pass.setPipeline(PIPELINE);
 			RenderSystem.bindDefaultUniforms(pass);
-			pass.setUniform("DynamicTransforms", transforms);
 			pass.bindTexture("Sampler0", atlas.getTextureView(), atlas.getSampler());
 			pass.bindTexture("Sampler2", minecraft.gameRenderer.lightmap(),
 					RenderSystem.getSamplerCache().getClampToEdge(FilterMode.LINEAR));
 			pass.setIndexBuffer(indexBuffer, indices.type());
-			pass.setVertexBuffer(0, vertexBuffer.slice());
-			pass.setVertexBuffer(1, waveBuffer.slice());
-			pass.drawIndexed(indexCount, 1, 0, 0, 0);
+
+			for (int i = 0; i < transforms.length; i++) {
+				Section section = visible.get(i);
+				pass.setUniform("DynamicTransforms", offsets[i]);
+				pass.setVertexBuffer(0, section.vertices().slice());
+				pass.setVertexBuffer(1, section.weights().slice());
+				pass.drawIndexed(section.indexCount(), 1, 0, 0, 0);
+			}
 		}
 	}
 
-	private static void rebuild(Minecraft minecraft, ClientLevel level, BlockPos centre) {
+	/**
+	 * Rebuilds the queued sections nearest the camera. Nearest first matters because a chunk load
+	 * storm can leave thousands of entries queued, and foliage appearing late at your feet is far
+	 * more noticeable than foliage appearing late on the horizon.
+	 */
+	private static void buildNearest(Minecraft minecraft, Vec3 camera) {
+		long[] nearest = new long[REBUILD_BUDGET];
+		double[] distances = new double[REBUILD_BUDGET];
+		Arrays.fill(distances, Double.MAX_VALUE);
+		int found = 0;
+
+		var pending = DIRTY.iterator();
+		while (pending.hasNext()) {
+			long key = pending.next();
+			if (!withinRange(minecraft, key)) {
+				pending.remove();
+				continue;
+			}
+			double distance = distanceSqTo(key, camera);
+			for (int slot = 0; slot < REBUILD_BUDGET; slot++) {
+				if (distance < distances[slot]) {
+					int tail = REBUILD_BUDGET - slot - 1;
+					System.arraycopy(distances, slot, distances, slot + 1, tail);
+					System.arraycopy(nearest, slot, nearest, slot + 1, tail);
+					distances[slot] = distance;
+					nearest[slot] = key;
+					found = Math.min(found + 1, REBUILD_BUDGET);
+					break;
+				}
+			}
+		}
+
+		for (int i = 0; i < found; i++) {
+			DIRTY.remove(nearest[i]);
+			rebuild(minecraft, minecraft.level, nearest[i]);
+		}
+	}
+
+	private static double distanceSqTo(long key, Vec3 camera) {
+		double x = SectionPos.sectionToBlockCoord(SectionPos.x(key)) + 8.0D - camera.x;
+		double y = SectionPos.sectionToBlockCoord(SectionPos.y(key)) + 8.0D - camera.y;
+		double z = SectionPos.sectionToBlockCoord(SectionPos.z(key)) + 8.0D - camera.z;
+		return x * x + y * y + z * z;
+	}
+
+	/** Sections beyond the render distance are neither built nor kept. */
+	private static boolean withinRange(Minecraft minecraft, long key) {
+		if (minecraft.player == null) {
+			return false;
+		}
+		int limit = minecraft.options.renderDistance().get() + 1;
+		int dx = SectionPos.x(key) - SectionPos.blockToSectionCoord(minecraft.player.getBlockX());
+		int dz = SectionPos.z(key) - SectionPos.blockToSectionCoord(minecraft.player.getBlockZ());
+		int dy = SectionPos.y(key) - SectionPos.blockToSectionCoord(minecraft.player.getBlockY());
+		return Math.abs(dx) <= limit && Math.abs(dz) <= limit && Math.abs(dy) <= limit;
+	}
+
+	private static void rebuild(Minecraft minecraft, ClientLevel level, long key) {
 		if (modelRenderer == null) {
 			// Same arguments the section compiler passes, so the geometry matches it exactly.
 			modelRenderer = new ModelBlockRenderer(
@@ -256,8 +495,18 @@ public final class GpuFoliageRenderer {
 					minecraft.getBlockColors());
 		}
 		BlockStateModelSet models = minecraft.getModelManager().getBlockStateModelSet();
-		origin = centre;
-		indexCount = 0;
+		BlockPos origin = new BlockPos(
+				SectionPos.sectionToBlockCoord(SectionPos.x(key)),
+				SectionPos.sectionToBlockCoord(SectionPos.y(key)),
+				SectionPos.sectionToBlockCoord(SectionPos.z(key)));
+
+		Section previous = SECTIONS.remove(key);
+		if (previous != null) {
+			previous.close();
+		}
+		if (!mayHoldFoliage(level, key)) {
+			return;
+		}
 
 		try (ByteBufferBuilder scratch = ByteBufferBuilder.exactlySized(
 				DefaultVertexFormat.BLOCK.getVertexSize() * 4 * 4096)) {
@@ -268,7 +517,6 @@ public final class GpuFoliageRenderer {
 			// Vanilla writes the standard attributes; alongside each quad we append the sway weight
 			// of its four vertices, so both bindings stay in step without touching its output.
 			SwayAnchor anchor = new SwayAnchor();
-			anchor.reset();
 			BlockQuadOutput output = (x, y, z, quad, instance) -> {
 				builder.putBlockBakedQuad(x, y, z, quad, instance);
 				if (weights.remaining() >= Float.BYTES * 4) {
@@ -280,10 +528,10 @@ public final class GpuFoliageRenderer {
 			};
 
 			BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos();
-			for (int dx = -RADIUS_XZ; dx <= RADIUS_XZ; dx++) {
-				for (int dy = -RADIUS_Y; dy <= RADIUS_Y; dy++) {
-					for (int dz = -RADIUS_XZ; dz <= RADIUS_XZ; dz++) {
-						pos.set(centre.getX() + dx, centre.getY() + dy, centre.getZ() + dz);
+			for (int dx = 0; dx < SECTION_SIZE; dx++) {
+				for (int dy = 0; dy < SECTION_SIZE; dy++) {
+					for (int dz = 0; dz < SECTION_SIZE; dz++) {
+						pos.set(origin.getX() + dx, origin.getY() + dy, origin.getZ() + dz);
 						BlockState state = level.getBlockState(pos);
 						if (!GpuFoliagePrototype.rendersItself(state)) {
 							continue;
@@ -300,17 +548,26 @@ public final class GpuFoliageRenderer {
 				return;
 			}
 			try (mesh) {
-				indexCount = mesh.drawState().indexCount();
 				weights.flip();
-				close();
-				vertexBuffer = RenderSystem.getDevice().createBuffer(
-						() -> "MC2 foliage vertices",
-						GpuBuffer.USAGE_VERTEX | GpuBuffer.USAGE_COPY_DST,
-						mesh.vertexBuffer());
-				waveBuffer = RenderSystem.getDevice().createBuffer(
-						() -> "MC2 foliage sway weights",
-						GpuBuffer.USAGE_VERTEX | GpuBuffer.USAGE_COPY_DST,
-						weights);
+				AABB bounds = new AABB(
+						origin.getX() - SWAY_MARGIN,
+						origin.getY() - SWAY_MARGIN,
+						origin.getZ() - SWAY_MARGIN,
+						origin.getX() + SECTION_SIZE + SWAY_MARGIN,
+						origin.getY() + SECTION_SIZE + SWAY_MARGIN,
+						origin.getZ() + SECTION_SIZE + SWAY_MARGIN);
+				SECTIONS.put(key, new Section(
+						RenderSystem.getDevice().createBuffer(
+								() -> "MC2 foliage vertices",
+								GpuBuffer.USAGE_VERTEX | GpuBuffer.USAGE_COPY_DST,
+								mesh.vertexBuffer()),
+						RenderSystem.getDevice().createBuffer(
+								() -> "MC2 foliage sway weights",
+								GpuBuffer.USAGE_VERTEX | GpuBuffer.USAGE_COPY_DST,
+								weights),
+						mesh.drawState().indexCount(),
+						origin,
+						bounds));
 			}
 		}
 	}
