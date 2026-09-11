@@ -16,9 +16,12 @@ public class FoliageConfigScreen extends Screen {
 	/** Sway's own default for maxDistance in every supported version, so a fresh install already starts here. */
 	private static final float DEFAULT_RADIUS = 8.0f;
 
+	private IntensitySlider intensitySlider;
+	private RadiusSlider radiusSlider;
 	private Button resetIntensityBtn;
 	private Button resetRadiusBtn;
 	//? fabric && >=26.2 {
+	private WavingIntensitySlider wavingIntensitySlider;
 	private Button resetWavingIntensityBtn;
 	//?}
 
@@ -50,21 +53,15 @@ public class FoliageConfigScreen extends Screen {
 
 		// ── Intensidad ─────────────────────────────────────────────────────────
 		final int intensityY = y;
-		this.addRenderableWidget(new IntensitySlider(cx - 100, y, 178, 20,
+		intensitySlider = new IntensitySlider(cx - 100, y, 178, 20,
 				(config.intensity - 0.1f) / (2.0f - 0.1f)
-		));
+		);
+		this.addRenderableWidget(intensitySlider);
 
+		// Resets in place: rebuilding the screen flashes the world behind it black for a few frames.
 		resetIntensityBtn = Button.builder(
 				Component.translatable("config.mc2_interactivefoliage.reset"),
-				btn -> {
-					// FIX: asignar el valor primero, luego recrear la pantalla
-					config.intensity = DEFAULT_INTENSITY;
-					//? >=26.2{
-					this.minecraft.setScreenAndShow(new FoliageConfigScreen(parent));
-					 //?} else{
-					/*this.minecraft.setScreen(new FoliageConfigScreen(parent));
-					*///?}
-				}
+				btn -> intensitySlider.reset()
 		).bounds(cx + 82, intensityY, 18, 20).build();
 		resetIntensityBtn.visible =
 				Math.abs(config.intensity - DEFAULT_INTENSITY) > 0.01f;
@@ -74,21 +71,14 @@ public class FoliageConfigScreen extends Screen {
 
 		// ── Radio de visibilidad ───────────────────────────────────────────────
 		final int radiusY = y;
-		this.addRenderableWidget(new RadiusSlider(cx - 100, y, 178, 20,
+		radiusSlider = new RadiusSlider(cx - 100, y, 178, 20,
 				(config.maxDistance - 6.0f) / (32.0f - 6.0f)
-		));
+		);
+		this.addRenderableWidget(radiusSlider);
 
 		resetRadiusBtn = Button.builder(
 				Component.translatable("config.mc2_interactivefoliage.reset"),
-				btn -> {
-					// FIX: asignar el valor primero, luego recrear la pantalla
-					config.maxDistance = DEFAULT_RADIUS;
-					//? >=26.2{
-					this.minecraft.setScreenAndShow(new FoliageConfigScreen(parent));
-					 //?} else{
-					/*this.minecraft.setScreen(new FoliageConfigScreen(parent));
-					*///?}
-				}
+				btn -> radiusSlider.reset()
 		).bounds(cx + 82, radiusY, 18, 20).build();
 		resetRadiusBtn.visible =
 				Math.abs(config.maxDistance - DEFAULT_RADIUS) > 0.1f;
@@ -105,27 +95,28 @@ public class FoliageConfigScreen extends Screen {
 						FoliageSettings.wavingFoliage()
 				).create(cx - 100, y, 200, 20,
 						Component.translatable("config.mc2_interactivefoliage.waving_foliage"),
-						(btn, val) -> FoliageSettings.setWavingFoliage(val)
+						(btn, val) -> {
+							FoliageSettings.setWavingFoliage(val);
+							updateWavingIntensityVisibility();
+						}
 				)
 		);
 
 		y += 30;
 
-		// ── Waving intensity (GPU) ─────────────────────────────────────────────
+		// ── Waving intensity (GPU), shown only while waving foliage is on ──────
 		final int wavingIntensityY = y;
-		this.addRenderableWidget(new WavingIntensitySlider(cx - 100, y, 178, 20,
+		wavingIntensitySlider = new WavingIntensitySlider(cx - 100, y, 178, 20,
 				wavingIntensityToSlider(FoliageSettings.wavingIntensity())
-		));
+		);
+		this.addRenderableWidget(wavingIntensitySlider);
 
 		resetWavingIntensityBtn = Button.builder(
 				Component.translatable("config.mc2_interactivefoliage.reset"),
-				btn -> {
-					FoliageSettings.setWavingIntensity(FoliageSettings.DEFAULT_WAVING_INTENSITY);
-					this.minecraft.setScreenAndShow(new FoliageConfigScreen(parent));
-				}
+				btn -> wavingIntensitySlider.reset()
 		).bounds(cx + 82, wavingIntensityY, 18, 20).build();
-		resetWavingIntensityBtn.visible = !FoliageSettings.isDefaultWavingIntensity();
 		this.addRenderableWidget(resetWavingIntensityBtn);
+		updateWavingIntensityVisibility();
 		//?}
 
 		y += 40;
@@ -207,6 +198,13 @@ public class FoliageConfigScreen extends Screen {
 		protected void applyValue() {
 			config.intensity = 0.1f + (float) value * (2.0f - 0.1f);
 		}
+
+		/** Back to the default in place, without rebuilding the screen. */
+		void reset() {
+			config.intensity = DEFAULT_INTENSITY;
+			value = (DEFAULT_INTENSITY - 0.1f) / (2.0f - 0.1f);
+			updateMessage();
+		}
 	}
 	private class RadiusSlider extends AbstractSliderButton {
 		public RadiusSlider(int x, int y, int w, int h, double initialValue) {
@@ -230,6 +228,13 @@ public class FoliageConfigScreen extends Screen {
 		protected void applyValue() {
 			config.maxDistance = 6.0f + (float) value * (32.0f - 6.0f);
 		}
+
+		/** Back to the default in place, without rebuilding the screen. */
+		void reset() {
+			config.maxDistance = DEFAULT_RADIUS;
+			value = (DEFAULT_RADIUS - 6.0f) / (32.0f - 6.0f);
+			updateMessage();
+		}
 	}
 
 	//? fabric && >=26.2 {
@@ -244,6 +249,20 @@ public class FoliageConfigScreen extends Screen {
 		return intensity <= def
 				? 0.5 * (intensity - min) / (def - min)
 				: 0.5 + 0.5 * (intensity - def) / (max - def);
+	}
+
+	/**
+	 * The intensity slider shows only while waving foliage is on, and its reset button only while it also sits
+	 * off the default. Hidden widgets are neither drawn nor clickable, and their row is left empty.
+	 */
+	private void updateWavingIntensityVisibility() {
+		boolean wavingOn = FoliageSettings.wavingFoliage();
+		if (wavingIntensitySlider != null) {
+			wavingIntensitySlider.visible = wavingOn;
+		}
+		if (resetWavingIntensityBtn != null) {
+			resetWavingIntensityBtn.visible = wavingOn && !FoliageSettings.isDefaultWavingIntensity();
+		}
 	}
 
 	/** Inverse of {@link #wavingIntensityToSlider}, snapped to steps of 0.05. */
@@ -269,14 +288,19 @@ public class FoliageConfigScreen extends Screen {
 					"config.mc2_interactivefoliage.waving_intensity",
 					String.format("%.2f", FoliageSettings.wavingIntensity())
 			));
-			if (resetWavingIntensityBtn != null) {
-				resetWavingIntensityBtn.visible = !FoliageSettings.isDefaultWavingIntensity();
-			}
+			updateWavingIntensityVisibility();
 		}
 
 		@Override
 		protected void applyValue() {
 			FoliageSettings.setWavingIntensity(sliderToWavingIntensity(value));
+		}
+
+		/** Back to the default in place, without rebuilding the screen. */
+		void reset() {
+			FoliageSettings.setWavingIntensity(FoliageSettings.DEFAULT_WAVING_INTENSITY);
+			value = wavingIntensityToSlider(FoliageSettings.DEFAULT_WAVING_INTENSITY);
+			updateMessage();
 		}
 	}
 	//?}
