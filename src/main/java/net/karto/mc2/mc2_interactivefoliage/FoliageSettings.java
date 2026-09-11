@@ -4,7 +4,6 @@ package net.karto.mc2.mc2_interactivefoliage;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
-import net.fabricmc.loader.api.FabricLoader;
 
 import java.io.IOException;
 import java.io.Reader;
@@ -24,7 +23,7 @@ public final class FoliageSettings {
 	public static final float DEFAULT_WAVING_INTENSITY = 1.0F;
 	public static final float MAX_WAVING_INTENSITY = 2.0F;
 
-	private static final Path PATH = FabricLoader.getInstance().getConfigDir().resolve(ModTemplate.MOD_ID + ".json");
+	private static final Path PATH = ModTemplate.xplat().configDir().resolve(ModTemplate.MOD_ID + ".json");
 	private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
 
 	/** The file's contents. Fields missing from an older file keep the defaults set here. */

@@ -13,6 +13,11 @@ public class FabricPlatform implements Platform {
 	}
 
 	@Override
+	public java.nio.file.Path configDir() {
+		return FabricLoader.getInstance().getConfigDir();
+	}
+
+	@Override
 	public ModLoader loader() {
 		return ModLoader.FABRIC;
 	}

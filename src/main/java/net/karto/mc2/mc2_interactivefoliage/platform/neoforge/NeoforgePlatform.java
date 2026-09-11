@@ -15,6 +15,11 @@ public class NeoforgePlatform implements Platform {
 	}
 
 	@Override
+	public java.nio.file.Path configDir() {
+		return net.neoforged.fml.loading.FMLPaths.CONFIGDIR.get();
+	}
+
+	@Override
 	public ModLoader loader() {
 		return ModLoader.NEOFORGE;
 	}

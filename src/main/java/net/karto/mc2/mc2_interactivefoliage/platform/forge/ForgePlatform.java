@@ -14,6 +14,11 @@ public class ForgePlatform implements Platform {
 	}
 
 	@Override
+	public java.nio.file.Path configDir() {
+		return net.minecraftforge.fml.loading.FMLPaths.CONFIGDIR.get();
+	}
+
+	@Override
 	public ModLoader loader() {
 		return ModLoader.FORGE;
 	}

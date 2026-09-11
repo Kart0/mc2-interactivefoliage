@@ -339,7 +339,7 @@ public class FoliageConfigScreen extends Screen {
 		protected void updateMessage() {
 			// The arrow marks it as belonging to the row above it.
 			setMessage(Component.literal("⤷ ").append(Component.translatable(
-					"config.mc2_interactivefoliage.waving_intensity",
+					"config.mc2_interactivefoliage.intensity",
 					String.format("%.1f", FoliageSettings.wavingIntensity())
 			)));
 			updateGpuOptions();
