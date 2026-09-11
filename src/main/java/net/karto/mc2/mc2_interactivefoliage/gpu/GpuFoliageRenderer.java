@@ -10,8 +10,12 @@ import com.mojang.blaze3d.GpuFormat;
 import com.mojang.blaze3d.PrimitiveTopology;
 import com.mojang.blaze3d.buffers.GpuBuffer;
 import com.mojang.blaze3d.buffers.GpuBufferSlice;
+import com.mojang.blaze3d.buffers.Std140Builder;
+import com.mojang.blaze3d.buffers.Std140SizeCalculator;
+import com.mojang.blaze3d.pipeline.BindGroupLayout;
 import com.mojang.blaze3d.pipeline.RenderPipeline;
 import com.mojang.blaze3d.pipeline.RenderTarget;
+import com.mojang.blaze3d.shaders.UniformType;
 import com.mojang.blaze3d.systems.RenderPass;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.textures.FilterMode;
@@ -50,6 +54,7 @@ import org.joml.FrustumIntersection;
 import org.joml.Matrix4f;
 import org.joml.Vector3f;
 import org.joml.Vector4f;
+import org.lwjgl.system.MemoryStack;
 import org.lwjgl.system.MemoryUtil;
 
 import java.nio.ByteBuffer;
@@ -120,17 +125,29 @@ public final class GpuFoliageRenderer {
 			.build();
 
 	/**
+	 * The {@code FoliageSway} uniform block: the settings the shader reads that the player can change while
+	 * playing. They are data in a buffer rather than constants in the shader, so a change shows on the next
+	 * frame without recompiling anything.
+	 */
+	private static final BindGroupLayout SWAY_SETTINGS = BindGroupLayout.builder()
+			.withUniform("FoliageSway", UniformType.UNIFORM_BUFFER)
+			.build();
+	/** A whole vec4 for one float, so the buffer is never smaller than the block once a driver pads it. */
+	private static final int SWAY_SETTINGS_SIZE = new Std140SizeCalculator().putVec4().get();
+
+	/**
 	 * Our own pipeline, so the vertex shader can displace foliage on the GPU.
 	 * <p>
 	 * It inherits everything from vanilla's block snippet -- vertex format, bind groups, depth and
-	 * blend state -- and only swaps in our shaders and adds the sway weight binding. The shader files
-	 * are discovered by resource pack scanning, so no registration call is needed.
+	 * blend state -- and only swaps in our shaders and adds the sway weight binding and the sway settings.
+	 * The shader files are discovered by resource pack scanning, so no registration call is needed.
 	 */
 	private static final RenderPipeline PIPELINE = RenderPipeline.builder(RenderPipelines.BLOCK_SNIPPET)
 			.withLocation(Identifier.fromNamespaceAndPath(ModTemplate.MOD_ID, "pipeline/foliage"))
 			.withVertexShader(Identifier.fromNamespaceAndPath(ModTemplate.MOD_ID, "core/foliage"))
 			.withFragmentShader(Identifier.fromNamespaceAndPath(ModTemplate.MOD_ID, "core/foliage"))
 			.withVertexBinding(1, WAVE_FORMAT)
+			.withBindGroupLayout(SWAY_SETTINGS)
 			.withShaderDefine("ALPHA_CUTOUT", 0.5F)
 			.build();
 
@@ -151,6 +168,10 @@ public final class GpuFoliageRenderer {
 	private static boolean active;
 	/** Set when every buffer was thrown away, so the chunks already loaded get queued again. */
 	private static boolean reseedPending;
+
+	/** Holds the sway settings the shader reads; rewritten only when one of them changes. */
+	private static GpuBuffer swaySettings;
+	private static float uploadedIntensity = Float.NaN;
 
 	/** Reused by every rebuild and grown to the largest section seen, so no rebuild has a size limit. */
 	private static ByteBufferBuilder vertexScratch;
@@ -645,6 +666,8 @@ public final class GpuFoliageRenderer {
 		RenderSystem.AutoStorageIndexBuffer indices = RenderSystem.getSequentialBuffer(PrimitiveTopology.QUADS);
 		GpuBuffer indexBuffer = indices.getBuffer(indexCountFor(longestDraw));
 		RenderTarget target = minecraft.gameRenderer.mainRenderTarget();
+		// Written before the pass opens: a buffer cannot be written to while a render pass is open.
+		GpuBuffer settings = swaySettings();
 
 		try (RenderPass pass = RenderSystem.getDevice()
 				.createCommandEncoder()
@@ -660,6 +683,7 @@ public final class GpuFoliageRenderer {
 			pass.bindTexture("Sampler2", minecraft.gameRenderer.lightmap(),
 					RenderSystem.getSamplerCache().getClampToEdge(FilterMode.LINEAR));
 			pass.setIndexBuffer(indexBuffer, indices.type());
+			pass.setUniform("FoliageSway", settings);
 
 			int boundRegion = -1;
 			for (int i = 0; i < drawsSize; i += 3) {
@@ -676,6 +700,29 @@ public final class GpuFoliageRenderer {
 				pass.drawIndexed(indexCountFor(draws[i + 2]), 1, 0, draws[i + 1], 0);
 			}
 		}
+	}
+
+	/**
+	 * The sway settings buffer, with the current intensity in it. It is written only when the player changed
+	 * the value, so moving the slider is seen live and costs nothing the rest of the time.
+	 */
+	private static GpuBuffer swaySettings() {
+		if (swaySettings == null) {
+			swaySettings = RenderSystem.getDevice().createBuffer(
+					() -> "MC2 foliage sway settings",
+					GpuBuffer.USAGE_UNIFORM | GpuBuffer.USAGE_COPY_DST,
+					SWAY_SETTINGS_SIZE);
+			uploadedIntensity = Float.NaN;
+		}
+		float intensity = FoliageSettings.wavingIntensity();
+		if (intensity != uploadedIntensity) {
+			try (MemoryStack stack = MemoryStack.stackPush()) {
+				ByteBuffer data = Std140Builder.onStack(stack, SWAY_SETTINGS_SIZE).putFloat(intensity).get();
+				RenderSystem.getDevice().createCommandEncoder().writeToBuffer(swaySettings.slice(), data);
+			}
+			uploadedIntensity = intensity;
+		}
+		return swaySettings;
 	}
 
 	private static boolean isVisible(Section section, Frustum frustum, Object sodium) {

@@ -13,10 +13,14 @@ public class FoliageConfigScreen extends Screen {
 	private final SwayConfig config = SwayConfig.INSTANCE;
 
 	private static final float DEFAULT_INTENSITY = 1.0f;
-	private static final float DEFAULT_RADIUS = 6.0f;
+	/** Sway's own default for maxDistance in every supported version, so a fresh install already starts here. */
+	private static final float DEFAULT_RADIUS = 8.0f;
 
 	private Button resetIntensityBtn;
 	private Button resetRadiusBtn;
+	//? fabric && >=26.2 {
+	private Button resetWavingIntensityBtn;
+	//?}
 
 	public FoliageConfigScreen(Screen parent) {
 		super(Component.translatable("config.mc2_interactivefoliage.title"));
@@ -104,6 +108,24 @@ public class FoliageConfigScreen extends Screen {
 						(btn, val) -> FoliageSettings.setWavingFoliage(val)
 				)
 		);
+
+		y += 30;
+
+		// ── Waving intensity (GPU) ─────────────────────────────────────────────
+		final int wavingIntensityY = y;
+		this.addRenderableWidget(new WavingIntensitySlider(cx - 100, y, 178, 20,
+				wavingIntensityToSlider(FoliageSettings.wavingIntensity())
+		));
+
+		resetWavingIntensityBtn = Button.builder(
+				Component.translatable("config.mc2_interactivefoliage.reset"),
+				btn -> {
+					FoliageSettings.setWavingIntensity(FoliageSettings.DEFAULT_WAVING_INTENSITY);
+					this.minecraft.setScreenAndShow(new FoliageConfigScreen(parent));
+				}
+		).bounds(cx + 82, wavingIntensityY, 18, 20).build();
+		resetWavingIntensityBtn.visible = !FoliageSettings.isDefaultWavingIntensity();
+		this.addRenderableWidget(resetWavingIntensityBtn);
 		//?}
 
 		y += 40;
@@ -209,4 +231,53 @@ public class FoliageConfigScreen extends Screen {
 			config.maxDistance = 6.0f + (float) value * (32.0f - 6.0f);
 		}
 	}
+
+	//? fabric && >=26.2 {
+	/**
+	 * The default sits in the middle of the slider: the left half runs down to the minimum and the right half
+	 * up to the maximum, so weaker and stronger each get half the travel.
+	 */
+	private static double wavingIntensityToSlider(float intensity) {
+		float min = FoliageSettings.MIN_WAVING_INTENSITY;
+		float def = FoliageSettings.DEFAULT_WAVING_INTENSITY;
+		float max = FoliageSettings.MAX_WAVING_INTENSITY;
+		return intensity <= def
+				? 0.5 * (intensity - min) / (def - min)
+				: 0.5 + 0.5 * (intensity - def) / (max - def);
+	}
+
+	/** Inverse of {@link #wavingIntensityToSlider}, snapped to steps of 0.05. */
+	private static float sliderToWavingIntensity(double value) {
+		float min = FoliageSettings.MIN_WAVING_INTENSITY;
+		float def = FoliageSettings.DEFAULT_WAVING_INTENSITY;
+		float max = FoliageSettings.MAX_WAVING_INTENSITY;
+		double intensity = value <= 0.5
+				? min + value / 0.5 * (def - min)
+				: def + (value - 0.5) / 0.5 * (max - def);
+		return Math.round(intensity * 20.0) / 20.0f;
+	}
+
+	private class WavingIntensitySlider extends AbstractSliderButton {
+		public WavingIntensitySlider(int x, int y, int w, int h, double initialValue) {
+			super(x, y, w, h, Component.empty(), initialValue);
+			updateMessage();
+		}
+
+		@Override
+		protected void updateMessage() {
+			setMessage(Component.translatable(
+					"config.mc2_interactivefoliage.waving_intensity",
+					String.format("%.2f", FoliageSettings.wavingIntensity())
+			));
+			if (resetWavingIntensityBtn != null) {
+				resetWavingIntensityBtn.visible = !FoliageSettings.isDefaultWavingIntensity();
+			}
+		}
+
+		@Override
+		protected void applyValue() {
+			FoliageSettings.setWavingIntensity(sliderToWavingIntensity(value));
+		}
+	}
+	//?}
 }

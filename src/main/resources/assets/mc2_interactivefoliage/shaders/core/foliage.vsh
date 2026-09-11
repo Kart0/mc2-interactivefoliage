@@ -28,7 +28,13 @@ const float SWAY_SPEED = 2513.2741;
 // 299 for the second axis, which runs 1.3 times faster -- so the wrap never shows as a seam.
 const int PHASE_WRAP = 4095;
 const float SWAY_SCALE = 6.2831853 * 230.0 / 4096.0;
-const float SWAY_STRENGTH = 0.20;
+const float SWAY_STRENGTH = 0.33;
+
+// Settings the player changes in game, written by the mod into a buffer so they apply on the next frame.
+// SwayIntensity multiplies SWAY_STRENGTH, from 0.5 to 2.0.
+layout(std140) uniform FoliageSway {
+    float SwayIntensity;
+};
 
 uniform sampler2D Sampler2;
 
@@ -47,7 +53,7 @@ void main() {
 
     // Phase varies with world position so neighbouring plants never move in lockstep.
     float phase = (world.x + world.z) * SWAY_SCALE + GameTime * SWAY_SPEED;
-    float amount = WaveWeight * SWAY_STRENGTH;
+    float amount = WaveWeight * SWAY_STRENGTH * SwayIntensity;
     pos.x += sin(phase) * amount;
     pos.z += cos(phase * 1.3) * amount * 0.7;
 

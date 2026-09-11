@@ -20,12 +20,17 @@ import java.nio.file.Path;
  */
 public final class FoliageSettings {
 
+	public static final float MIN_WAVING_INTENSITY = 0.5F;
+	public static final float DEFAULT_WAVING_INTENSITY = 1.0F;
+	public static final float MAX_WAVING_INTENSITY = 2.0F;
+
 	private static final Path PATH = FabricLoader.getInstance().getConfigDir().resolve(ModTemplate.MOD_ID + ".json");
 	private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
 
 	/** The file's contents. Fields missing from an older file keep the defaults set here. */
 	private static final class Values {
 		boolean wavingFoliage = true;
+		float wavingIntensity = DEFAULT_WAVING_INTENSITY;
 	}
 
 	private static Values values = load();
@@ -40,6 +45,19 @@ public final class FoliageSettings {
 
 	public static void setWavingFoliage(boolean enabled) {
 		values.wavingFoliage = enabled;
+	}
+
+	/** How strongly foliage sways, as a multiplier of the shader's own strength. */
+	public static float wavingIntensity() {
+		return values.wavingIntensity;
+	}
+
+	public static void setWavingIntensity(float intensity) {
+		values.wavingIntensity = Math.clamp(intensity, MIN_WAVING_INTENSITY, MAX_WAVING_INTENSITY);
+	}
+
+	public static boolean isDefaultWavingIntensity() {
+		return Math.abs(values.wavingIntensity - DEFAULT_WAVING_INTENSITY) < 0.001F;
 	}
 
 	public static void save() {
@@ -58,6 +76,8 @@ public final class FoliageSettings {
 			try (Reader reader = Files.newBufferedReader(PATH)) {
 				Values loaded = GSON.fromJson(reader, Values.class);
 				if (loaded != null) {
+					// A hand-edited file may hold anything.
+					loaded.wavingIntensity = Math.clamp(loaded.wavingIntensity, MIN_WAVING_INTENSITY, MAX_WAVING_INTENSITY);
 					return loaded;
 				}
 			} catch (IOException | RuntimeException e) {
