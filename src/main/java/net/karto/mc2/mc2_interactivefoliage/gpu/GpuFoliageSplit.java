@@ -166,6 +166,12 @@ public final class GpuFoliageSplit {
 		generation++;
 	}
 
+	/** Render thread: no area at all, so every chunk build keeps its foliage. */
+	static void clearArea() {
+		area = null;
+		generation++;
+	}
+
 	/**
 	 * Whether this block is foliage the GPU renderer draws: every block Sway animates, the vanilla foliage it
 	 * registers itself plus whatever {@link net.karto.mc2.mc2_interactivefoliage.ModCompatRegistry} found.

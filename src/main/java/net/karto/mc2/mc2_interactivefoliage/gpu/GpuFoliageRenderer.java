@@ -23,6 +23,7 @@ import com.mojang.blaze3d.vertex.VertexFormat;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientChunkEvents;
 import net.fabricmc.fabric.api.client.rendering.v1.level.LevelRenderEvents;
 import net.fabricmc.fabric.api.client.rendering.v1.level.LevelTerrainRenderContext;
+import net.karto.mc2.mc2_interactivefoliage.FoliageSettings;
 import net.karto.mc2.mc2_interactivefoliage.ModTemplate;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
@@ -146,6 +147,8 @@ public final class GpuFoliageRenderer {
 	private static final Predicate<BlockState> FOLIAGE = GpuFoliageSplit::isFoliage;
 
 	private static ModelBlockRenderer modelRenderer;
+	/** Whether the renderer is in charge of the near foliage, following the waving foliage setting. */
+	private static boolean active;
 	/** Set when every buffer was thrown away, so the chunks already loaded get queued again. */
 	private static boolean reseedPending;
 
@@ -386,6 +389,9 @@ public final class GpuFoliageRenderer {
 	 * neighbours are only touched when the block sits on that edge.
 	 */
 	public static void onBlockChanged(BlockPos pos) {
+		if (!active) {
+			return;
+		}
 		int sectionX = SectionPos.blockToSectionCoord(pos.getX());
 		int sectionY = SectionPos.blockToSectionCoord(pos.getY());
 		int sectionZ = SectionPos.blockToSectionCoord(pos.getZ());
@@ -422,6 +428,9 @@ public final class GpuFoliageRenderer {
 
 	/** Queues the sections of a chunk whose palette could hold foliage. */
 	private static void discoverChunk(ClientLevel level, LevelChunk chunk) {
+		if (!active) {
+			return;
+		}
 		int chunkX = SectionPos.blockToSectionCoord(chunk.getPos().getMinBlockX());
 		int chunkZ = SectionPos.blockToSectionCoord(chunk.getPos().getMinBlockZ());
 		LevelChunkSection[] sections = chunk.getSections();
@@ -522,6 +531,19 @@ public final class GpuFoliageRenderer {
 		if (minecraft.level == null) {
 			return;
 		}
+		// Decisions keep being applied while switched off, so the record is accurate when switched back on.
+		GpuFoliageSplit.applyMeshDecisions();
+		if (!FoliageSettings.wavingFoliage()) {
+			if (active) {
+				deactivate(minecraft);
+			}
+			return;
+		}
+		if (!active) {
+			// Chunks that loaded while switched off were never queued.
+			active = true;
+			reseedPending = true;
+		}
 
 		// The render state carries the camera and the cull frustum vanilla already prepared this
 		// frame, which is available whether or not Sodium owns the terrain renderer.
@@ -530,7 +552,6 @@ public final class GpuFoliageRenderer {
 			return;
 		}
 		Vec3 camera = cameraState.pos;
-		GpuFoliageSplit.applyMeshDecisions();
 		updateNearArea(minecraft);
 		if (reseedPending && minecraft.player != null) {
 			reseedPending = false;
@@ -728,6 +749,27 @@ public final class GpuFoliageRenderer {
 				}
 			}
 		}
+	}
+
+	/**
+	 * Waving foliage was switched off: the chunk mesh takes back the near foliage, and everything the renderer
+	 * held is let go. Switching it on again goes through {@link #updateNearArea} as on first use.
+	 */
+	private static void deactivate(Minecraft minecraft) {
+		active = false;
+		if (GpuFoliageSplit.hasArea()) {
+			int centreX = GpuFoliageSplit.centreX();
+			int centreZ = GpuFoliageSplit.centreZ();
+			int radius = GpuFoliageSplit.radius();
+			// Cleared before any column is queued, so none of their builds can still find itself near.
+			GpuFoliageSplit.clearArea();
+			for (int chunkX = centreX - radius; chunkX <= centreX + radius; chunkX++) {
+				for (int chunkZ = centreZ - radius; chunkZ <= centreZ + radius; chunkZ++) {
+					remeshColumn(minecraft, chunkX, chunkZ, false);
+				}
+			}
+		}
+		discardAll();
 	}
 
 	/** Has the chunk mesher mesh again every section of a column that could hold foliage. */

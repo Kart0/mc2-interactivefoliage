@@ -90,6 +90,22 @@ public class FoliageConfigScreen extends Screen {
 				Math.abs(config.maxDistance - DEFAULT_RADIUS) > 0.1f;
 		this.addRenderableWidget(resetRadiusBtn);
 
+		//? fabric && >=26.2 {
+		y += 30;
+
+		// ── Waving foliage (GPU) ───────────────────────────────────────────────
+		this.addRenderableWidget(
+				CycleButton.booleanBuilder(
+						Component.translatable("config.mc2_interactivefoliage.on"),
+						Component.translatable("config.mc2_interactivefoliage.off"),
+						FoliageSettings.wavingFoliage()
+				).create(cx - 100, y, 200, 20,
+						Component.translatable("config.mc2_interactivefoliage.waving_foliage"),
+						(btn, val) -> FoliageSettings.setWavingFoliage(val)
+				)
+		);
+		//?}
+
 		y += 40;
 
 		// ── Guardar ────────────────────────────────────────────────────────────
@@ -97,6 +113,9 @@ public class FoliageConfigScreen extends Screen {
 				Component.translatable("config.mc2_interactivefoliage.save"),
 				btn -> {
 					SwayConfig.save();
+					//? fabric && >=26.2 {
+					FoliageSettings.save();
+					//?}
 					//? >=26.2{
 					this.minecraft.setScreenAndShow(parent);
 					 //?} else{
@@ -109,6 +128,9 @@ public class FoliageConfigScreen extends Screen {
 	@Override
 	public void onClose() {
 		SwayConfig.save();
+		//? fabric && >=26.2 {
+		FoliageSettings.save();
+		//?}
 		//? >=26.2{
 		this.minecraft.setScreenAndShow(parent);
 		 //?} else{
