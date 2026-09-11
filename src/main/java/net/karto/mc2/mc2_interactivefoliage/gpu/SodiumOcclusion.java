@@ -13,10 +13,10 @@ import java.lang.invoke.MethodType;
  * Asks Sodium whether a box survived its occlusion culling, when Sodium is installed.
  * <p>
  * Sodium has no public API for this. {@code SodiumWorldRenderer.instanceNullable()} and
- * {@code isBoxVisible(double...)} are public methods on an internal class, but they have kept the
- * same signatures from Sodium 0.5 through 0.9, and Sodium relies on them itself to cull entities.
- * They are reached by reflection so the mod neither compiles against Sodium nor needs it; if either
- * cannot be found, culling falls back to the camera frustum alone.
+ * {@code isBoxVisible(double...)} are public methods on an internal class, but they have kept the same
+ * signatures from Sodium 0.5 through 0.9, and Sodium relies on them itself to cull entities. They are
+ * reached by reflection so the mod neither compiles against Sodium nor needs it; if either cannot be
+ * found, culling falls back to the camera frustum alone.
  * <p>
  * A section Sodium holds no geometry for is reported visible, so foliage standing on its own is never
  * hidden by mistake -- it only misses out on being culled.

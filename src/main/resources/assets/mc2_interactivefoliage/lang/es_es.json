@@ -11,8 +11,5 @@
   "key.mc2_interactivefoliage.open_config": "Abrir configuración",
   "key.mc2_interactivefoliage.toggle": "Alternar mod",
   "key.mc2_interactivefoliage.toggle.on": "Vegetación Interactiva: ACTIVADA",
-  "key.mc2_interactivefoliage.toggle.off": "Vegetación Interactiva: DESACTIVADA",
-  "key.mc2_interactivefoliage.compare_renderer": "Comparar renderizado de vegetación (dev)",
-  "key.mc2_interactivefoliage.compare_renderer.gpu": "Renderizado de vegetación: GPU (mod)",
-  "key.mc2_interactivefoliage.compare_renderer.chunks": "Renderizado de vegetación: malla de chunks (Sodium + Sway)"
+  "key.mc2_interactivefoliage.toggle.off": "Vegetación Interactiva: DESACTIVADA"
 }
