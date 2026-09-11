@@ -22,8 +22,13 @@ in float WaveWeight;
 // twenty real minutes. Scaling by two pi times a whole number of cycles gives a visible rhythm
 // (one sway every three seconds) and keeps the motion seamless when it wraps back to zero.
 const float SWAY_SPEED = 2513.2741;
-const float SWAY_SCALE = 0.35;
-const float SWAY_STRENGTH = 0.08;
+
+// The phase follows world position, with the camera's block wrapped to 4096 so the numbers stay
+// precise far from the origin. The scale fits a whole number of cycles into that span -- 230, and
+// 299 for the second axis, which runs 1.3 times faster -- so the wrap never shows as a seam.
+const int PHASE_WRAP = 4095;
+const float SWAY_SCALE = 6.2831853 * 230.0 / 4096.0;
+const float SWAY_STRENGTH = 0.20;
 
 uniform sampler2D Sampler2;
 
@@ -35,8 +40,13 @@ out vec2 texCoord0;
 void main() {
     vec3 pos = Position + ModelOffset;
 
+    // pos is relative to the camera. Adding the camera back gives a world position, so each plant
+    // keeps its own rhythm while the player moves instead of the pattern sliding along with them.
+    // CameraOffset is the camera's block corner minus the camera itself.
+    vec3 world = pos + vec3(CameraBlockPos & PHASE_WRAP) - CameraOffset;
+
     // Phase varies with world position so neighbouring plants never move in lockstep.
-    float phase = (pos.x + pos.z) * SWAY_SCALE + GameTime * SWAY_SPEED;
+    float phase = (world.x + world.z) * SWAY_SCALE + GameTime * SWAY_SPEED;
     float amount = WaveWeight * SWAY_STRENGTH;
     pos.x += sin(phase) * amount;
     pos.z += cos(phase * 1.3) * amount * 0.7;

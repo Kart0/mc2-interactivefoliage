@@ -12,5 +12,8 @@
     "key.mc2_interactivefoliage.open_config":       "Open Config",
     "key.mc2_interactivefoliage.toggle":            "Toggle Mod",
     "key.mc2_interactivefoliage.toggle.on":         "Interactive Foliage: ON",
-    "key.mc2_interactivefoliage.toggle.off":        "Interactive Foliage: OFF"
+    "key.mc2_interactivefoliage.toggle.off":        "Interactive Foliage: OFF",
+    "key.mc2_interactivefoliage.compare_renderer":        "Compare Foliage Renderer (dev)",
+    "key.mc2_interactivefoliage.compare_renderer.gpu":    "Foliage renderer: GPU (mod)",
+    "key.mc2_interactivefoliage.compare_renderer.chunks": "Foliage renderer: chunk mesh (Sodium + Sway)"
 }

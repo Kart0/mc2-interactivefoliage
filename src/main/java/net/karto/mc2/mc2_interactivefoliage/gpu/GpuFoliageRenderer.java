@@ -12,6 +12,7 @@ import com.mojang.blaze3d.buffers.GpuBuffer;
 import com.mojang.blaze3d.buffers.GpuBufferSlice;
 import com.mojang.blaze3d.pipeline.RenderPipeline;
 import com.mojang.blaze3d.pipeline.RenderTarget;
+import com.mojang.blaze3d.systems.GpuQueryPool;
 import com.mojang.blaze3d.systems.RenderPass;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.textures.FilterMode;
@@ -42,8 +43,10 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.level.chunk.LevelChunkSection;
 import net.minecraft.world.level.chunk.status.ChunkStatus;
+import net.minecraft.world.level.levelgen.structure.BoundingBox;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
+import org.joml.FrustumIntersection;
 import org.joml.Matrix4f;
 import org.joml.Vector3f;
 import org.joml.Vector4f;
@@ -55,9 +58,11 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.OptionalDouble;
+import java.util.OptionalLong;
 import java.util.Set;
 import java.util.function.Predicate;
 
@@ -148,10 +153,22 @@ public final class GpuFoliageRenderer {
 
 	/** This frame's draw calls, three ints each: index into the drawn regions, first vertex, vertex count. */
 	private static int[] draws = new int[256 * 3];
+	/** Regions with at least one draw this frame, in the order their draws were queued. */
+	private static final List<Region> DRAWN = new ArrayList<>();
 	private static int drawsSize;
 
 	// Temporary instrumentation while the section pipeline is being brought up.
 	private static long lastReport;
+	private static long buildNanos;
+	private static long uploadNanos;
+	private static long cullNanos;
+	private static long submitNanos;
+	private static int frames;
+	/** Two timestamps written around the foliage pass and read back once the GPU has run it. */
+	private static GpuQueryPool gpuTimer;
+	private static boolean gpuTimerPending;
+	private static long gpuNanos;
+	private static int gpuSamples;
 
 	private GpuFoliageRenderer() {
 	}
@@ -194,6 +211,11 @@ public final class GpuFoliageRenderer {
 		final Section[] sections = new Section[SECTIONS_PER_REGION];
 		/** Where each section starts in the region's buffers, valid once uploaded. */
 		final int[] firstVertex = new int[SECTIONS_PER_REGION];
+		/** The occupied slots in buffer order, so drawing never walks the empty ones. Valid once uploaded. */
+		final int[] occupied = new int[SECTIONS_PER_REGION];
+		int occupiedCount;
+		/** The region's blocks without padding, for asking whether it lies wholly inside the frustum. */
+		final BoundingBox blockBounds;
 		int sectionCount;
 		GpuBuffer vertices;
 		GpuBuffer weights;
@@ -207,6 +229,13 @@ public final class GpuFoliageRenderer {
 					origin.getX() + REGION_WIDTH * SECTION_SIZE + SWAY_MARGIN,
 					origin.getY() + REGION_HEIGHT * SECTION_SIZE + SWAY_MARGIN,
 					origin.getZ() + REGION_WIDTH * SECTION_SIZE + SWAY_MARGIN);
+			blockBounds = new BoundingBox(
+					origin.getX(),
+					origin.getY(),
+					origin.getZ(),
+					origin.getX() + REGION_WIDTH * SECTION_SIZE - 1,
+					origin.getY() + REGION_HEIGHT * SECTION_SIZE - 1,
+					origin.getZ() + REGION_WIDTH * SECTION_SIZE - 1);
 		}
 
 		void put(int slot, Section section) {
@@ -233,10 +262,12 @@ public final class GpuFoliageRenderer {
 		void upload() {
 			closeBuffers();
 			int vertexCount = 0;
+			occupiedCount = 0;
 			for (int slot = 0; slot < SECTIONS_PER_REGION; slot++) {
 				if (sections[slot] != null) {
 					firstVertex[slot] = vertexCount;
 					vertexCount += sections[slot].vertexCount;
+					occupied[occupiedCount++] = slot;
 				}
 			}
 			ByteBuffer vertexData = MemoryUtil.memAlloc(vertexCount * VERTEX_BYTES);
@@ -510,19 +541,23 @@ public final class GpuFoliageRenderer {
 			return;
 		}
 		Vec3 camera = cameraState.pos;
+		long buildStart = System.nanoTime();
 		if (reseedPending && minecraft.player != null) {
 			reseedPending = false;
 			reseedLoadedChunks(minecraft, minecraft.level);
 		}
 		buildNearest(minecraft, camera);
+		long uploadStart = System.nanoTime();
 		// Every change is folded into its region before anything is drawn, so a region's buffers and
 		// the layout used to draw from them always agree.
 		DIRTY_REGIONS.forEach(Region::upload);
 		DIRTY_REGIONS.clear();
+		long cullStart = System.nanoTime();
 
 		Frustum frustum = cameraState.cullFrustum;
 		Object sodium = SodiumOcclusion.renderer();
-		List<Region> drawn = new ArrayList<>();
+		List<Region> drawn = DRAWN;
+		drawn.clear();
 		drawsSize = 0;
 		int storedSections = 0;
 		int drawnSections = 0;
@@ -539,6 +574,10 @@ public final class GpuFoliageRenderer {
 			if (frustum != null && !frustum.isVisible(region.bounds)) {
 				continue;
 			}
+			// A region wholly inside the frustum needs no per-section frustum test. Its unpadded box is
+			// used, so a section whose padding pokes outside is simply drawn -- never wrongly dropped.
+			Frustum sectionFrustum = frustum != null
+					&& frustum.cubeInFrustum(region.blockBounds) == FrustumIntersection.INSIDE ? null : frustum;
 
 			// Walk the sections in buffer order, extending a run while they stay visible, so a region
 			// that is fully in view costs one draw call however many sections it holds.
@@ -546,12 +585,10 @@ public final class GpuFoliageRenderer {
 			int drawsBefore = drawsSize;
 			int runStart = -1;
 			int runEnd = -1;
-			for (int slot = 0; slot < SECTIONS_PER_REGION; slot++) {
+			for (int i = 0; i < region.occupiedCount; i++) {
+				int slot = region.occupied[i];
 				Section section = region.sections[slot];
-				if (section == null) {
-					continue;
-				}
-				if (!isVisible(section, frustum, sodium)) {
+				if (!isVisible(section, sectionFrustum, sodium)) {
 					if (runStart >= 0) {
 						addDraw(regionIndex, runStart, runEnd - runStart);
 						runStart = -1;
@@ -572,19 +609,36 @@ public final class GpuFoliageRenderer {
 			}
 		}
 
+		long cullEnd = System.nanoTime();
+		buildNanos += uploadStart - buildStart;
+		uploadNanos += cullStart - uploadStart;
+		cullNanos += cullEnd - cullStart;
+		frames++;
+
 		long now = System.currentTimeMillis();
 		if (now - lastReport > 5000L) {
 			lastReport = now;
 			ModTemplate.LOGGER.info(
-					"Foliage GPU: regions={} sections={} drawnSections={} drawCalls={} dirtyQueue={} culling={}",
+					"Foliage GPU: regions={} sections={} drawnSections={} drawCalls={} dirtyQueue={} culling={} "
+							+ "cpuMsPerFrame[build={} upload={} cull={} submit={}] gpuMsPerFrame={}",
 					REGIONS.size(), storedSections, drawnSections, drawsSize / 3, DIRTY.size(),
-					sodium != null ? "sodium" : "frustum");
+					sodium != null ? "sodium" : "frustum",
+					perFrame(buildNanos), perFrame(uploadNanos), perFrame(cullNanos), perFrame(submitNanos),
+					gpuSamples == 0 ? "n/a" : String.format(Locale.ROOT, "%.3f", gpuNanos / 1.0e6 / gpuSamples));
+			gpuNanos = 0;
+			gpuSamples = 0;
+			buildNanos = 0;
+			uploadNanos = 0;
+			cullNanos = 0;
+			submitNanos = 0;
+			frames = 0;
 		}
 
 		if (drawn.isEmpty()) {
 			return;
 		}
 
+		long submitStart = System.nanoTime();
 		// Every region's offset is written in one mapping of the uniform ring buffer. The singular
 		// writeTransform maps and unmaps it per call, which costs a GPU round trip for each one.
 		Matrix4f modelView = RenderSystem.getModelViewMatrixCopy();
@@ -612,6 +666,7 @@ public final class GpuFoliageRenderer {
 		RenderSystem.AutoStorageIndexBuffer indices = RenderSystem.getSequentialBuffer(PrimitiveTopology.QUADS);
 		GpuBuffer indexBuffer = indices.getBuffer(indexCountFor(longestDraw));
 		RenderTarget target = minecraft.gameRenderer.mainRenderTarget();
+		boolean timeGpu = gpuTimerReady();
 
 		try (RenderPass pass = RenderSystem.getDevice()
 				.createCommandEncoder()
@@ -627,6 +682,9 @@ public final class GpuFoliageRenderer {
 			pass.bindTexture("Sampler2", minecraft.gameRenderer.lightmap(),
 					RenderSystem.getSamplerCache().getClampToEdge(FilterMode.LINEAR));
 			pass.setIndexBuffer(indexBuffer, indices.type());
+			if (timeGpu) {
+				pass.writeTimestamp(gpuTimer, 0);
+			}
 
 			int boundRegion = -1;
 			for (int i = 0; i < drawsSize; i += 3) {
@@ -642,7 +700,12 @@ public final class GpuFoliageRenderer {
 				// this run of sections starts in the region's buffers.
 				pass.drawIndexed(indexCountFor(draws[i + 2]), 1, 0, draws[i + 1], 0);
 			}
+			if (timeGpu) {
+				pass.writeTimestamp(gpuTimer, 1);
+				gpuTimerPending = true;
+			}
 		}
+		submitNanos += System.nanoTime() - submitStart;
 	}
 
 	private static boolean isVisible(Section section, Frustum frustum, Object sodium) {
@@ -666,6 +729,32 @@ public final class GpuFoliageRenderer {
 		draws[drawsSize++] = regionIndex;
 		draws[drawsSize++] = firstVertex;
 		draws[drawsSize++] = vertexCount;
+	}
+
+	/**
+	 * Collects the previous pass's GPU time if it has come back, and says whether the pool is free to
+	 * time this one. Queries are only rewritten once read, so no result is ever overwritten unread.
+	 */
+	private static boolean gpuTimerReady() {
+		if (gpuTimer == null) {
+			gpuTimer = RenderSystem.getDevice().createTimestampQueryPool(2);
+		}
+		if (!gpuTimerPending) {
+			return true;
+		}
+		OptionalLong start = gpuTimer.getValue(0);
+		OptionalLong end = gpuTimer.getValue(1);
+		if (start.isEmpty() || end.isEmpty()) {
+			return false;
+		}
+		gpuNanos += end.getAsLong() - start.getAsLong();
+		gpuSamples++;
+		gpuTimerPending = false;
+		return true;
+	}
+
+	private static String perFrame(long nanos) {
+		return String.format(Locale.ROOT, "%.3f", nanos / 1.0e6 / Math.max(1, frames));
 	}
 
 	private static int indexCountFor(int vertexCount) {
