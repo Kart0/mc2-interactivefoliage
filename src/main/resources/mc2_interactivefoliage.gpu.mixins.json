@@ -9,6 +9,7 @@
   "mixins": [],
   "client": [
     "ClientLevelMixin",
-    "LevelExtractorMixin"
+    "LevelExtractorMixin",
+    "SwayProximityForceMixin"
   ]
 }

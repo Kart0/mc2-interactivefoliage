@@ -17,6 +17,8 @@ in vec4 Color;
 in vec2 UV0;
 in ivec2 UV2;
 in float WaveWeight;
+// The plant's anchor block, relative to the region: every vertex of a plant shares it.
+in vec3 SwayCell;
 
 // GameTime is the fraction of a Minecraft day, so it advances from 0 to 1 over 24000 ticks --
 // twenty real minutes. Scaling by two pi times a whole number of cycles gives a visible rhythm
@@ -36,6 +38,38 @@ layout(std140) uniform FoliageSway {
     float SwayIntensity;
 };
 
+// Sway's pushes on the plants near the player this frame, one per plant by its anchor block, already
+// followed through a spring by the mod so plants lean in smoothly and rock back when let go.
+#define MAX_CELLS 128
+layout(std140) uniform FoliageInteraction {
+    int CellCount;
+    vec4 CellBoundsMin;           // xyz: lowest cell corner, relative to the camera
+    vec4 CellBoundsMax;           // xyz: highest cell corner, relative to the camera
+    vec4 CellPosition[MAX_CELLS]; // xyz: anchor block corner, relative to the camera
+    vec4 CellForce[MAX_CELLS];    // xy: push along x and z
+};
+
+// How far the tip of a plant can be pushed, in blocks.
+const float INTERACT_STRENGTH = 0.55;
+
+// Sway's push on the plant whose anchor block is at this cell, or none. Every vertex of a plant reads the
+// same push, so the whole plant leans as one piece.
+vec2 swayCellPush(vec3 cell) {
+    if (CellCount == 0
+            || any(lessThan(cell, CellBoundsMin.xyz - 0.5))
+            || any(greaterThan(cell, CellBoundsMax.xyz + 0.5))) {
+        return vec2(0.0);
+    }
+    for (int i = 0; i < CellCount; i++) {
+        if (all(lessThan(abs(CellPosition[i].xyz - cell), vec3(0.5)))) {
+            vec2 force = CellForce[i].xy;
+            float amount = length(force);
+            return amount > 1.0 ? force / amount : force;
+        }
+    }
+    return vec2(0.0);
+}
+
 uniform sampler2D Sampler2;
 
 out float sphericalVertexDistance;
@@ -54,8 +88,13 @@ void main() {
     // Phase varies with world position so neighbouring plants never move in lockstep.
     float phase = (world.x + world.z) * SWAY_SCALE + GameTime * SWAY_SPEED;
     float amount = WaveWeight * SWAY_STRENGTH * SwayIntensity;
+    // ModelOffset is the region's corner relative to the camera, which SwayCell is measured from.
+    vec2 push = swayCellPush(SwayCell + ModelOffset) * WaveWeight * INTERACT_STRENGTH;
     pos.x += sin(phase) * amount;
     pos.z += cos(phase * 1.3) * amount * 0.7;
+    pos.xz += push;
+    // A plant bends rather than slides: the further its tip is pushed, the lower it sits.
+    pos.y -= dot(push, push) * 0.5;
 
     gl_Position = ProjMat * ModelViewMat * vec4(pos, 1.0);
 

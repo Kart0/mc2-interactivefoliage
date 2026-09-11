@@ -86,8 +86,11 @@ public final class GpuFoliageRenderer {
 
 	/** Rebuilds run on the render thread, so only a few are allowed per frame. */
 	private static final int REBUILD_BUDGET = 6;
-	/** Padding on cull boxes so foliage leaning into view is not culled away. */
-	private static final double SWAY_MARGIN = 1.0D;
+	/**
+	 * Padding on cull boxes so foliage leaning into view is not culled away: room for the sway at its strongest
+	 * plus a push from an entity.
+	 */
+	private static final double SWAY_MARGIN = 1.5D;
 	private static final int SECTION_SIZE = 16;
 	/** The near area never shrinks below this many chunks, however short the render distance. */
 	private static final int MIN_NEAR_RADIUS = 2;
@@ -116,12 +119,14 @@ public final class GpuFoliageRenderer {
 	private static final float MAX_LENGTH_DAMPING = 0.8F;
 
 	/**
-	 * A second vertex binding carrying one float per vertex: how freely it may sway, from 0 at the
-	 * anchor to 1 at the far end. Keeping it out of the main format leaves vanilla free to write
-	 * the standard attributes through {@code putBlockBakedQuad}.
+	 * A second vertex binding carrying what the shader needs to move each vertex: how freely it may sway,
+	 * from 0 at the anchor to 1 at the far end, and which block that anchor is, relative to the region, so
+	 * every vertex of a plant can look up the same push. Keeping it out of the main format leaves vanilla free
+	 * to write the standard attributes through {@code putBlockBakedQuad}.
 	 */
 	private static final VertexFormat WAVE_FORMAT = VertexFormat.builder(0)
 			.addAttribute("WaveWeight", GpuFormat.R32_FLOAT)
+			.addAttribute("SwayCell", GpuFormat.RGB32_FLOAT)
 			.build();
 
 	/**
@@ -148,11 +153,12 @@ public final class GpuFoliageRenderer {
 			.withFragmentShader(Identifier.fromNamespaceAndPath(ModTemplate.MOD_ID, "core/foliage"))
 			.withVertexBinding(1, WAVE_FORMAT)
 			.withBindGroupLayout(SWAY_SETTINGS)
+			.withBindGroupLayout(GpuFoliageInteraction.LAYOUT)
 			.withShaderDefine("ALPHA_CUTOUT", 0.5F)
 			.build();
 
 	private static final int VERTEX_BYTES = DefaultVertexFormat.BLOCK.getVertexSize();
-	private static final int WEIGHT_BYTES = Float.BYTES;
+	private static final int WEIGHT_BYTES = WAVE_FORMAT.getVertexSize();
 	private static final int INITIAL_SCRATCH_QUADS = 1024;
 
 	private static final Map<Long, Region> REGIONS = new HashMap<>();
@@ -339,6 +345,10 @@ public final class GpuFoliageRenderer {
 		private final Map<BlockPos, Float> dampingByAnchor = new HashMap<>();
 
 		private float anchorY;
+		/** The anchor block, where Sway keeps the force for the whole plant. */
+		private int cellX;
+		private int cellY;
+		private int cellZ;
 		private boolean hanging;
 		private float damping = 1.0F;
 
@@ -358,6 +368,9 @@ public final class GpuFoliageRenderer {
 			}
 			// Hanging plants are held at the top of their anchor block, everything else at the base.
 			anchorY = hanging ? anchor.getY() + 1 : anchor.getY();
+			cellX = anchor.getX();
+			cellY = anchor.getY();
+			cellZ = anchor.getZ();
 			damping = multiblock == null ? 1.0F : dampingFor(multiblock, anchor, level);
 		}
 
@@ -393,6 +406,11 @@ public final class GpuFoliageRenderer {
 		// chunk loads are followed through Fabric's own event, which fires whichever renderer is used.
 		ClientChunkEvents.CHUNK_LOAD.register(GpuFoliageRenderer::discoverChunk);
 		ClientChunkEvents.CHUNK_UNLOAD.register(GpuFoliageRenderer::forgetChunk);
+	}
+
+	/** Whether this renderer is drawing the near foliage, which is while waving foliage is on in a world. */
+	static boolean isActive() {
+		return active;
 	}
 
 	/** Light arrived or changed in a section. Only sections already holding foliage care. */
@@ -445,6 +463,7 @@ public final class GpuFoliageRenderer {
 		// Nothing queues the chunks that are already loaded again: with Sodium in charge a resource
 		// reload rebuilds its own meshes without passing any hook. They are rediscovered on next draw.
 		reseedPending = true;
+		GpuFoliageInteraction.reset();
 	}
 
 	/** Queues the sections of a chunk whose palette could hold foliage. */
@@ -668,6 +687,7 @@ public final class GpuFoliageRenderer {
 		RenderTarget target = minecraft.gameRenderer.mainRenderTarget();
 		// Written before the pass opens: a buffer cannot be written to while a render pass is open.
 		GpuBuffer settings = swaySettings();
+		GpuBuffer interaction = GpuFoliageInteraction.upload(camera);
 
 		try (RenderPass pass = RenderSystem.getDevice()
 				.createCommandEncoder()
@@ -684,6 +704,7 @@ public final class GpuFoliageRenderer {
 					RenderSystem.getSamplerCache().getClampToEdge(FilterMode.LINEAR));
 			pass.setIndexBuffer(indexBuffer, indices.type());
 			pass.setUniform("FoliageSway", settings);
+			pass.setUniform("FoliageInteraction", interaction);
 
 			int boundRegion = -1;
 			for (int i = 0; i < drawsSize; i += 3) {
@@ -965,6 +986,9 @@ public final class GpuFoliageRenderer {
 			for (int vertex = 0; vertex < 4; vertex++) {
 				float worldY = regionOrigin.getY() + y + quad.position(vertex).y();
 				weightScratch.putFloat(anchor.weightAt(worldY));
+				weightScratch.putFloat(anchor.cellX - regionOrigin.getX());
+				weightScratch.putFloat(anchor.cellY - regionOrigin.getY());
+				weightScratch.putFloat(anchor.cellZ - regionOrigin.getZ());
 			}
 		};
 
