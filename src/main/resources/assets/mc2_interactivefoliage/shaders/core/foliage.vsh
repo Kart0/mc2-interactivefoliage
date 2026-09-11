@@ -46,7 +46,7 @@ layout(std140) uniform FoliageInteraction {
     vec4 CellBoundsMin;           // xyz: lowest cell corner, relative to the camera
     vec4 CellBoundsMax;           // xyz: highest cell corner, relative to the camera
     vec4 CellPosition[MAX_CELLS]; // xyz: anchor block corner, relative to the camera
-    vec4 CellForce[MAX_CELLS];    // xy: push along x and z
+    vec4 CellForce[MAX_CELLS];    // xy: push along x and z; z: the most this plant may be pushed
 };
 
 // How far the tip of a plant can be pushed, in blocks.
@@ -68,8 +68,9 @@ vec2 swayCellPush(vec3 cell) {
     for (int i = 0; i < CellCount; i++) {
         if (all(lessThan(abs(CellPosition[i].xyz - cell), vec3(0.5)))) {
             vec2 force = CellForce[i].xy;
+            float limit = CellForce[i].z;
             float amount = length(force);
-            return amount > 1.0 ? force / amount : force;
+            return amount > limit ? force * (limit / amount) : force;
         }
     }
     return vec2(0.0);
@@ -101,8 +102,11 @@ void main() {
     pos.x += sin(phase) * amount;
     pos.z += cos(phase * 1.3) * amount * 0.7;
     pos.xz += push;
-    // A plant bends rather than slides: the further its tip is pushed, the lower it sits.
-    pos.y -= dot(push, push) * 0.5;
+    // A plant bends rather than slides: the further its tip is pushed, the lower it sits. Up to a block of
+    // push the drop grows with its square, as a bending stalk would; past that it only grows in step, so a
+    // strong push leans a plant over instead of sinking it into the ground.
+    float pushed = length(push);
+    pos.y -= min(pushed * pushed, pushed) * 0.5;
 
     gl_Position = ProjMat * ModelViewMat * vec4(pos, 1.0);
 

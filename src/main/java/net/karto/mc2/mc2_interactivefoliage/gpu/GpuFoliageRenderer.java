@@ -88,9 +88,9 @@ public final class GpuFoliageRenderer {
 	private static final int REBUILD_BUDGET = 6;
 	/**
 	 * Padding on cull boxes so foliage leaning into view is not culled away: room for the sway at its strongest
-	 * plus a push from an entity.
+	 * plus the strongest push from an entity, on a tall plant with Sway's intensity turned up.
 	 */
-	private static final double SWAY_MARGIN = 1.5D;
+	private static final double SWAY_MARGIN = 2.5D;
 	private static final int SECTION_SIZE = 16;
 	/** The near area never shrinks below this many chunks, however short the render distance. */
 	private static final int MIN_NEAR_RADIUS = 2;
