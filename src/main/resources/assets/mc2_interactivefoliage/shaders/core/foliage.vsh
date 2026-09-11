@@ -51,6 +51,11 @@ layout(std140) uniform FoliageInteraction {
 
 // How far the tip of a plant can be pushed, in blocks.
 const float INTERACT_STRENGTH = 0.55;
+// How much of its sway a plant keeps while an entity pushes it.
+const float PUSHED_SWAY = 0.25;
+// How hard a push has to be before a plant keeps only PUSHED_SWAY; lighter pushes calm it partly, so the
+// sway eases down as a plant is pushed and back up as the push fades.
+const float PUSH_FOR_CALM = 0.2;
 
 // Sway's push on the plant whose anchor block is at this cell, or none. Every vertex of a plant reads the
 // same push, so the whole plant leans as one piece.
@@ -87,9 +92,12 @@ void main() {
 
     // Phase varies with world position so neighbouring plants never move in lockstep.
     float phase = (world.x + world.z) * SWAY_SCALE + GameTime * SWAY_SPEED;
-    float amount = WaveWeight * SWAY_STRENGTH * SwayIntensity;
     // ModelOffset is the region's corner relative to the camera, which SwayCell is measured from.
-    vec2 push = swayCellPush(SwayCell + ModelOffset) * WaveWeight * INTERACT_STRENGTH;
+    vec2 force = swayCellPush(SwayCell + ModelOffset);
+    // Every vertex of a plant reads the same force, so the whole plant calms together.
+    float calm = smoothstep(0.0, PUSH_FOR_CALM, length(force));
+    float amount = WaveWeight * SWAY_STRENGTH * SwayIntensity * mix(1.0, PUSHED_SWAY, calm);
+    vec2 push = force * WaveWeight * INTERACT_STRENGTH;
     pos.x += sin(phase) * amount;
     pos.z += cos(phase * 1.3) * amount * 0.7;
     pos.xz += push;
