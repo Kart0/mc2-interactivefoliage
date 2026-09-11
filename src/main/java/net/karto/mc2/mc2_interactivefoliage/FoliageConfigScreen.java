@@ -12,7 +12,10 @@ public class FoliageConfigScreen extends Screen {
 	private final Screen parent;
 	private final SwayConfig config = SwayConfig.INSTANCE;
 
+	/** Sway accepts weaker than this, but below half strength the interaction is barely visible. */
+	private static final float MIN_INTENSITY = 0.5f;
 	private static final float DEFAULT_INTENSITY = 1.0f;
+	private static final float MAX_INTENSITY = 2.0f;
 	/** Sway's own default for maxDistance in every supported version, so a fresh install already starts here. */
 	private static final float DEFAULT_RADIUS = 8.0f;
 
@@ -21,6 +24,7 @@ public class FoliageConfigScreen extends Screen {
 	private Button resetIntensityBtn;
 	private Button resetRadiusBtn;
 	//? fabric && >=26.2 {
+	private CycleButton<Boolean> wavingFoliageBtn;
 	private WavingIntensitySlider wavingIntensitySlider;
 	private Button resetWavingIntensityBtn;
 	//?}
@@ -30,10 +34,26 @@ public class FoliageConfigScreen extends Screen {
 		this.parent = parent;
 	}
 
+	/**
+	 * Where the first option goes, so the whole screen sits centred whatever its height: the window's, the
+	 * interface scale's, or the mod's own, since some versions have fewer options than others.
+	 * <p>
+	 * The title sits 20 above this, the options follow 30 apart, and the save button comes 40 after the last
+	 * one. Options that are hidden keep their row, so the height never changes while the screen is open.
+	 */
+	private int topOfOptions() {
+		int rows = 3;
+		//? fabric && >=26.2 {
+		rows += 3;
+		//?}
+		int height = 20 + (rows - 1) * 30 + 60;
+		return Math.max((this.height - height) / 2 + 20, 20);
+	}
+
 	@Override
 	protected void init() {
 		int cx = this.width / 2;
-		int y = this.height / 4;
+		int y = topOfOptions();
 
 		// ── Toggle ON/OFF ──────────────────────────────────────────────────────
 		this.addRenderableWidget(
@@ -54,7 +74,7 @@ public class FoliageConfigScreen extends Screen {
 		// ── Intensidad ─────────────────────────────────────────────────────────
 		final int intensityY = y;
 		intensitySlider = new IntensitySlider(cx - 100, y, 178, 20,
-				(config.intensity - 0.1f) / (2.0f - 0.1f)
+				toSliderPosition(config.intensity, MIN_INTENSITY, DEFAULT_INTENSITY, MAX_INTENSITY)
 		);
 		this.addRenderableWidget(intensitySlider);
 
@@ -87,24 +107,41 @@ public class FoliageConfigScreen extends Screen {
 		//? fabric && >=26.2 {
 		y += 30;
 
-		// ── Waving foliage (GPU) ───────────────────────────────────────────────
+		// ── Renderer: the chunk mesh as always, or the mod's own on the GPU ────
 		this.addRenderableWidget(
 				CycleButton.booleanBuilder(
-						Component.translatable("config.mc2_interactivefoliage.on"),
-						Component.translatable("config.mc2_interactivefoliage.off"),
-						FoliageSettings.wavingFoliage()
+						// Written out rather than translated: the two read the same in every language.
+						Component.literal("GPU"),
+						Component.literal("CPU"),
+						FoliageSettings.gpuRenderer()
 				).create(cx - 100, y, 200, 20,
-						Component.translatable("config.mc2_interactivefoliage.waving_foliage"),
+						Component.translatable("config.mc2_interactivefoliage.renderer"),
 						(btn, val) -> {
-							FoliageSettings.setWavingFoliage(val);
-							updateWavingIntensityVisibility();
+							FoliageSettings.setGpuRenderer(val);
+							updateGpuOptions();
 						}
 				)
 		);
 
 		y += 30;
 
-		// ── Waving intensity (GPU), shown only while waving foliage is on ──────
+		// ── Wind, shown only with the GPU renderer on ──────────────────────────
+		wavingFoliageBtn = CycleButton.booleanBuilder(
+				Component.translatable("config.mc2_interactivefoliage.on"),
+				Component.translatable("config.mc2_interactivefoliage.off"),
+				FoliageSettings.wavingFoliage()
+		).create(cx - 100, y, 200, 20,
+				Component.translatable("config.mc2_interactivefoliage.waving_foliage"),
+				(btn, val) -> {
+					FoliageSettings.setWavingFoliage(val);
+					updateGpuOptions();
+				}
+		);
+		this.addRenderableWidget(wavingFoliageBtn);
+
+		y += 30;
+
+		// ── Wind strength, shown only while the wind is on ─────────────────────
 		final int wavingIntensityY = y;
 		wavingIntensitySlider = new WavingIntensitySlider(cx - 100, y, 178, 20,
 				wavingIntensityToSlider(FoliageSettings.wavingIntensity())
@@ -116,7 +153,7 @@ public class FoliageConfigScreen extends Screen {
 				btn -> wavingIntensitySlider.reset()
 		).bounds(cx + 82, wavingIntensityY, 18, 20).build();
 		this.addRenderableWidget(resetWavingIntensityBtn);
-		updateWavingIntensityVisibility();
+		updateGpuOptions();
 		//?}
 
 		y += 40;
@@ -160,7 +197,7 @@ public class FoliageConfigScreen extends Screen {
 		super.render(graphics, mouseX, mouseY, delta);
 		graphics.drawCenteredString(
 				this.font, this.title,
-				this.width / 2, this.height / 4 - 20,
+				this.width / 2, topOfOptions() - 20,
 				0xFFFFFF
 		);
 	}
@@ -170,11 +207,32 @@ public class FoliageConfigScreen extends Screen {
 	public void extractRenderState(net.minecraft.client.gui.GuiGraphicsExtractor graphics, int mouseX, int mouseY, float a) {
 		super.extractRenderState(graphics, mouseX, mouseY, a);
 		graphics.centeredText(this.font, this.title,
-				this.width / 2, this.height / 4 - 20,
+				this.width / 2, topOfOptions() - 20,
 				0xFFFFFF);
 	}
 	//?}
 
+
+	/**
+	 * Where a value sits on a slider that holds its default in the middle: the left half runs down to the
+	 * minimum and the right half up to the maximum, so weaker and stronger each get half the travel.
+	 */
+	private static double toSliderPosition(float value, float min, float def, float max) {
+		double position = value <= def
+				? 0.5 * (value - min) / (def - min)
+				: 0.5 + 0.5 * (value - def) / (max - def);
+		// A config file edited by hand may hold a value from outside the slider's range. Math.clamp would say
+		// this better, but this screen is shared with 1.20.1, which is built against Java 17.
+		return Math.max(0.0, Math.min(1.0, position));
+	}
+
+	/** The inverse of {@link #toSliderPosition}, snapped to steps of 0.1. */
+	private static float fromSliderPosition(double position, float min, float def, float max) {
+		double value = position <= 0.5
+				? min + position / 0.5 * (def - min)
+				: def + (position - 0.5) / 0.5 * (max - def);
+		return Math.round(value * 10.0) / 10.0f;
+	}
 
 	private class IntensitySlider extends AbstractSliderButton {
 		public IntensitySlider(int x, int y, int w, int h, double initialValue) {
@@ -196,13 +254,13 @@ public class FoliageConfigScreen extends Screen {
 
 		@Override
 		protected void applyValue() {
-			config.intensity = 0.1f + (float) value * (2.0f - 0.1f);
+			config.intensity = fromSliderPosition(value, MIN_INTENSITY, DEFAULT_INTENSITY, MAX_INTENSITY);
 		}
 
 		/** Back to the default in place, without rebuilding the screen. */
 		void reset() {
 			config.intensity = DEFAULT_INTENSITY;
-			value = (DEFAULT_INTENSITY - 0.1f) / (2.0f - 0.1f);
+			value = toSliderPosition(DEFAULT_INTENSITY, MIN_INTENSITY, DEFAULT_INTENSITY, MAX_INTENSITY);
 			updateMessage();
 		}
 	}
@@ -243,37 +301,32 @@ public class FoliageConfigScreen extends Screen {
 	 * up to the maximum, so weaker and stronger each get half the travel.
 	 */
 	private static double wavingIntensityToSlider(float intensity) {
-		float min = FoliageSettings.MIN_WAVING_INTENSITY;
-		float def = FoliageSettings.DEFAULT_WAVING_INTENSITY;
-		float max = FoliageSettings.MAX_WAVING_INTENSITY;
-		return intensity <= def
-				? 0.5 * (intensity - min) / (def - min)
-				: 0.5 + 0.5 * (intensity - def) / (max - def);
+		return toSliderPosition(intensity, FoliageSettings.MIN_WAVING_INTENSITY,
+				FoliageSettings.DEFAULT_WAVING_INTENSITY, FoliageSettings.MAX_WAVING_INTENSITY);
 	}
 
 	/**
-	 * The intensity slider shows only while waving foliage is on, and its reset button only while it also sits
-	 * off the default. Hidden widgets are neither drawn nor clickable, and their row is left empty.
+	 * What the GPU renderer owns shows only while it is on: the wind, and under it the wind's strength while the
+	 * wind itself is on. The strength's reset button also waits until the value sits off its default. Hidden
+	 * widgets are neither drawn nor clickable, and their row is left empty.
 	 */
-	private void updateWavingIntensityVisibility() {
-		boolean wavingOn = FoliageSettings.wavingFoliage();
+	private void updateGpuOptions() {
+		boolean gpu = FoliageSettings.gpuRenderer();
+		if (wavingFoliageBtn != null) {
+			wavingFoliageBtn.visible = gpu;
+		}
+		boolean wind = gpu && FoliageSettings.wavingFoliage();
 		if (wavingIntensitySlider != null) {
-			wavingIntensitySlider.visible = wavingOn;
+			wavingIntensitySlider.visible = wind;
 		}
 		if (resetWavingIntensityBtn != null) {
-			resetWavingIntensityBtn.visible = wavingOn && !FoliageSettings.isDefaultWavingIntensity();
+			resetWavingIntensityBtn.visible = wind && !FoliageSettings.isDefaultWavingIntensity();
 		}
 	}
 
-	/** Inverse of {@link #wavingIntensityToSlider}, snapped to steps of 0.05. */
 	private static float sliderToWavingIntensity(double value) {
-		float min = FoliageSettings.MIN_WAVING_INTENSITY;
-		float def = FoliageSettings.DEFAULT_WAVING_INTENSITY;
-		float max = FoliageSettings.MAX_WAVING_INTENSITY;
-		double intensity = value <= 0.5
-				? min + value / 0.5 * (def - min)
-				: def + (value - 0.5) / 0.5 * (max - def);
-		return Math.round(intensity * 20.0) / 20.0f;
+		return fromSliderPosition(value, FoliageSettings.MIN_WAVING_INTENSITY,
+				FoliageSettings.DEFAULT_WAVING_INTENSITY, FoliageSettings.MAX_WAVING_INTENSITY);
 	}
 
 	private class WavingIntensitySlider extends AbstractSliderButton {
@@ -284,11 +337,12 @@ public class FoliageConfigScreen extends Screen {
 
 		@Override
 		protected void updateMessage() {
-			setMessage(Component.translatable(
+			// The arrow marks it as belonging to the row above it.
+			setMessage(Component.literal("⤷ ").append(Component.translatable(
 					"config.mc2_interactivefoliage.waving_intensity",
-					String.format("%.2f", FoliageSettings.wavingIntensity())
-			));
-			updateWavingIntensityVisibility();
+					String.format("%.1f", FoliageSettings.wavingIntensity())
+			)));
+			updateGpuOptions();
 		}
 
 		@Override

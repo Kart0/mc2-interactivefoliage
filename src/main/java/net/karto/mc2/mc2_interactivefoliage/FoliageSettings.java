@@ -29,6 +29,7 @@ public final class FoliageSettings {
 
 	/** The file's contents. Fields missing from an older file keep the defaults set here. */
 	private static final class Values {
+		boolean gpuRenderer = true;
 		boolean wavingFoliage = true;
 		float wavingIntensity = DEFAULT_WAVING_INTENSITY;
 	}
@@ -38,7 +39,19 @@ public final class FoliageSettings {
 	private FoliageSettings() {
 	}
 
-	/** Whether foliage near the player is drawn and swayed on the GPU. */
+	/**
+	 * Whether the mod draws the foliage near the player itself, on the GPU. Turned off, every plant is drawn by
+	 * the chunk mesh as it always was, and the mod adds nothing to it.
+	 */
+	public static boolean gpuRenderer() {
+		return values.gpuRenderer;
+	}
+
+	public static void setGpuRenderer(boolean enabled) {
+		values.gpuRenderer = enabled;
+	}
+
+	/** Whether the wind sways the foliage the GPU renderer draws. */
 	public static boolean wavingFoliage() {
 		return values.wavingFoliage;
 	}
@@ -47,7 +60,7 @@ public final class FoliageSettings {
 		values.wavingFoliage = enabled;
 	}
 
-	/** How strongly foliage sways, as a multiplier of the shader's own strength. */
+	/** How strongly the wind sways foliage, as a multiplier of the shader's own strength. */
 	public static float wavingIntensity() {
 		return values.wavingIntensity;
 	}

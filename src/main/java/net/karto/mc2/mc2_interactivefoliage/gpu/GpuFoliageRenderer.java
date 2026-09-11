@@ -408,7 +408,7 @@ public final class GpuFoliageRenderer {
 		ClientChunkEvents.CHUNK_UNLOAD.register(GpuFoliageRenderer::forgetChunk);
 	}
 
-	/** Whether this renderer is drawing the near foliage, which is while waving foliage is on in a world. */
+	/** Whether this renderer is drawing the near foliage, which is while it is switched on in a world. */
 	static boolean isActive() {
 		return active;
 	}
@@ -573,7 +573,7 @@ public final class GpuFoliageRenderer {
 		}
 		// Decisions keep being applied while switched off, so the record is accurate when switched back on.
 		GpuFoliageSplit.applyMeshDecisions();
-		if (!FoliageSettings.wavingFoliage()) {
+		if (!FoliageSettings.gpuRenderer()) {
 			if (active) {
 				deactivate(minecraft);
 			}
@@ -724,8 +724,9 @@ public final class GpuFoliageRenderer {
 	}
 
 	/**
-	 * The sway settings buffer, with the current intensity in it. It is written only when the player changed
-	 * the value, so moving the slider is seen live and costs nothing the rest of the time.
+	 * The sway settings buffer, with the current intensity in it, or zero while the wind is switched off. It is
+	 * written only when the value changed, so moving the slider is seen live and costs nothing the rest of the
+	 * time.
 	 */
 	private static GpuBuffer swaySettings() {
 		if (swaySettings == null) {
@@ -735,7 +736,7 @@ public final class GpuFoliageRenderer {
 					SWAY_SETTINGS_SIZE);
 			uploadedIntensity = Float.NaN;
 		}
-		float intensity = FoliageSettings.wavingIntensity();
+		float intensity = FoliageSettings.wavingFoliage() ? FoliageSettings.wavingIntensity() : 0.0F;
 		if (intensity != uploadedIntensity) {
 			try (MemoryStack stack = MemoryStack.stackPush()) {
 				ByteBuffer data = Std140Builder.onStack(stack, SWAY_SETTINGS_SIZE).putFloat(intensity).get();
@@ -820,7 +821,7 @@ public final class GpuFoliageRenderer {
 	}
 
 	/**
-	 * Waving foliage was switched off: the chunk mesh takes back the near foliage, and everything the renderer
+	 * The GPU renderer was switched off: the chunk mesh takes back the near foliage, and everything the renderer
 	 * held is let go. Switching it on again goes through {@link #updateNearArea} as on first use.
 	 */
 	private static void deactivate(Minecraft minecraft) {

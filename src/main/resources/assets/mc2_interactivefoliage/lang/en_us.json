@@ -7,6 +7,7 @@
     "config.mc2_interactivefoliage.radius":    "Visibility Radius: %s blocks",
     "config.mc2_interactivefoliage.reset":     "↺",
     "config.mc2_interactivefoliage.save":      "Save & Close",
+    "config.mc2_interactivefoliage.renderer":      "Renderer",
     "config.mc2_interactivefoliage.waving_foliage": "Waving Foliage",
     "config.mc2_interactivefoliage.waving_intensity": "Intensity: %s",
 
