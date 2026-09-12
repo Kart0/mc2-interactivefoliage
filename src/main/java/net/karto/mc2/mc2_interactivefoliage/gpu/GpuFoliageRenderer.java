@@ -19,7 +19,6 @@ import com.mojang.blaze3d.buffers.Std140SizeCalculator;
 import com.mojang.blaze3d.pipeline.BindGroupLayout;
 //?} else {
 /*import com.mojang.blaze3d.pipeline.DepthStencilState;
-import com.mojang.blaze3d.vertex.VertexFormatElement;
 *///?}
 import com.mojang.blaze3d.pipeline.RenderPipeline;
 import com.mojang.blaze3d.pipeline.RenderTarget;
@@ -32,6 +31,7 @@ import com.mojang.blaze3d.vertex.ByteBufferBuilder;
 import com.mojang.blaze3d.vertex.DefaultVertexFormat;
 import com.mojang.blaze3d.vertex.MeshData;
 import com.mojang.blaze3d.vertex.VertexFormat;
+import com.mojang.blaze3d.vertex.VertexFormatElement;
 import net.karto.mc2.mc2_interactivefoliage.FoliageSettings;
 import net.karto.mc2.mc2_interactivefoliage.ModTemplate;
 import net.minecraft.client.Minecraft;
@@ -132,17 +132,28 @@ public final class GpuFoliageRenderer {
 	 * end, and which block that anchor is, relative to the region, so every vertex of a plant looks up the
 	 * same push. Either way vanilla writes the standard attributes itself, untouched.
 	 */
+	// They ride with the block's own attributes in a single format, interleaved as a region is uploaded.
+	// A binding of their own would read better, and 26.2 allows one, but Iris rewrites the bindings of any
+	// pipeline whose first one is the block format, collapsing them to the single one a shader pack wants.
+	// Sharing one format keeps this pipeline unmistakably the mod's own, and matches what older versions,
+	// which read one vertex buffer per pipeline, can do anyway.
 	//? >=26.2 {
-	// A binding of its own, which is the tidiest a pipeline allows from 26.2 on.
-	private static final VertexFormat WAVE_FORMAT = VertexFormat.builder(0)
-			.addAttribute("WaveWeight", GpuFormat.R32_FLOAT)
-			.addAttribute("SwayCell", GpuFormat.RGB32_FLOAT)
-			.addAttribute("PushWeight", GpuFormat.R32_FLOAT)
-			.build();
+	private static final VertexFormat FOLIAGE_FORMAT = foliageFormat();
+
+	private static VertexFormat foliageFormat() {
+		VertexFormat.Builder builder = VertexFormat.builder(0);
+		// The block's attributes first and in their own order, so they keep the offsets vanilla writes them at.
+		for (VertexFormatElement element : DefaultVertexFormat.BLOCK.getElements()) {
+			builder.addAttribute(element.name(), element.format());
+		}
+		return builder
+				.addAttribute("WaveWeight", GpuFormat.R32_FLOAT)
+				.addAttribute("SwayCell", GpuFormat.RGB32_FLOAT)
+				.addAttribute("PushWeight", GpuFormat.R32_FLOAT)
+				.build();
+	}
 	//?} else {
-	/*// Before 26.2 a pipeline reads one vertex buffer only, so these ride with the block's own attributes in
-	// a single format, interleaved as a region is uploaded.
-	private static final VertexFormatElement WAVE_WEIGHT_ELEMENT =
+	/*private static final VertexFormatElement WAVE_WEIGHT_ELEMENT =
 			VertexFormatElement.register(10, 0, VertexFormatElement.Type.FLOAT, false, 1);
 	private static final VertexFormatElement SWAY_CELL_ELEMENT =
 			VertexFormatElement.register(11, 0, VertexFormatElement.Type.FLOAT, false, 3);
@@ -190,7 +201,7 @@ public final class GpuFoliageRenderer {
 			.withLocation(Identifier.fromNamespaceAndPath(ModTemplate.MOD_ID, "pipeline/foliage"))
 			.withVertexShader(Identifier.fromNamespaceAndPath(ModTemplate.MOD_ID, "core/foliage"))
 			.withFragmentShader(Identifier.fromNamespaceAndPath(ModTemplate.MOD_ID, "core/foliage"))
-			.withVertexBinding(1, WAVE_FORMAT)
+			.withVertexBinding(0, FOLIAGE_FORMAT)
 			.withBindGroupLayout(SWAY_SETTINGS)
 			.withBindGroupLayout(GpuFoliageInteraction.LAYOUT)
 			.withShaderDefine("ALPHA_CUTOUT", 0.5F)
@@ -299,7 +310,6 @@ public final class GpuFoliageRenderer {
 		int occupiedCount;
 		int sectionCount;
 		GpuBuffer vertices;
-		GpuBuffer weights;
 
 		Region(long regionKey) {
 			origin = regionOrigin(regionKey);
@@ -351,32 +361,7 @@ public final class GpuFoliageRenderer {
 					occupied[occupiedCount++] = slot;
 				}
 			}
-			//? >=26.2 {
-			ByteBuffer vertexData = MemoryUtil.memAlloc(vertexCount * VERTEX_BYTES);
-			ByteBuffer weightData = MemoryUtil.memAlloc(vertexCount * WEIGHT_BYTES);
-			try {
-				// Absolute copies, so no view of each section's buffers has to be created to read them.
-				for (int i = 0; i < occupiedCount; i++) {
-					int slot = occupied[i];
-					Section section = sections[slot];
-					vertexData.put(firstVertex[slot] * VERTEX_BYTES, section.vertices, 0, section.vertexCount * VERTEX_BYTES);
-					weightData.put(firstVertex[slot] * WEIGHT_BYTES, section.weights, 0, section.vertexCount * WEIGHT_BYTES);
-				}
-				vertices = RenderSystem.getDevice().createBuffer(
-						() -> "MC2 foliage vertices",
-						GpuBuffer.USAGE_VERTEX | GpuBuffer.USAGE_COPY_DST,
-						vertexData);
-				weights = RenderSystem.getDevice().createBuffer(
-						() -> "MC2 foliage sway weights",
-						GpuBuffer.USAGE_VERTEX | GpuBuffer.USAGE_COPY_DST,
-						weightData);
-			} finally {
-				MemoryUtil.memFree(vertexData);
-				MemoryUtil.memFree(weightData);
-			}
-			//?} else {
-			/*// One buffer holding both, vertex by vertex: the block's own attributes, then ours. A pipeline
-			// reads a single vertex buffer before 26.2, so the two are interleaved here rather than bound apart.
+			// One buffer holding both, vertex by vertex: the block's own attributes, then ours.
 			int stride = VERTEX_BYTES + WEIGHT_BYTES;
 			ByteBuffer vertexData = MemoryUtil.memAlloc(vertexCount * stride);
 			try {
@@ -396,17 +381,12 @@ public final class GpuFoliageRenderer {
 			} finally {
 				MemoryUtil.memFree(vertexData);
 			}
-			*///?}
 		}
 
 		void closeBuffers() {
 			if (vertices != null) {
 				vertices.close();
 				vertices = null;
-			}
-			if (weights != null) {
-				weights.close();
-				weights = null;
 			}
 		}
 
@@ -836,7 +816,6 @@ public final class GpuFoliageRenderer {
 					pass.setUniform("DynamicTransforms", offsets[regionIndex]);
 					//? >=26.2 {
 					pass.setVertexBuffer(0, region.vertices.slice());
-					pass.setVertexBuffer(1, region.weights.slice());
 					//?} else {
 					/*pass.setVertexBuffer(0, region.vertices);
 					*///?}
@@ -1071,6 +1050,17 @@ public final class GpuFoliageRenderer {
 				Math.clamp(SectionPos.blockToSectionCoord(minecraft.player.getBlockZ()), minZ, minZ + REGION_WIDTH - 1)));
 	}
 
+	private static boolean warnedForeignVertexFormat;
+
+	private static void warnForeignVertexFormat(Object format) {
+		if (warnedForeignVertexFormat) {
+			return;
+		}
+		warnedForeignVertexFormat = true;
+		ModTemplate.LOGGER.warn("Foliage was meshed in {} rather than the block format, so the GPU renderer "
+				+ "left it to the chunk mesh. Another mod is widening the mod's vertex buffer.", format);
+	}
+
 	private static void reserveWeights(int bytes) {
 		if (weightScratch.remaining() >= bytes) {
 			return;
@@ -1082,7 +1072,20 @@ public final class GpuFoliageRenderer {
 		weightScratch = grown;
 	}
 
+	/**
+	 * Meshes a section, with Iris told to leave the buffer alone: it widens any buffer asked for the block
+	 * format while a shader pack is loaded, and these vertices are written for a pipeline of the mod's own.
+	 */
 	private static void rebuild(Minecraft minecraft, ClientLevel level, long key) {
+		boolean wasSkipping = IrisVertexExtension.begin();
+		try {
+			meshSection(minecraft, level, key);
+		} finally {
+			IrisVertexExtension.end(wasSkipping);
+		}
+	}
+
+	private static void meshSection(Minecraft minecraft, ClientLevel level, long key) {
 		if (!mayHoldFoliage(level, key)) {
 			removeSection(key);
 			return;
@@ -1161,8 +1164,17 @@ public final class GpuFoliageRenderer {
 			return;
 		}
 		try (mesh) {
+			// The mesh says how many vertices it holds and in what format, rather than dividing its size by
+			// the block format's stride: another mod may widen the buffer behind our back -- Iris does, for
+			// shader packs -- and the vertices would then be read at a stride they were not written at. A
+			// section that comes back in another format is left to the chunk mesh instead of drawn as noise.
+			if (!DefaultVertexFormat.BLOCK.equals(mesh.drawState().format())) {
+				warnForeignVertexFormat(mesh.drawState().format());
+				removeSection(key);
+				return;
+			}
 			ByteBuffer meshVertices = mesh.vertexBuffer();
-			int vertexCount = meshVertices.remaining() / VERTEX_BYTES;
+			int vertexCount = mesh.drawState().vertexCount();
 			ByteBuffer vertices = MemoryUtil.memAlloc(meshVertices.remaining());
 			vertices.put(meshVertices).flip();
 			weightScratch.flip();
