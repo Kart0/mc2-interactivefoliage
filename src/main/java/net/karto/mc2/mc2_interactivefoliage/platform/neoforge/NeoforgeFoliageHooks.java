@@ -1,6 +1,6 @@
 package net.karto.mc2.mc2_interactivefoliage.platform.neoforge;
 
-//? neoforge && >=26.2 {
+//? neoforge && >=26.1.2 {
 
 /*import com.github.razorplay01.sway.api.SwayAPI;
 import net.karto.mc2.mc2_interactivefoliage.ModTemplate;

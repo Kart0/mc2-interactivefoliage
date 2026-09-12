@@ -1,6 +1,6 @@
 package net.karto.mc2.mc2_interactivefoliage.platform.neoforge;
 
-//? neoforge && >=26.2 {
+//? neoforge && >=26.1.2 {
 
 /*import net.karto.mc2.mc2_interactivefoliage.gpu.GpuFoliageSplit;
 import net.minecraft.client.renderer.block.BlockAndTintGetter;

@@ -56,7 +56,7 @@ sealed class Loader(val id: String) {
 					// Only queried when Mod Menu is installed, so it costs nothing when it is not.
 					"modmenu" to listOf("${ctx.modGroup}.${ctx.modId}.platform.fabric.FabricModMenuIntegration")
 				),
-				// The GPU foliage mixins target classes that only exist from 26.2 onwards, so the
+				// The GPU foliage mixins target classes that only exist from 26.1.2 onwards, so the
 				// config listing them is only declared where those classes are there to be found.
 				mixins = if (ctx.stonecutter.eval(ctx.currentMcVersion, ">=26.1.2")) {
 					listOf("${ctx.modId}.mixins.json", "${ctx.modId}.gpu.mixins.json")
@@ -124,7 +124,7 @@ sealed class Loader(val id: String) {
 						description = ctx.description
 					)
 				), dependencies = mapOf(ctx.modId to forgeDeps),
-				// The GPU foliage mixins target classes that only exist from 26.2 onwards, as on Fabric.
+				// The GPU foliage mixins target classes that only exist from 26.1.2 onwards, as on Fabric.
 				mixins = if (ctx.stonecutter.eval(ctx.currentMcVersion, ">=26.1.2")) {
 					listOf(ForgeMixin("${ctx.modId}.mixins.json"), ForgeMixin("${ctx.modId}.gpu.mixins.json"))
 				} else {
