@@ -1,13 +1,17 @@
 package net.karto.mc2.mc2_interactivefoliage.platform.neoforge;
 
-//? neoforge && >=26.1.2 {
+//? neoforge && >=1.21.11 {
 
 /*import com.github.razorplay01.sway.api.SwayAPI;
 import net.karto.mc2.mc2_interactivefoliage.ModTemplate;
 import net.karto.mc2.mc2_interactivefoliage.gpu.GpuFoliageRenderer;
 import net.karto.mc2.mc2_interactivefoliage.gpu.GpuFoliageSplit;
 import net.minecraft.client.multiplayer.ClientLevel;
+//? >=26.1.2 {
 import net.minecraft.client.renderer.block.dispatch.BlockStateModel;
+//?} else {
+/^import net.minecraft.client.renderer.block.model.BlockStateModel;
+^///?}
 import net.minecraft.world.level.block.state.BlockState;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.EventPriority;

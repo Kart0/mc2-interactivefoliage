@@ -4,9 +4,6 @@ package net.karto.mc2.mc2_interactivefoliage.gpu;
 
 import com.github.razorplay01.sway.client.SwayData;
 import com.github.razorplay01.sway.client.SwayEngine;
-import com.github.razorplay01.sway.client.behavior.multiblock.GrowingVineMultiblockBehavior;
-import com.github.razorplay01.sway.client.behavior.multiblock.HangingVineMultiblockBehavior;
-import com.github.razorplay01.sway.client.behavior.multiblock.SugarCaneMultiblockBehavior;
 import com.github.razorplay01.sway.config.SwayConfig;
 import com.mojang.blaze3d.buffers.GpuBuffer;
 import com.mojang.blaze3d.buffers.Std140Builder;
@@ -18,9 +15,7 @@ import com.mojang.blaze3d.shaders.UniformType;
 import com.mojang.blaze3d.systems.RenderSystem;
 import net.karto.mc2.mc2_interactivefoliage.ModTemplate;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.core.BlockPos;
-import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 import org.lwjgl.system.MemoryStack;
@@ -73,12 +68,6 @@ public final class GpuFoliageInteraction {
 	public static final double PLANT_HITBOX_SCALE = 1.5D;
 	/** While the GPU renderer draws the foliage, how many times harder than Sway's own push plants are pushed. */
 	private static final float PUSH_BOOST = 1.5F;
-	/**
-	 * How many times harder hanging and stacked plants -- vines, sugar cane and the like -- are pushed, and how
-	 * much further they may lean. A long strand spreads its push over its whole length, so it needs more to
-	 * look as moved as a short plant.
-	 */
-	private static final float TALL_PLANT_BOOST = 1.5F;
 	/** The furthest Sway's intensity setting can raise how far a plant leans: the top of the config slider. */
 	private static final float MAX_PUSH_LIMIT = 2.0F;
 
@@ -98,8 +87,6 @@ public final class GpuFoliageInteraction {
 	/** A plant Sway is pushing, or recently was, with its spring. */
 	private static final class Cell {
 		final BlockPos pos;
-		/** Whether this is a hanging or stacked plant, which is pushed harder. */
-		final boolean tall;
 		float pushX;
 		float pushZ;
 		float velocityX;
@@ -109,9 +96,8 @@ public final class GpuFoliageInteraction {
 		boolean touched;
 		double distanceSq;
 
-		Cell(BlockPos pos, boolean tall) {
+		Cell(BlockPos pos) {
 			this.pos = pos;
-			this.tall = tall;
 		}
 	}
 
@@ -162,7 +148,7 @@ public final class GpuFoliageInteraction {
 		int cellCount = 0;
 		// Sway's own interaction switch turns it off.
 		if (SwayConfig.INSTANCE.enabled) {
-			followSway(delta, Minecraft.getInstance().level);
+			followSway(delta);
 			cellCount = collectCells(camera);
 		} else {
 			CELLS.clear();
@@ -187,7 +173,7 @@ public final class GpuFoliageInteraction {
 	}
 
 	/** Moves every plant's spring towards Sway's current push, or back to upright once Sway lets go. */
-	private static void followSway(float delta, ClientLevel level) {
+	private static void followSway(float delta) {
 		for (Cell cell : CELLS.values()) {
 			cell.touched = false;
 			cell.targetX = 0.0F;
@@ -200,15 +186,12 @@ public final class GpuFoliageInteraction {
 			}
 			Cell cell = CELLS.get(entry.getKey());
 			if (cell == null) {
-				BlockPos pos = entry.getKey().immutable();
-				// Resolved once: a plant rarely changes kind while it is being pushed.
-				cell = new Cell(pos, level != null && isTallPlant(level.getBlockState(pos)));
+				cell = new Cell(entry.getKey().immutable());
 				CELLS.put(cell.pos, cell);
 			}
-			float boost = PUSH_BOOST * (cell.tall ? TALL_PLANT_BOOST : 1.0F);
 			cell.touched = true;
-			cell.targetX = force.nx * force.intensity * boost;
-			cell.targetZ = force.nz * force.intensity * boost;
+			cell.targetX = force.nx * force.intensity * PUSH_BOOST;
+			cell.targetZ = force.nz * force.intensity * PUSH_BOOST;
 		}
 
 		Iterator<Cell> iterator = CELLS.values().iterator();
@@ -225,13 +208,6 @@ public final class GpuFoliageInteraction {
 				iterator.remove();
 			}
 		}
-	}
-
-	/** Hanging and stacked plants: the ones Sway treats as strands of several blocks. */
-	private static boolean isTallPlant(BlockState state) {
-		return HangingVineMultiblockBehavior.isHangingVine(state)
-				|| GrowingVineMultiblockBehavior.isGrowingVine(state)
-				|| SugarCaneMultiblockBehavior.isStackable(state);
 	}
 
 	/**
@@ -265,7 +241,7 @@ public final class GpuFoliageInteraction {
 			CELL_POSITIONS[i * 4 + 2] = z;
 			CELL_FORCES[i * 4] = cell.pushX;
 			CELL_FORCES[i * 4 + 1] = cell.pushZ;
-			CELL_FORCES[i * 4 + 2] = limit * (cell.tall ? TALL_PLANT_BOOST : 1.0F);
+			CELL_FORCES[i * 4 + 2] = limit;
 			if (i == 0) {
 				CELL_BOUNDS[0] = CELL_BOUNDS[3] = x;
 				CELL_BOUNDS[1] = CELL_BOUNDS[4] = y;
