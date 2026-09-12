@@ -1,6 +1,6 @@
 package net.karto.mc2.mc2_interactivefoliage.gpu;
 
-//? >=26.1.2 {
+//? >=1.21.11 {
 
 import com.github.razorplay01.sway.client.SwayData;
 import com.github.razorplay01.sway.client.SwayEngine;

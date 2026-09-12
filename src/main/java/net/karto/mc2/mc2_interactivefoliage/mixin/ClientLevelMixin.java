@@ -1,6 +1,6 @@
 package net.karto.mc2.mc2_interactivefoliage.mixin;
 
-//? >=26.1.2 {
+//? >=1.21.11 {
 
 import net.karto.mc2.mc2_interactivefoliage.gpu.GpuFoliageRenderer;
 import net.minecraft.client.multiplayer.ClientLevel;

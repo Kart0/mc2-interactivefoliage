@@ -17,7 +17,7 @@ public class FabricClientEntrypoint implements ClientModInitializer {
 		// are in the registry. Registering from the main entrypoint instead would depend on mod
 		// load order and silently miss mods that initialize after this one.
 		ModTemplate.onRegistriesReady();
-		//? >=26.1.2 {
+		//? >=1.21.11 {
 		FabricFoliageHooks.register();
 		//?}
 		FoliageKeyBindings.register();

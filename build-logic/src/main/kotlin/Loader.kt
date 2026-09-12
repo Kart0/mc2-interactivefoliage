@@ -58,7 +58,7 @@ sealed class Loader(val id: String) {
 				),
 				// The GPU foliage mixins target classes that only exist from 26.1.2 onwards, so the
 				// config listing them is only declared where those classes are there to be found.
-				mixins = if (ctx.stonecutter.eval(ctx.currentMcVersion, ">=26.1.2")) {
+				mixins = if (ctx.stonecutter.eval(ctx.currentMcVersion, ">=1.21.11")) {
 					listOf("${ctx.modId}.mixins.json", "${ctx.modId}.gpu.mixins.json")
 				} else {
 					listOf("${ctx.modId}.mixins.json")
@@ -125,7 +125,7 @@ sealed class Loader(val id: String) {
 					)
 				), dependencies = mapOf(ctx.modId to forgeDeps),
 				// The GPU foliage mixins target classes that only exist from 26.1.2 onwards, as on Fabric.
-				mixins = if (ctx.stonecutter.eval(ctx.currentMcVersion, ">=26.1.2")) {
+				mixins = if (ctx.stonecutter.eval(ctx.currentMcVersion, ">=1.21.11")) {
 					listOf(ForgeMixin("${ctx.modId}.mixins.json"), ForgeMixin("${ctx.modId}.gpu.mixins.json"))
 				} else {
 					listOf(ForgeMixin("${ctx.modId}.mixins.json"))

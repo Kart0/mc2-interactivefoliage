@@ -2,25 +2,29 @@
 
 // Vanilla's core/block vertex shader with a sway added before projection.
 //
-// The displacement is driven entirely by WaveWeight, which the mod computes per vertex from Sway's
-// anchor for that plant: 0 where it is held and 1 at its free end. That is what makes a ground
-// plant bend from its base, a hanging vine from the ceiling, and a tall stack move as one piece.
+// The displacement is driven by the weights the mod computes per vertex from Sway's anchor for that
+// plant: 0 where it is held and 1 at its free end. That is what makes a ground plant bend from its
+// base, a hanging vine from the ceiling, and a tall stack move as one piece.
 
 #moj_import <minecraft:globals.glsl>
 #moj_import <minecraft:fog.glsl>
 #moj_import <minecraft:dynamictransforms.glsl>
 #moj_import <minecraft:projection.glsl>
-#moj_import <minecraft:sample_lightmap.glsl>
 
 in vec3 Position;
 in vec4 Color;
 in vec2 UV0;
 in ivec2 UV2;
-in float WaveWeight;
-// The plant's anchor block, relative to the region: every vertex of a plant shares it.
-in vec3 SwayCell;
-// How far a push moves this vertex, straight from Sway, so a pushed plant bends the same whoever draws it.
-in float PushWeight;
+// The mod's two per-vertex values, each packed whole into one float, because a vertex attribute is read
+// for every vertex of every frame and eight bytes beat twenty. A float holds whole numbers up to 2^24
+// exactly, which is three bytes' worth, and both values fit inside that.
+//
+// SwayCell: the plant's anchor block relative to the region, a byte per axis, biased so an anchor just
+// outside its region still fits. Every vertex of a plant carries the same one.
+in float SwayCell;
+// SwayWeights: how freely this vertex sways, and how far a push moves it, twelve bits each. The first is
+// the wind's own curve; the second is Sway's, so a pushed plant bends the same whoever draws it.
+in float SwayWeights;
 
 // GameTime is the fraction of a Minecraft day, so it advances from 0 to 1 over 24000 ticks --
 // twenty real minutes. Scaling by two pi times a whole number of cycles gives a visible rhythm
@@ -81,6 +85,25 @@ vec2 swayCellPush(vec3 cell) {
 
 uniform sampler2D Sampler2;
 
+vec3 unpackCell(float bits) {
+    float x = floor(bits / 65536.0);
+    float rest = bits - x * 65536.0;
+    float y = floor(rest / 256.0);
+    return vec3(x, y, rest - y * 256.0) - 64.0;
+}
+
+// x: the wind weight, y: the push weight.
+vec2 unpackWeights(float bits) {
+    float wave = floor(bits / 4096.0);
+    return vec2(wave, bits - wave * 4096.0) / 4095.0;
+}
+
+// Reading the lightmap, spelled out rather than imported: the file vanilla keeps it in only exists from
+// 26.1.2 on, and older versions write these same three lines into each shader that needs them.
+vec4 mc2_sample_lightmap(sampler2D lightMap, ivec2 uv) {
+    return texture(lightMap, clamp((uv / 256.0) + 0.5 / 16.0, vec2(0.5 / 16.0), vec2(15.5 / 16.0)));
+}
+
 out float sphericalVertexDistance;
 out float cylindricalVertexDistance;
 out vec4 vertexColor;
@@ -97,11 +120,12 @@ void main() {
     // Phase varies with world position so neighbouring plants never move in lockstep.
     float phase = (world.x + world.z) * SWAY_SCALE + GameTime * SWAY_SPEED;
     // ModelOffset is the region's corner relative to the camera, which SwayCell is measured from.
-    vec2 force = swayCellPush(SwayCell + ModelOffset);
+    vec2 force = swayCellPush(unpackCell(SwayCell) + ModelOffset);
+    vec2 weights = unpackWeights(SwayWeights);
     // Every vertex of a plant reads the same force, so the whole plant calms together.
     float calm = smoothstep(0.0, PUSH_FOR_CALM, length(force));
-    float amount = WaveWeight * SWAY_STRENGTH * SwayIntensity * mix(1.0, PUSHED_SWAY, calm);
-    vec2 push = force * PushWeight * INTERACT_STRENGTH;
+    float amount = weights.x * SWAY_STRENGTH * SwayIntensity * mix(1.0, PUSHED_SWAY, calm);
+    vec2 push = force * weights.y * INTERACT_STRENGTH;
     pos.x += sin(phase) * amount;
     pos.z += cos(phase * 1.3) * amount * 0.7;
     pos.xz += push;
@@ -115,6 +139,6 @@ void main() {
 
     sphericalVertexDistance = fog_spherical_distance(pos);
     cylindricalVertexDistance = fog_cylindrical_distance(pos);
-    vertexColor = Color * sample_lightmap(Sampler2, UV2);
+    vertexColor = Color * mc2_sample_lightmap(Sampler2, UV2);
     texCoord0 = UV0;
 }

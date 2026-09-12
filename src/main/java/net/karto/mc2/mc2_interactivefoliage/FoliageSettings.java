@@ -1,6 +1,6 @@
 package net.karto.mc2.mc2_interactivefoliage;
 
-//? >=26.1.2 {
+//? >=1.21.11 {
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;

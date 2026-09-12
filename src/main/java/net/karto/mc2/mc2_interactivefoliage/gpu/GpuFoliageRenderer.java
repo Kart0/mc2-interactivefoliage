@@ -1,6 +1,6 @@
 package net.karto.mc2.mc2_interactivefoliage.gpu;
 
-//? >=26.1.2 {
+//? >=1.21.11 {
 
 import com.github.razorplay01.sway.api.SwayAPI;
 import com.github.razorplay01.sway.api.behavior.BehaviorPipeline;
@@ -18,7 +18,11 @@ import com.mojang.blaze3d.buffers.Std140SizeCalculator;
 //? >=26.2 {
 import com.mojang.blaze3d.pipeline.BindGroupLayout;
 //?} else {
-/*import com.mojang.blaze3d.pipeline.DepthStencilState;
+/*//? >=26.1.2 {
+import com.mojang.blaze3d.pipeline.DepthStencilState;
+//?} else {
+/^import com.mojang.blaze3d.platform.DepthTestFunction;
+^///?}
 *///?}
 import com.mojang.blaze3d.pipeline.RenderPipeline;
 import com.mojang.blaze3d.pipeline.RenderTarget;
@@ -38,16 +42,30 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.renderer.DynamicUniforms;
 import net.minecraft.client.renderer.RenderPipelines;
+//? >=26.1.2 {
 import net.minecraft.client.renderer.block.BlockQuadOutput;
 import net.minecraft.client.renderer.block.BlockStateModelSet;
+//?} else {
+/*import com.mojang.blaze3d.vertex.PoseStack;
+import com.mojang.blaze3d.vertex.VertexConsumer;
+import net.minecraft.client.renderer.block.model.BlockModelPart;
+import net.minecraft.client.renderer.block.BlockModelShaper;
+import net.minecraft.client.renderer.texture.OverlayTexture;
+import net.minecraft.util.RandomSource;
+*///?}
 import net.minecraft.client.renderer.block.ModelBlockRenderer;
 import net.minecraft.client.renderer.culling.Frustum;
+//? >=26.1.2 {
 import net.minecraft.client.renderer.state.level.CameraRenderState;
 import net.minecraft.client.renderer.state.level.LevelRenderState;
+//?} else {
+/*import net.minecraft.client.renderer.state.LevelRenderState;
+*///?}
 import net.minecraft.client.renderer.texture.AbstractTexture;
 import net.minecraft.client.renderer.texture.TextureAtlas;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.SectionPos;
+import net.minecraft.util.Mth;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.chunk.LevelChunk;
@@ -147,30 +165,41 @@ public final class GpuFoliageRenderer {
 			builder.addAttribute(element.name(), element.format());
 		}
 		return builder
-				.addAttribute("WaveWeight", GpuFormat.R32_FLOAT)
-				.addAttribute("SwayCell", GpuFormat.RGB32_FLOAT)
-				.addAttribute("PushWeight", GpuFormat.R32_FLOAT)
+				.addAttribute("SwayCell", GpuFormat.R32_FLOAT)
+				.addAttribute("SwayWeights", GpuFormat.R32_FLOAT)
 				.build();
 	}
 	//?} else {
-	/*private static final VertexFormatElement WAVE_WEIGHT_ELEMENT =
-			VertexFormatElement.register(10, 0, VertexFormatElement.Type.FLOAT, false, 1);
+	/*//? >=26.1.2 {
 	private static final VertexFormatElement SWAY_CELL_ELEMENT =
-			VertexFormatElement.register(11, 0, VertexFormatElement.Type.FLOAT, false, 3);
-	private static final VertexFormatElement PUSH_WEIGHT_ELEMENT =
-			VertexFormatElement.register(12, 0, VertexFormatElement.Type.FLOAT, false, 1);
+			VertexFormatElement.register(10, 0, VertexFormatElement.Type.FLOAT, false, 1);
+	private static final VertexFormatElement SWAY_WEIGHTS_ELEMENT =
+			VertexFormatElement.register(11, 0, VertexFormatElement.Type.FLOAT, false, 1);
+	//?} else {
+	/^private static final VertexFormatElement SWAY_CELL_ELEMENT =
+			VertexFormatElement.register(10, 0, VertexFormatElement.Type.FLOAT, VertexFormatElement.Usage.GENERIC, 1);
+	private static final VertexFormatElement SWAY_WEIGHTS_ELEMENT =
+			VertexFormatElement.register(11, 0, VertexFormatElement.Type.FLOAT, VertexFormatElement.Usage.GENERIC, 1);
+	^///?}
 	private static final VertexFormat FOLIAGE_FORMAT = foliageFormat();
 
 	private static VertexFormat foliageFormat() {
 		VertexFormat block = DefaultVertexFormat.BLOCK;
 		VertexFormat.Builder builder = VertexFormat.builder();
+		int written = 0;
 		for (VertexFormatElement element : block.getElements()) {
 			builder.add(block.getElementName(element), element);
+			written += element.byteSize();
+		}
+		// Some versions round a block's vertex up with a byte or two of padding past its last attribute:
+		// 1.21.11 does, 26.1.2 does not. Rebuilding from the elements alone would drop it, and then every
+		// vertex would be read at a stride it was never written at.
+		if (written < block.getVertexSize()) {
+			builder.padding(block.getVertexSize() - written);
 		}
 		return builder
-				.add("WaveWeight", WAVE_WEIGHT_ELEMENT)
 				.add("SwayCell", SWAY_CELL_ELEMENT)
-				.add("PushWeight", PUSH_WEIGHT_ELEMENT)
+				.add("SwayWeights", SWAY_WEIGHTS_ELEMENT)
 				.build();
 	}
 	*///?}
@@ -222,14 +251,49 @@ public final class GpuFoliageRenderer {
 			.withUniform("Globals", UniformType.UNIFORM_BUFFER)
 			.withUniform(SWAY_SETTINGS_UNIFORM, UniformType.UNIFORM_BUFFER)
 			.withUniform(GpuFoliageInteraction.UNIFORM, UniformType.UNIFORM_BUFFER)
+			//? >=26.1.2 {
 			.withDepthStencilState(DepthStencilState.DEFAULT)
+			//?} else {
+			/^.withDepthWrite(true)
+			.withDepthTestFunction(DepthTestFunction.LESS_DEPTH_TEST)
+			^///?}
 			.withShaderDefine("ALPHA_CUTOUT", 0.5F)
 			.build();
 	*///?}
 
 	private static final int VERTEX_BYTES = DefaultVertexFormat.BLOCK.getVertexSize();
-	/** Our own per-vertex data: the wind weight, the anchor block and the push weight, five floats in all. */
-	private static final int WEIGHT_BYTES = Float.BYTES * 5;
+	/** Our own per-vertex data: the plant's anchor block and its two weights, one float each. */
+	private static final int WEIGHT_BYTES = Float.BYTES * 2;
+
+	/**
+	 * A float carries whole numbers up to 2^24 exactly, which is room for three bytes. Both of the mod's
+	 * per-vertex values fit in that, so each travels packed into one float and is taken apart in the shader.
+	 * Eight bytes a vertex instead of twenty, which is bandwidth the GPU pays for on every vertex of every
+	 * frame -- far more than the handful of instructions it costs to unpack.
+	 */
+	private static final float PACK_BYTE = 256.0F;
+	/** Anchors may sit a little outside their region, so a coordinate is shifted before it is packed. */
+	private static final int CELL_BIAS = 64;
+	/** Each weight keeps twelve bits, so the two together stay inside a float's exact whole numbers. */
+	private static final float WEIGHT_SCALE = 4095.0F;
+
+	/**
+	 * The anchor block, relative to the region, as one float: a byte per axis. A region is 128 blocks wide
+	 * and 64 tall, and an anchor can be a few blocks outside it, which the bias leaves room for.
+	 */
+	private static float packCell(int x, int y, int z) {
+		int cx = Mth.clamp(x + CELL_BIAS, 0, 255);
+		int cy = Mth.clamp(y + CELL_BIAS, 0, 255);
+		int cz = Mth.clamp(z + CELL_BIAS, 0, 255);
+		return (cx * 256 + cy) * 256 + cz;
+	}
+
+	/** The wind weight and the push weight, both between 0 and 1, as one float: twelve bits each. */
+	private static float packWeights(float wave, float push) {
+		int w = Math.round(Mth.clamp(wave, 0.0F, 1.0F) * WEIGHT_SCALE);
+		int p = Math.round(Mth.clamp(push, 0.0F, 1.0F) * WEIGHT_SCALE);
+		return w * 4096 + p;
+	}
 	private static final int INITIAL_SCRATCH_QUADS = 1024;
 
 	private static final Map<Long, Region> REGIONS = new HashMap<>();
@@ -243,6 +307,15 @@ public final class GpuFoliageRenderer {
 	private static ModelBlockRenderer modelRenderer;
 	/** Whether the renderer is in charge of the near foliage, following the waving foliage setting. */
 	private static boolean active;
+	//? <26.1.2 {
+	/*/^* The frustum vanilla culls the terrain with this frame, caught on its way past. ^/
+	private static Frustum cullFrustum;
+
+	/^* Called as vanilla prepares its cull frustum, which the camera state does not carry before 26.1.2. ^/
+	public static void onCullFrustum(Frustum frustum) {
+		cullFrustum = frustum;
+	}
+	*///?}
 	/** Set when every buffer was thrown away, so the chunks already loaded get queued again. */
 	private static boolean reseedPending;
 
@@ -268,11 +341,11 @@ public final class GpuFoliageRenderer {
 		final long key;
 		final BlockPos origin;
 		final AABB bounds;
-		final ByteBuffer vertices;
-		final ByteBuffer weights;
+		/** The block's attributes and ours, interleaved, ready to be copied into a region as it stands. */
+		final ByteBuffer data;
 		final int vertexCount;
 
-		Section(long key, BlockPos origin, ByteBuffer vertices, ByteBuffer weights, int vertexCount) {
+		Section(long key, BlockPos origin, ByteBuffer data, int vertexCount) {
 			this.key = key;
 			this.origin = origin;
 			this.bounds = new AABB(
@@ -282,14 +355,12 @@ public final class GpuFoliageRenderer {
 					origin.getX() + SECTION_SIZE + SWAY_MARGIN,
 					origin.getY() + SECTION_SIZE + SWAY_MARGIN,
 					origin.getZ() + SECTION_SIZE + SWAY_MARGIN);
-			this.vertices = vertices;
-			this.weights = weights;
+			this.data = data;
 			this.vertexCount = vertexCount;
 		}
 
 		void free() {
-			MemoryUtil.memFree(vertices);
-			MemoryUtil.memFree(weights);
+			MemoryUtil.memFree(data);
 		}
 	}
 
@@ -361,26 +432,23 @@ public final class GpuFoliageRenderer {
 					occupied[occupiedCount++] = slot;
 				}
 			}
-			// One buffer holding both, vertex by vertex: the block's own attributes, then ours.
+			// Its sections are already interleaved, so each one is a single copy. A region is rebuilt
+			// whenever any of its sections changes, and there are up to sixteen of them, so doing the
+			// per-vertex work here instead would repeat it for every section that did not change.
 			int stride = VERTEX_BYTES + WEIGHT_BYTES;
-			ByteBuffer vertexData = MemoryUtil.memAlloc(vertexCount * stride);
-			try {
-				for (int i = 0; i < occupiedCount; i++) {
-					int slot = occupied[i];
-					Section section = sections[slot];
-					int base = firstVertex[slot] * stride;
-					for (int vertex = 0; vertex < section.vertexCount; vertex++) {
-						vertexData.put(base + vertex * stride, section.vertices, vertex * VERTEX_BYTES, VERTEX_BYTES);
-						vertexData.put(base + vertex * stride + VERTEX_BYTES, section.weights, vertex * WEIGHT_BYTES, WEIGHT_BYTES);
-					}
-				}
-				vertices = RenderSystem.getDevice().createBuffer(
-						() -> "MC2 foliage vertices",
-						GpuBuffer.USAGE_VERTEX | GpuBuffer.USAGE_COPY_DST,
-						vertexData);
-			} finally {
-				MemoryUtil.memFree(vertexData);
+			// Staging memory is borrowed rather than asked for: uploads happen one after another on the
+			// render thread, and a region can be hundreds of kilobytes, so this saves an allocation and a
+			// free every time any section in any region changes.
+			ByteBuffer vertexData = uploadScratch(vertexCount * stride);
+			for (int i = 0; i < occupiedCount; i++) {
+				int slot = occupied[i];
+				Section section = sections[slot];
+				vertexData.put(firstVertex[slot] * stride, section.data, 0, section.vertexCount * stride);
 			}
+			vertices = RenderSystem.getDevice().createBuffer(
+					() -> "MC2 foliage vertices",
+					GpuBuffer.USAGE_VERTEX | GpuBuffer.USAGE_COPY_DST,
+					vertexData);
 		}
 
 		void closeBuffers() {
@@ -673,7 +741,7 @@ public final class GpuFoliageRenderer {
 
 		// The render state carries the camera and the cull frustum vanilla already prepared this
 		// frame, which is available whether or not Sodium owns the terrain renderer.
-		CameraRenderState cameraState = levelState.cameraRenderState;
+		var cameraState = levelState.cameraRenderState;
 		if (cameraState == null || cameraState.pos == null) {
 			return;
 		}
@@ -689,7 +757,15 @@ public final class GpuFoliageRenderer {
 		DIRTY_REGIONS.forEach(Region::upload);
 		DIRTY_REGIONS.clear();
 
+		//? >=26.1.2 {
 		Frustum frustum = cameraState.cullFrustum;
+		//?} else {
+		/*// Before 26.1.2 the camera state does not carry it, so it is caught as vanilla prepares it.
+		Frustum frustum = cullFrustum;
+		if (frustum == null) {
+			return;
+		}
+		*///?}
 		Object sodium = SodiumOcclusion.renderer();
 		List<Region> drawn = DRAWN;
 		drawn.clear();
@@ -802,7 +878,12 @@ public final class GpuFoliageRenderer {
 			pass.setPipeline(PIPELINE);
 			RenderSystem.bindDefaultUniforms(pass);
 			pass.bindTexture("Sampler0", atlas.getTextureView(), atlas.getSampler());
-			pass.bindTexture("Sampler2", minecraft.gameRenderer.lightmap(),
+			pass.bindTexture("Sampler2",
+					//? >=26.1.2 {
+					minecraft.gameRenderer.lightmap(),
+					//?} else {
+					/*minecraft.gameRenderer.lightTexture().getTextureView(),
+					*///?}
 					RenderSystem.getSamplerCache().getClampToEdge(FilterMode.LINEAR));
 			pass.setIndexBuffer(indexBuffer, indices.type());
 			pass.setUniform(SWAY_SETTINGS_UNIFORM, settings);
@@ -1050,7 +1131,120 @@ public final class GpuFoliageRenderer {
 				Math.clamp(SectionPos.blockToSectionCoord(minecraft.player.getBlockZ()), minZ, minZ + REGION_WIDTH - 1)));
 	}
 
+	//? <26.1.2 {
+	/*/^*
+	 * Appends the mod's per-vertex data as vanilla writes each vertex, for the versions where a block is
+	 * tesselated into a vertex consumer rather than handed over one quad at a time.
+	 * <p>
+	 * Everything is passed straight through to the buffer, untouched. Only {@code addVertex} is of
+	 * interest: it is where a vertex's final position is known, and one set of weights is written for it.
+	 * The position arrives relative to the region, so the block's own corner is taken off again to get the
+	 * height within the plant that a sway weight is measured against.
+	 ^/
+	private static final class FoliageVertexWriter implements VertexConsumer {
+
+		private final VertexConsumer delegate;
+		private final SwayAnchor anchor;
+		private final BlockPos regionOrigin;
+		private float blockY;
+
+		FoliageVertexWriter(VertexConsumer delegate, SwayAnchor anchor, BlockPos regionOrigin) {
+			this.delegate = delegate;
+			this.anchor = anchor;
+			this.regionOrigin = regionOrigin;
+		}
+
+		/^* The height of the block about to be tesselated, relative to the region. ^/
+		void beginBlock(float blockY) {
+			this.blockY = blockY;
+		}
+
+		@Override
+		public VertexConsumer addVertex(float x, float y, float z) {
+			delegate.addVertex(x, y, z);
+			float localY = y - blockY;
+			reserveWeights(WEIGHT_BYTES);
+			weightScratch.putFloat(packCell(anchor.cellX - regionOrigin.getX(),
+					anchor.cellY - regionOrigin.getY(),
+					anchor.cellZ - regionOrigin.getZ()));
+			weightScratch.putFloat(packWeights(anchor.weightAt(regionOrigin.getY() + y),
+					anchor.pushWeightAt(localY)));
+			return this;
+		}
+
+		@Override
+		public VertexConsumer setColor(int red, int green, int blue, int alpha) {
+			delegate.setColor(red, green, blue, alpha);
+			return this;
+		}
+
+		@Override
+		public VertexConsumer setColor(int packed) {
+			delegate.setColor(packed);
+			return this;
+		}
+
+		@Override
+		public VertexConsumer setUv(float u, float v) {
+			delegate.setUv(u, v);
+			return this;
+		}
+
+		@Override
+		public VertexConsumer setUv1(int u, int v) {
+			delegate.setUv1(u, v);
+			return this;
+		}
+
+		@Override
+		public VertexConsumer setUv2(int u, int v) {
+			delegate.setUv2(u, v);
+			return this;
+		}
+
+		@Override
+		public VertexConsumer setNormal(float x, float y, float z) {
+			delegate.setNormal(x, y, z);
+			return this;
+		}
+
+		@Override
+		public VertexConsumer setLineWidth(float width) {
+			delegate.setLineWidth(width);
+			return this;
+		}
+	}
+	*///?}
+
 	private static boolean warnedForeignVertexFormat;
+
+	/**
+	 * Staging memory for a region upload, reused between them and grown when a region needs more. Render
+	 * thread only, and only live for the length of one upload: nothing holds on to it afterwards.
+	 */
+	private static ByteBuffer uploadStaging;
+
+	private static ByteBuffer uploadScratch(int bytes) {
+		if (uploadStaging == null || uploadStaging.capacity() < bytes) {
+			if (uploadStaging != null) {
+				MemoryUtil.memFree(uploadStaging);
+			}
+			uploadStaging = MemoryUtil.memAlloc(Math.max(bytes, 64 * 1024));
+		}
+		return uploadStaging.clear().limit(bytes);
+	}
+
+	private static boolean warnedWeightCountMismatch;
+
+	private static void warnWeightCountMismatch(int vertices, int weights) {
+		if (warnedWeightCountMismatch) {
+			return;
+		}
+		warnedWeightCountMismatch = true;
+		ModTemplate.LOGGER.warn("Foliage was meshed with {} vertices but {} sway weights, so the GPU renderer "
+				+ "left it to the chunk mesh. Another mod is writing vertices the mod cannot see.",
+				vertices, weights);
+	}
 
 	private static void warnForeignVertexFormat(Object format) {
 		if (warnedForeignVertexFormat) {
@@ -1092,10 +1286,14 @@ public final class GpuFoliageRenderer {
 		}
 		if (modelRenderer == null) {
 			// Same arguments the section compiler passes, so the geometry matches it exactly.
+			//? >=26.1.2 {
 			modelRenderer = new ModelBlockRenderer(
 					minecraft.options.ambientOcclusion().get(),
 					minecraft.options.cutoutLeaves().get(),
 					minecraft.getBlockColors());
+			//?} else {
+			/*modelRenderer = new ModelBlockRenderer(minecraft.getBlockColors());
+			*///?}
 		}
 		if (vertexScratch == null) {
 			vertexScratch = new ByteBufferBuilder(VERTEX_BYTES * 4 * INITIAL_SCRATCH_QUADS);
@@ -1122,21 +1320,30 @@ public final class GpuFoliageRenderer {
 		// Vanilla writes the standard attributes; alongside each quad we append the sway weight of its
 		// four vertices, so both bindings stay in step without touching its output.
 		SwayAnchor anchor = new SwayAnchor();
+		//? >=26.1.2 {
 		BlockQuadOutput output = (x, y, z, quad, instance) -> {
 			builder.putBlockBakedQuad(x, y, z, quad, instance);
 			reserveWeights(WEIGHT_BYTES * 4);
+			float cell = packCell(anchor.cellX - regionOrigin.getX(),
+					anchor.cellY - regionOrigin.getY(),
+					anchor.cellZ - regionOrigin.getZ());
 			for (int vertex = 0; vertex < 4; vertex++) {
 				float localY = quad.position(vertex).y();
 				float worldY = regionOrigin.getY() + y + localY;
-				weightScratch.putFloat(anchor.weightAt(worldY));
-				weightScratch.putFloat(anchor.cellX - regionOrigin.getX());
-				weightScratch.putFloat(anchor.cellY - regionOrigin.getY());
-				weightScratch.putFloat(anchor.cellZ - regionOrigin.getZ());
-				weightScratch.putFloat(anchor.pushWeightAt(localY));
+				weightScratch.putFloat(cell);
+				weightScratch.putFloat(packWeights(anchor.weightAt(worldY), anchor.pushWeightAt(localY)));
 			}
 		};
 
 		BlockStateModelSet models = minecraft.getModelManager().getBlockStateModelSet();
+		//?} else {
+		/*// Before 26.1.2 a block is tesselated into a vertex consumer rather than handed over quad by quad,
+		// so the weights are appended as each vertex is written instead of once per quad.
+		FoliageVertexWriter output = new FoliageVertexWriter(builder, anchor, regionOrigin);
+		PoseStack poseStack = new PoseStack();
+		RandomSource random = RandomSource.create();
+		BlockModelShaper models = minecraft.getModelManager().getBlockModelShaper();
+		*///?}
 		// Blocks are read from the section itself: going through the level would look the chunk up again
 		// for every one of its 4096 blocks.
 		LevelChunkSection blocks = level.getChunk(SectionPos.x(key), SectionPos.z(key))
@@ -1151,9 +1358,25 @@ public final class GpuFoliageRenderer {
 					}
 					pos.set(origin.getX() + dx, origin.getY() + dy, origin.getZ() + dz);
 					anchor.prepare(state, pos, level);
+					//? >=26.1.2 {
 					modelRenderer.tesselateBlock(output, offsetX + dx, offsetY + dy, offsetZ + dz,
 							level, pos, state, GpuFoliageSplit.modelFor(state, models.get(state)),
 							state.getSeed(pos));
+					//?} else {
+					/*random.setSeed(state.getSeed(pos));
+					List<BlockModelPart> parts = GpuFoliageSplit
+							.modelFor(state, models.getBlockModel(state))
+							.collectParts(random);
+					// The pose carries what the newer call took as arguments: where the block sits in
+					// its region. The writer subtracts it again to recover each vertex's height in
+					// its own block, which is what a sway weight is measured against.
+					poseStack.pushPose();
+					poseStack.translate(offsetX + dx, offsetY + dy, offsetZ + dz);
+					output.beginBlock(offsetY + dy);
+					modelRenderer.tesselateBlock(level, parts, state, pos, poseStack, output, true,
+							OverlayTexture.NO_OVERLAY);
+					poseStack.popPose();
+					*///?}
 				}
 			}
 		}
@@ -1175,12 +1398,24 @@ public final class GpuFoliageRenderer {
 			}
 			ByteBuffer meshVertices = mesh.vertexBuffer();
 			int vertexCount = mesh.drawState().vertexCount();
-			ByteBuffer vertices = MemoryUtil.memAlloc(meshVertices.remaining());
-			vertices.put(meshVertices).flip();
 			weightScratch.flip();
-			ByteBuffer weights = MemoryUtil.memAlloc(weightScratch.remaining());
-			weights.put(weightScratch).flip();
-			putSection(key, new Section(key, origin, vertices, weights, vertexCount));
+			// One set of weights was written for each vertex as it was written. If the two ever disagree,
+			// every vertex past the first difference would be read from the wrong place, so the section is
+			// left to the chunk mesh rather than drawn wrongly.
+			if (weightScratch.remaining() != vertexCount * WEIGHT_BYTES) {
+				warnWeightCountMismatch(vertexCount, weightScratch.remaining() / WEIGHT_BYTES);
+				removeSection(key);
+				return;
+			}
+			// Interleaved here, once, rather than each time the section's region is uploaded.
+			int stride = VERTEX_BYTES + WEIGHT_BYTES;
+			int meshBase = meshVertices.position();
+			ByteBuffer data = MemoryUtil.memAlloc(vertexCount * stride);
+			for (int vertex = 0; vertex < vertexCount; vertex++) {
+				data.put(vertex * stride, meshVertices, meshBase + vertex * VERTEX_BYTES, VERTEX_BYTES);
+				data.put(vertex * stride + VERTEX_BYTES, weightScratch, vertex * WEIGHT_BYTES, WEIGHT_BYTES);
+			}
+			putSection(key, new Section(key, origin, data, vertexCount));
 		}
 	}
 }

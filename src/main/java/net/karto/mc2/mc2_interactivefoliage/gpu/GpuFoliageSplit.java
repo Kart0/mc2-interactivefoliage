@@ -1,11 +1,19 @@
 package net.karto.mc2.mc2_interactivefoliage.gpu;
 
-//? >=26.1.2 {
+//? >=1.21.11 {
 
 import com.github.razorplay01.sway.api.SwayAPI;
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
+//? >=26.1.2 {
 import net.minecraft.client.renderer.block.BlockAndTintGetter;
+//?} else {
+/*import net.minecraft.world.level.BlockAndTintGetter;
+*///?}
+//? >=26.1.2 {
 import net.minecraft.client.renderer.block.dispatch.BlockStateModel;
+//?} else {
+/*import net.minecraft.client.renderer.block.model.BlockStateModel;
+*///?}
 import net.minecraft.client.renderer.chunk.RenderSectionRegion;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.SectionPos;

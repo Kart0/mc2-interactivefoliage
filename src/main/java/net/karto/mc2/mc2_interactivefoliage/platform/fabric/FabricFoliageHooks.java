@@ -1,12 +1,16 @@
 package net.karto.mc2.mc2_interactivefoliage.platform.fabric;
 
-//? fabric && >=26.1.2 {
+//? fabric && >=1.21.11 {
 
 import com.github.razorplay01.sway.api.SwayAPI;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientChunkEvents;
 import net.fabricmc.fabric.api.client.model.loading.v1.ModelLoadingPlugin;
 import net.fabricmc.fabric.api.client.model.loading.v1.ModelModifier;
+//? >=26.1.2 {
 import net.fabricmc.fabric.api.client.rendering.v1.level.LevelRenderEvents;
+//?} else {
+/*import net.fabricmc.fabric.api.client.rendering.v1.world.WorldRenderEvents;
+*///?}
 import net.karto.mc2.mc2_interactivefoliage.gpu.GpuFoliageModel;
 import net.karto.mc2.mc2_interactivefoliage.gpu.GpuFoliageRenderer;
 
@@ -24,7 +28,14 @@ public final class FabricFoliageHooks {
 				ModelModifier.WRAP_LAST_PHASE,
 				(model, bake) -> SwayAPI.isInteractive(bake.state().getBlock()) ? new GpuFoliageModel(model) : model));
 
+		//? >=26.1.2 {
 		LevelRenderEvents.AFTER_OPAQUE_TERRAIN.register(context -> GpuFoliageRenderer.draw(context.levelState()));
+		//?} else {
+		/*// There is no event for the moment the opaque terrain is done before 26.1.2. The one before the
+		// translucent pass is the nearest: the opaque blocks are drawn by then, and the foliage still lands
+		// before anything see-through, which is what it has to be behind.
+		WorldRenderEvents.BEFORE_TRANSLUCENT.register(context -> GpuFoliageRenderer.draw(context.worldState()));
+		*///?}
 
 		// Sodium overwrites every vanilla route that marks a section dirty when a chunk arrives, so chunk
 		// loads are followed through Fabric's own event, which fires whichever renderer is used.
