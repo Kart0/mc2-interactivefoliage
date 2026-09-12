@@ -16,8 +16,6 @@ public class FoliageConfigScreen extends Screen {
 	private static final float MIN_INTENSITY = 0.5f;
 	private static final float DEFAULT_INTENSITY = 1.0f;
 	private static final float MAX_INTENSITY = 2.0f;
-	/** Sway's own default for maxDistance in every supported version, so a fresh install already starts here. */
-	private static final float DEFAULT_RADIUS = 8.0f;
 
 	private IntensitySlider intensitySlider;
 	private RadiusSlider radiusSlider;
@@ -91,17 +89,14 @@ public class FoliageConfigScreen extends Screen {
 
 		// ── Radio de visibilidad ───────────────────────────────────────────────
 		final int radiusY = y;
-		radiusSlider = new RadiusSlider(cx - 100, y, 178, 20,
-				(config.maxDistance - 6.0f) / (32.0f - 6.0f)
-		);
+		radiusSlider = new RadiusSlider(cx - 100, y, 178, 20, radiusToSlider(config.maxDistance));
 		this.addRenderableWidget(radiusSlider);
 
 		resetRadiusBtn = Button.builder(
 				Component.translatable("config.mc2_interactivefoliage.reset"),
 				btn -> radiusSlider.reset()
 		).bounds(cx + 82, radiusY, 18, 20).build();
-		resetRadiusBtn.visible =
-				Math.abs(config.maxDistance - DEFAULT_RADIUS) > 0.1f;
+		resetRadiusBtn.visible = !isDefaultRadius();
 		this.addRenderableWidget(resetRadiusBtn);
 
 		//? >=1.21.11 {
@@ -277,22 +272,35 @@ public class FoliageConfigScreen extends Screen {
 					String.format("%.0f", config.maxDistance)
 			));
 			if (resetRadiusBtn != null) {
-				resetRadiusBtn.visible =
-						Math.abs(config.maxDistance - DEFAULT_RADIUS) > 0.1f;
+				resetRadiusBtn.visible = !isDefaultRadius();
 			}
 		}
 
 		@Override
 		protected void applyValue() {
-			config.maxDistance = 6.0f + (float) value * (32.0f - 6.0f);
+			// The handle slides freely; the radius itself moves a step at a time, as the intensities do.
+			float range = FoliageSettings.MAX_INTERACTION_RADIUS - FoliageSettings.MIN_INTERACTION_RADIUS;
+			config.maxDistance = FoliageSettings.snapInteractionRadius(
+					FoliageSettings.MIN_INTERACTION_RADIUS + (float) value * range);
 		}
 
 		/** Back to the default in place, without rebuilding the screen. */
 		void reset() {
-			config.maxDistance = DEFAULT_RADIUS;
-			value = (DEFAULT_RADIUS - 6.0f) / (32.0f - 6.0f);
+			config.maxDistance = FoliageSettings.DEFAULT_INTERACTION_RADIUS;
+			value = radiusToSlider(FoliageSettings.DEFAULT_INTERACTION_RADIUS);
 			updateMessage();
 		}
+	}
+
+	/** Where a radius sits along the slider, which runs straight from the minimum to the maximum. */
+	private static double radiusToSlider(float radius) {
+		double position = (radius - FoliageSettings.MIN_INTERACTION_RADIUS)
+				/ (FoliageSettings.MAX_INTERACTION_RADIUS - FoliageSettings.MIN_INTERACTION_RADIUS);
+		return Math.max(0.0, Math.min(1.0, position));
+	}
+
+	private boolean isDefaultRadius() {
+		return Math.abs(config.maxDistance - FoliageSettings.DEFAULT_INTERACTION_RADIUS) < 0.1f;
 	}
 
 	//? >=1.21.11 {

@@ -5,6 +5,7 @@ package net.karto.mc2.mc2_interactivefoliage.platform.fabric;
 import com.github.razorplay01.sway.config.SwayConfig;
 import com.mojang.blaze3d.platform.InputConstants;
 import net.karto.mc2.mc2_interactivefoliage.FoliageConfigScreen;
+import net.karto.mc2.mc2_interactivefoliage.FoliageSettings;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
 import net.minecraft.network.chat.Component;
@@ -52,6 +53,7 @@ public class FoliageKeyBindings {
 	}
 
 	public static void tick(Minecraft mc) {
+		FoliageSettings.applyDefaultRadiusOnce();
 		while (openConfig.consumeClick()) {
 			//? >=26.2{
 			mc.setScreenAndShow(new FoliageConfigScreen(null));
