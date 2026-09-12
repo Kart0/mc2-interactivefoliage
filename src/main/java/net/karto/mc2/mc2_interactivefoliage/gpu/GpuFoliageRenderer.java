@@ -81,6 +81,7 @@ import org.joml.Vector4f;
 import org.lwjgl.system.MemoryStack;
 import org.lwjgl.system.MemoryUtil;
 
+import java.lang.ref.WeakReference;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -318,6 +319,8 @@ public final class GpuFoliageRenderer {
 	*///?}
 	/** Set when every buffer was thrown away, so the chunks already loaded get queued again. */
 	private static boolean reseedPending;
+	/** The world the near-area radar last went off for. Weak, so a world left behind is not kept alive. */
+	private static WeakReference<ClientLevel> radarLevel = new WeakReference<>(null);
 
 	/** Holds the sway settings the shader reads; rewritten only when one of them changes. */
 	private static GpuBuffer swaySettings;
@@ -746,7 +749,19 @@ public final class GpuFoliageRenderer {
 			return;
 		}
 		Vec3 camera = cameraState.pos;
+		// Joining a world is when near sections can be built before the near area reaches them, so the radar
+		// that catches them goes off then -- and only with the wind on, the one thing they would be missing.
+		if (radarLevel.get() != minecraft.level) {
+			radarLevel = new WeakReference<>(minecraft.level);
+			if (FoliageSettings.wavingFoliage()) {
+				GpuFoliageSplit.openRadar();
+			}
+		}
 		updateNearArea(minecraft);
+		// Near sections whose chunk mesh has not let go of their foliage yet are asked for again until it does;
+		// see GpuFoliageSplit for why asking once is not enough.
+		GpuFoliageSplit.forEachStaleDue(key ->
+				rebuildChunkMesh(minecraft, SectionPos.x(key), SectionPos.y(key), SectionPos.z(key)));
 		if (reseedPending && minecraft.player != null) {
 			reseedPending = false;
 			reseedLoadedChunks(minecraft, minecraft.level);
@@ -766,7 +781,7 @@ public final class GpuFoliageRenderer {
 			return;
 		}
 		*///?}
-		Object sodium = SodiumOcclusion.renderer();
+		Object sodium = SodiumBridge.renderer();
 		List<Region> drawn = DRAWN;
 		drawn.clear();
 		drawsSize = 0;
@@ -951,7 +966,7 @@ public final class GpuFoliageRenderer {
 		}
 		// The box is kept inside the section so Sodium answers for this section and not its neighbours.
 		BlockPos origin = section.origin;
-		return SodiumOcclusion.isVisible(sodium,
+		return SodiumBridge.isVisible(sodium,
 				origin.getX() + 1, origin.getY() + 1, origin.getZ() + 1,
 				origin.getX() + SECTION_SIZE - 1, origin.getY() + SECTION_SIZE - 1, origin.getZ() + SECTION_SIZE - 1);
 	}
@@ -1032,6 +1047,19 @@ public final class GpuFoliageRenderer {
 	}
 
 	/** Has the chunk mesher mesh again every section of a column that could hold foliage. */
+	/**
+	 * Asks for a section's chunk mesh to be built again, by whichever route is in charge: vanilla's own, or
+	 * Sodium's, which does not follow vanilla's. Asking both costs nothing when only one is listening.
+	 */
+	private static void rebuildChunkMesh(Minecraft minecraft, int sectionX, int sectionY, int sectionZ) {
+		//? >=26.2 {
+		minecraft.levelExtractor.setSectionDirty(sectionX, sectionY, sectionZ);
+		//?} else {
+		/*minecraft.levelRenderer.setSectionDirty(sectionX, sectionY, sectionZ);
+		*///?}
+		SodiumBridge.scheduleRebuild(sectionX, sectionY, sectionZ);
+	}
+
 	private static void remeshColumn(Minecraft minecraft, int chunkX, int chunkZ, boolean nowNear) {
 		ClientLevel level = minecraft.level;
 		LevelChunk chunk = level.getChunkSource().getChunk(chunkX, chunkZ, ChunkStatus.FULL, false);
@@ -1044,13 +1072,12 @@ public final class GpuFoliageRenderer {
 				continue;
 			}
 			int sectionY = level.getSectionYFromSectionIndex(index);
-			//? >=26.2 {
-			minecraft.levelExtractor.setSectionDirty(chunkX, sectionY, chunkZ);
-			//?} else {
-			/*minecraft.levelRenderer.setSectionDirty(chunkX, sectionY, chunkZ);
-			*///?}
+			rebuildChunkMesh(minecraft, chunkX, sectionY, chunkZ);
 			if (nowNear) {
-				DIRTY.add(SectionPos.asLong(chunkX, sectionY, chunkZ));
+				long key = SectionPos.asLong(chunkX, sectionY, chunkZ);
+				DIRTY.add(key);
+				// This first request is often too early to count: see GpuFoliageSplit.expectFoliageLeft.
+				GpuFoliageSplit.expectFoliageLeft(key);
 			}
 		}
 	}

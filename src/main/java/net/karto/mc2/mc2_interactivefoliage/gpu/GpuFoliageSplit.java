@@ -3,6 +3,8 @@ package net.karto.mc2.mc2_interactivefoliage.gpu;
 //? >=1.21.11 {
 
 import com.github.razorplay01.sway.api.SwayAPI;
+import it.unimi.dsi.fastutil.longs.Long2LongMap;
+import it.unimi.dsi.fastutil.longs.Long2LongOpenHashMap;
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 //? >=26.1.2 {
 import net.minecraft.client.renderer.block.BlockAndTintGetter;
@@ -26,6 +28,7 @@ import java.util.IdentityHashMap;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.function.LongConsumer;
 
 /**
  * Decides who draws each piece of foliage: {@link GpuFoliageRenderer} near the player, where its sway can be
@@ -79,6 +82,32 @@ public final class GpuFoliageSplit {
 	private static final LongOpenHashSet MESHED_WITHOUT_FOLIAGE = new LongOpenHashSet();
 
 	/**
+	 * Render thread only: near sections whose chunk mesh is not yet known to have let go of their foliage,
+	 * and when each stops being asked for.
+	 * <p>
+	 * A build reads the near area as it starts, so one that started before the area reached its section
+	 * keeps the foliage. Asking for a rebuild once, as the area arrives, does not always help: Sodium turns
+	 * down a rebuild for a section it has not finished building for the first time, so a section whose first
+	 * build was under way as a world was joined kept its foliage -- drawn, but still -- until something else
+	 * happened to rebuild it. So a section is asked for again and again, a little apart, until a build of it
+	 * comes back without its foliage.
+	 */
+	private static final Long2LongOpenHashMap STALE = new Long2LongOpenHashMap();
+	/** How far apart the requests are: long enough for one to land, short enough not to be seen. */
+	private static final long STALE_RETRY_MILLIS = 100L;
+	/**
+	 * When to stop asking. A section can look as if it may hold foliage without holding any, and then no
+	 * build of it ever reports back; this keeps it from being rebuilt for good.
+	 */
+	private static final long STALE_GIVE_UP_MILLIS = 5000L;
+	private static long nextStaleRetry;
+	/**
+	 * Until when sections are taken on at all. The race above is lost as a world is joined, while every near
+	 * section is being built for the first time at once, so that is the only time it is watched for.
+	 */
+	private static long radarUntil;
+
+	/**
 	 * The models the mod wrapped, by state. Where Sway deforms inside the model rather than through a
 	 * rendering API -- NeoForge -- meshing through vanilla's model set would bake its own deformation into
 	 * geometry the GPU is about to move again. Meshing goes through these instead: they sit inside Sway's
@@ -124,11 +153,60 @@ public final class GpuFoliageSplit {
 	static void applyMeshDecisions() {
 		MeshDecision decision;
 		while ((decision = DECISIONS.poll()) != null) {
+			long key = decision.sectionKey();
 			if (decision.leftFoliage()) {
-				MESHED_WITHOUT_FOLIAGE.add(decision.sectionKey());
+				MESHED_WITHOUT_FOLIAGE.add(key);
+				STALE.remove(key);
 			} else {
-				MESHED_WITHOUT_FOLIAGE.remove(decision.sectionKey());
+				MESHED_WITHOUT_FOLIAGE.remove(key);
+				if (isNear(SectionPos.x(key), SectionPos.z(key))) {
+					expectFoliageLeft(key);
+				}
 			}
+		}
+	}
+
+	/**
+	 * Render thread: a near section should come to have its foliage left out of the chunk mesh, and is to be
+	 * asked for until it does. Called for each section the near area reaches, and for any near section whose
+	 * build comes back still holding its foliage.
+	 */
+	static void expectFoliageLeft(long sectionKey) {
+		long now = System.currentTimeMillis();
+		if (now <= radarUntil && !MESHED_WITHOUT_FOLIAGE.contains(sectionKey)) {
+			STALE.putIfAbsent(sectionKey, now + STALE_GIVE_UP_MILLIS);
+		}
+	}
+
+	/** Render thread: a world was joined, so near sections are watched for the next few seconds. */
+	static void openRadar() {
+		radarUntil = System.currentTimeMillis() + STALE_GIVE_UP_MILLIS;
+	}
+
+	/**
+	 * Render thread: every so often, hands over each section still waiting for its foliage to be left out, so
+	 * a rebuild of it can be asked for again. Sections the near area has moved away from are forgotten -- their
+	 * chunk mesh is right to keep their foliage -- and so are the ones that have been asked for long enough.
+	 */
+	static void forEachStaleDue(LongConsumer rebuild) {
+		if (STALE.isEmpty()) {
+			return;
+		}
+		long now = System.currentTimeMillis();
+		if (now < nextStaleRetry) {
+			return;
+		}
+		nextStaleRetry = now + STALE_RETRY_MILLIS;
+		var entries = STALE.long2LongEntrySet().fastIterator();
+		while (entries.hasNext()) {
+			Long2LongMap.Entry entry = entries.next();
+			long key = entry.getLongKey();
+			if (MESHED_WITHOUT_FOLIAGE.contains(key) || now > entry.getLongValue()
+					|| !isNear(SectionPos.x(key), SectionPos.z(key))) {
+				entries.remove();
+				continue;
+			}
+			rebuild.accept(key);
 		}
 	}
 
@@ -150,6 +228,7 @@ public final class GpuFoliageSplit {
 
 	/** Render thread: the section was unloaded, and its next build has to be recorded afresh. */
 	static void forgetSection(long sectionKey) {
+		STALE.remove(sectionKey);
 		if (MESHED_WITHOUT_FOLIAGE.remove(sectionKey)) {
 			generation++;
 		}
@@ -189,6 +268,8 @@ public final class GpuFoliageSplit {
 	/** Render thread: no area at all, so every chunk build keeps its foliage. */
 	static void clearArea() {
 		area = null;
+		STALE.clear();
+		radarUntil = 0L;
 		generation++;
 	}
 
