@@ -59,17 +59,22 @@ public final class GpuFoliageInteraction {
 	private static final int BUFFER_SIZE = bufferSize();
 
 	/**
-	 * While the GPU renderer draws the foliage, how many times wider an entity counts as when it pushes plants,
-	 * along x and z. Its height is kept. Only plant pushes see it; the entity's real hitbox is never changed.
+	 * How many times wider an entity counts as when it pushes plants, along x and z. Its height is kept. Only
+	 * plant pushes see it; the entity's real hitbox is never changed.
 	 * <p>
 	 * Sway only looks for plants within 2 blocks of an entity's centre, so beyond about 6 a player reaches no
 	 * further.
 	 */
 	public static final double PLANT_HITBOX_SCALE = 1.5D;
-	/** While the GPU renderer draws the foliage, how many times harder than Sway's own push plants are pushed. */
+	/**
+	 * How many times harder than Sway's own push plants are pushed. It is applied inside Sway's push itself, so
+	 * whoever draws the foliage -- the chunk mesh or the GPU renderer -- moves it by the very same amount.
+	 */
 	private static final float PUSH_BOOST = 1.5F;
-	/** The furthest Sway's intensity setting can raise how far a plant leans: the top of the config slider. */
-	private static final float MAX_PUSH_LIMIT = 2.0F;
+	/** Sway's own cap on how hard a plant can be pushed, as a multiple of its intensity setting. */
+	private static final float SWAY_PUSH_CAP = 2.0F;
+	/** The top of the config screen's intensity slider, which bounds how far the GPU renderer lets a plant lean. */
+	private static final float MAX_SLIDER_INTENSITY = 2.0F;
 
 	/** How hard a plant is pulled towards Sway's push. About 1.5 swings a second. */
 	private static final float CELL_STIFFNESS = 90.0F;
@@ -116,17 +121,19 @@ public final class GpuFoliageInteraction {
 	private GpuFoliageInteraction() {
 	}
 
-	/**
-	 * The box an entity pushes plants with: its hitbox, or a wider copy of it while the GPU renderer draws the
-	 * foliage. Always a separate box, so the entity's own is never changed.
-	 */
+	/** The box an entity pushes plants with: a wider copy of its hitbox, so the entity's own is never changed. */
 	public static AABB plantHitbox(AABB hitbox) {
-		if (!GpuFoliageRenderer.isActive()) {
-			return hitbox;
-		}
 		double growX = (hitbox.maxX - hitbox.minX) * (PLANT_HITBOX_SCALE - 1.0D) * 0.5D;
 		double growZ = (hitbox.maxZ - hitbox.minZ) * (PLANT_HITBOX_SCALE - 1.0D) * 0.5D;
 		return hitbox.inflate(growX, 0.0D, growZ);
+	}
+
+	/**
+	 * Sway's intensity as its push reads it, raised. Only that read is changed: the setting itself, and the cap
+	 * Sway puts on a plant's push, which it takes from the setting separately, stay as the player set them.
+	 */
+	public static float plantPushIntensity(float intensity) {
+		return intensity * PUSH_BOOST;
 	}
 
 	/** Forgets every plant, as when the world is swapped. */
@@ -190,8 +197,9 @@ public final class GpuFoliageInteraction {
 				CELLS.put(cell.pos, cell);
 			}
 			cell.touched = true;
-			cell.targetX = force.nx * force.intensity * PUSH_BOOST;
-			cell.targetZ = force.nz * force.intensity * PUSH_BOOST;
+			// Already raised inside Sway's push, as the chunk mesh sees it.
+			cell.targetX = force.nx * force.intensity;
+			cell.targetZ = force.nz * force.intensity;
 		}
 
 		Iterator<Cell> iterator = CELLS.values().iterator();
@@ -213,13 +221,13 @@ public final class GpuFoliageInteraction {
 	/**
 	 * The plants nearest the camera, with the box around them. Returns how many.
 	 * <p>
-	 * Each is sent with the most it may lean. That limit follows Sway's intensity setting once it is above 1, so
-	 * raising the setting pushes plants further; at 1 and below, plants lean no further than they always have.
-	 * It stops at the top of the config screen's slider: Sway accepts more from a hand-edited file, which would
-	 * push plants out past the room the renderer leaves for them when culling.
+	 * Each is sent with the most it may lean, which is the cap Sway itself puts on a plant's push, so a plant the
+	 * GPU renderer draws can lean exactly as far as one in the chunk mesh. It stops where the config screen's
+	 * slider does: Sway accepts more from a hand-edited file, which would push plants out past the room the
+	 * renderer leaves for them when culling.
 	 */
 	private static int collectCells(Vec3 camera) {
-		float limit = Math.clamp(SwayConfig.INSTANCE.intensity, 1.0F, MAX_PUSH_LIMIT);
+		float limit = SWAY_PUSH_CAP * Math.min(SwayConfig.INSTANCE.intensity, MAX_SLIDER_INTENSITY);
 		NEAREST.clear();
 		for (Cell cell : CELLS.values()) {
 			double dx = cell.pos.getX() + 0.5D - camera.x;
