@@ -1,18 +1,26 @@
 package net.karto.mc2.mc2_interactivefoliage.gpu;
 
-//? >=26.2 {
+//? >=26.1.2 {
 
 import com.github.razorplay01.sway.api.SwayAPI;
 import com.github.razorplay01.sway.api.behavior.BehaviorPipeline;
+import com.github.razorplay01.sway.api.behavior.contributors.DeformationContributor;
 import com.github.razorplay01.sway.api.behavior.contributors.MultiBlockContributor;
 import com.github.razorplay01.sway.client.behavior.multiblock.HangingVineMultiblockBehavior;
+//? >=26.2 {
 import com.mojang.blaze3d.GpuFormat;
 import com.mojang.blaze3d.PrimitiveTopology;
+//?}
 import com.mojang.blaze3d.buffers.GpuBuffer;
 import com.mojang.blaze3d.buffers.GpuBufferSlice;
 import com.mojang.blaze3d.buffers.Std140Builder;
 import com.mojang.blaze3d.buffers.Std140SizeCalculator;
+//? >=26.2 {
 import com.mojang.blaze3d.pipeline.BindGroupLayout;
+//?} else {
+/*import com.mojang.blaze3d.pipeline.DepthStencilState;
+import com.mojang.blaze3d.vertex.VertexFormatElement;
+*///?}
 import com.mojang.blaze3d.pipeline.RenderPipeline;
 import com.mojang.blaze3d.pipeline.RenderTarget;
 import com.mojang.blaze3d.shaders.UniformType;
@@ -64,6 +72,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.OptionalDouble;
+//? <26.2 {
+/*import java.util.OptionalInt;
+*///?}
 import java.util.Set;
 import java.util.function.Predicate;
 
@@ -117,24 +128,53 @@ public final class GpuFoliageRenderer {
 	private static final float MAX_LENGTH_DAMPING = 0.8F;
 
 	/**
-	 * A second vertex binding carrying what the shader needs to move each vertex: how freely it may sway,
-	 * from 0 at the anchor to 1 at the far end, and which block that anchor is, relative to the region, so
-	 * every vertex of a plant can look up the same push. Keeping it out of the main format leaves vanilla free
-	 * to write the standard attributes through {@code putBlockBakedQuad}.
+	 * What the shader needs to move each vertex: how freely it may sway, from 0 at the anchor to 1 at the far
+	 * end, and which block that anchor is, relative to the region, so every vertex of a plant looks up the
+	 * same push. Either way vanilla writes the standard attributes itself, untouched.
 	 */
+	//? >=26.2 {
+	// A binding of its own, which is the tidiest a pipeline allows from 26.2 on.
 	private static final VertexFormat WAVE_FORMAT = VertexFormat.builder(0)
 			.addAttribute("WaveWeight", GpuFormat.R32_FLOAT)
 			.addAttribute("SwayCell", GpuFormat.RGB32_FLOAT)
+			.addAttribute("PushWeight", GpuFormat.R32_FLOAT)
 			.build();
+	//?} else {
+	/*// Before 26.2 a pipeline reads one vertex buffer only, so these ride with the block's own attributes in
+	// a single format, interleaved as a region is uploaded.
+	private static final VertexFormatElement WAVE_WEIGHT_ELEMENT =
+			VertexFormatElement.register(10, 0, VertexFormatElement.Type.FLOAT, false, 1);
+	private static final VertexFormatElement SWAY_CELL_ELEMENT =
+			VertexFormatElement.register(11, 0, VertexFormatElement.Type.FLOAT, false, 3);
+	private static final VertexFormatElement PUSH_WEIGHT_ELEMENT =
+			VertexFormatElement.register(12, 0, VertexFormatElement.Type.FLOAT, false, 1);
+	private static final VertexFormat FOLIAGE_FORMAT = foliageFormat();
+
+	private static VertexFormat foliageFormat() {
+		VertexFormat block = DefaultVertexFormat.BLOCK;
+		VertexFormat.Builder builder = VertexFormat.builder();
+		for (VertexFormatElement element : block.getElements()) {
+			builder.add(block.getElementName(element), element);
+		}
+		return builder
+				.add("WaveWeight", WAVE_WEIGHT_ELEMENT)
+				.add("SwayCell", SWAY_CELL_ELEMENT)
+				.add("PushWeight", PUSH_WEIGHT_ELEMENT)
+				.build();
+	}
+	*///?}
 
 	/**
 	 * The {@code FoliageSway} uniform block: the settings the shader reads that the player can change while
 	 * playing. They are data in a buffer rather than constants in the shader, so a change shows on the next
 	 * frame without recompiling anything.
 	 */
+	private static final String SWAY_SETTINGS_UNIFORM = "FoliageSway";
+	//? >=26.2 {
 	private static final BindGroupLayout SWAY_SETTINGS = BindGroupLayout.builder()
-			.withUniform("FoliageSway", UniformType.UNIFORM_BUFFER)
+			.withUniform(SWAY_SETTINGS_UNIFORM, UniformType.UNIFORM_BUFFER)
 			.build();
+	//?}
 	/** A whole vec4 for one float, so the buffer is never smaller than the block once a driver pads it. */
 	private static final int SWAY_SETTINGS_SIZE = new Std140SizeCalculator().putVec4().get();
 
@@ -145,6 +185,7 @@ public final class GpuFoliageRenderer {
 	 * blend state -- and only swaps in our shaders and adds the sway weight binding and the sway settings.
 	 * The shader files are discovered by resource pack scanning, so no registration call is needed.
 	 */
+	//? >=26.2 {
 	private static final RenderPipeline PIPELINE = RenderPipeline.builder(RenderPipelines.BLOCK_SNIPPET)
 			.withLocation(Identifier.fromNamespaceAndPath(ModTemplate.MOD_ID, "pipeline/foliage"))
 			.withVertexShader(Identifier.fromNamespaceAndPath(ModTemplate.MOD_ID, "core/foliage"))
@@ -154,9 +195,30 @@ public final class GpuFoliageRenderer {
 			.withBindGroupLayout(GpuFoliageInteraction.LAYOUT)
 			.withShaderDefine("ALPHA_CUTOUT", 0.5F)
 			.build();
+	//?} else {
+	/*// Vanilla's block snippet is private before 26.2, so the same state is spelled out here: the samplers
+	// and uniforms its shaders read, one vertex format, and the depth state every block pipeline uses.
+	private static final RenderPipeline PIPELINE = RenderPipeline.builder()
+			.withLocation(Identifier.fromNamespaceAndPath(ModTemplate.MOD_ID, "pipeline/foliage"))
+			.withVertexShader(Identifier.fromNamespaceAndPath(ModTemplate.MOD_ID, "core/foliage"))
+			.withFragmentShader(Identifier.fromNamespaceAndPath(ModTemplate.MOD_ID, "core/foliage"))
+			.withVertexFormat(FOLIAGE_FORMAT, VertexFormat.Mode.QUADS)
+			.withSampler("Sampler0")
+			.withSampler("Sampler2")
+			.withUniform("DynamicTransforms", UniformType.UNIFORM_BUFFER)
+			.withUniform("Projection", UniformType.UNIFORM_BUFFER)
+			.withUniform("Fog", UniformType.UNIFORM_BUFFER)
+			.withUniform("Globals", UniformType.UNIFORM_BUFFER)
+			.withUniform(SWAY_SETTINGS_UNIFORM, UniformType.UNIFORM_BUFFER)
+			.withUniform(GpuFoliageInteraction.UNIFORM, UniformType.UNIFORM_BUFFER)
+			.withDepthStencilState(DepthStencilState.DEFAULT)
+			.withShaderDefine("ALPHA_CUTOUT", 0.5F)
+			.build();
+	*///?}
 
 	private static final int VERTEX_BYTES = DefaultVertexFormat.BLOCK.getVertexSize();
-	private static final int WEIGHT_BYTES = WAVE_FORMAT.getVertexSize();
+	/** Our own per-vertex data: the wind weight, the anchor block and the push weight, five floats in all. */
+	private static final int WEIGHT_BYTES = Float.BYTES * 5;
 	private static final int INITIAL_SCRATCH_QUADS = 1024;
 
 	private static final Map<Long, Region> REGIONS = new HashMap<>();
@@ -289,6 +351,7 @@ public final class GpuFoliageRenderer {
 					occupied[occupiedCount++] = slot;
 				}
 			}
+			//? >=26.2 {
 			ByteBuffer vertexData = MemoryUtil.memAlloc(vertexCount * VERTEX_BYTES);
 			ByteBuffer weightData = MemoryUtil.memAlloc(vertexCount * WEIGHT_BYTES);
 			try {
@@ -311,13 +374,38 @@ public final class GpuFoliageRenderer {
 				MemoryUtil.memFree(vertexData);
 				MemoryUtil.memFree(weightData);
 			}
+			//?} else {
+			/*// One buffer holding both, vertex by vertex: the block's own attributes, then ours. A pipeline
+			// reads a single vertex buffer before 26.2, so the two are interleaved here rather than bound apart.
+			int stride = VERTEX_BYTES + WEIGHT_BYTES;
+			ByteBuffer vertexData = MemoryUtil.memAlloc(vertexCount * stride);
+			try {
+				for (int i = 0; i < occupiedCount; i++) {
+					int slot = occupied[i];
+					Section section = sections[slot];
+					int base = firstVertex[slot] * stride;
+					for (int vertex = 0; vertex < section.vertexCount; vertex++) {
+						vertexData.put(base + vertex * stride, section.vertices, vertex * VERTEX_BYTES, VERTEX_BYTES);
+						vertexData.put(base + vertex * stride + VERTEX_BYTES, section.weights, vertex * WEIGHT_BYTES, WEIGHT_BYTES);
+					}
+				}
+				vertices = RenderSystem.getDevice().createBuffer(
+						() -> "MC2 foliage vertices",
+						GpuBuffer.USAGE_VERTEX | GpuBuffer.USAGE_COPY_DST,
+						vertexData);
+			} finally {
+				MemoryUtil.memFree(vertexData);
+			}
+			*///?}
 		}
 
 		void closeBuffers() {
 			if (vertices != null) {
 				vertices.close();
-				weights.close();
 				vertices = null;
+			}
+			if (weights != null) {
+				weights.close();
 				weights = null;
 			}
 		}
@@ -349,6 +437,11 @@ public final class GpuFoliageRenderer {
 		private int cellZ;
 		private boolean hanging;
 		private float damping = 1.0F;
+		/** Sway's own deformation for this plant, which decides how far a push moves each vertex. */
+		private DeformationContributor deformation;
+		private float deformationScale;
+		private BlockState state;
+		private BlockPos pos;
 
 		void prepare(BlockState state, BlockPos pos, ClientLevel level) {
 			hanging = HangingVineMultiblockBehavior.isHangingVine(state);
@@ -364,6 +457,18 @@ public final class GpuFoliageRenderer {
 					}
 				}
 			}
+			deformation = null;
+			if (pipeline != null) {
+				for (DeformationContributor contributor : pipeline.getDeformationContributors()) {
+					if (contributor.appliesTo(state)) {
+						deformation = contributor;
+						break;
+					}
+				}
+			}
+			deformationScale = deformation == null ? 0.0F : deformation.getDeformationScale(state, pos);
+			this.state = state;
+			this.pos = pos;
 			// Hanging plants are held at the top of their anchor block, everything else at the base.
 			anchorY = hanging ? anchor.getY() + 1 : anchor.getY();
 			cellX = anchor.getX();
@@ -389,6 +494,17 @@ public final class GpuFoliageRenderer {
 			float value = 1.0F - Math.min(MAX_LENGTH_DAMPING, (length - 1) * LENGTH_DAMPING_PER_BLOCK);
 			dampingByAnchor.put(anchor.immutable(), value);
 			return value;
+		}
+
+		/**
+		 * How far a push moves this vertex, straight from Sway: the same curve and scale the chunk mesh uses,
+		 * so a plant bends the same whoever draws it. The wind's own weight is a different shape, spread over
+		 * several blocks, which would leave a short plant barely pushed.
+		 *
+		 * @param localY the vertex's height within its own block, as Sway measures it
+		 */
+		float pushWeightAt(float localY) {
+			return deformation == null ? 0.0F : deformation.getVertexWeight(localY, state, pos) * deformationScale;
 		}
 
 		float weightAt(float worldY) {
@@ -650,7 +766,11 @@ public final class GpuFoliageRenderer {
 
 		// Every region's offset is written in one mapping of the uniform ring buffer. The singular
 		// writeTransform maps and unmaps it per call, which costs a GPU round trip for each one.
+		//? >=26.2 {
 		Matrix4f modelView = RenderSystem.getModelViewMatrixCopy();
+		//?} else {
+		/*Matrix4f modelView = RenderSystem.getModelViewMatrix();
+		*///?}
 		Vector4f noModulation = new Vector4f(1.0F, 1.0F, 1.0F, 1.0F);
 		Matrix4f noTextureTransform = new Matrix4f();
 		DynamicUniforms.Transform[] transforms = new DynamicUniforms.Transform[drawn.size()];
@@ -672,9 +792,17 @@ public final class GpuFoliageRenderer {
 			longestDraw = Math.max(longestDraw, draws[i]);
 		}
 		AbstractTexture atlas = minecraft.getTextureManager().getTexture(TextureAtlas.LOCATION_BLOCKS);
+		//? >=26.2 {
 		RenderSystem.AutoStorageIndexBuffer indices = RenderSystem.getSequentialBuffer(PrimitiveTopology.QUADS);
+		//?} else {
+		/*RenderSystem.AutoStorageIndexBuffer indices = RenderSystem.getSequentialBuffer(VertexFormat.Mode.QUADS);
+		*///?}
 		GpuBuffer indexBuffer = indices.getBuffer(indexCountFor(longestDraw));
+		//? >=26.2 {
 		RenderTarget target = minecraft.gameRenderer.mainRenderTarget();
+		//?} else {
+		/*RenderTarget target = minecraft.getMainRenderTarget();
+		*///?}
 		// Written before the pass opens: a buffer cannot be written to while a render pass is open.
 		GpuBuffer settings = swaySettings();
 		GpuBuffer interaction = GpuFoliageInteraction.upload(camera);
@@ -684,7 +812,11 @@ public final class GpuFoliageRenderer {
 				.createRenderPass(
 						() -> "MC2 foliage",
 						target.getColorTextureView(),
+						//? >=26.2 {
 						Optional.empty(),
+						//?} else {
+						/*OptionalInt.empty(),
+						*///?}
 						target.getDepthTextureView(),
 						OptionalDouble.empty())) {
 			pass.setPipeline(PIPELINE);
@@ -693,8 +825,8 @@ public final class GpuFoliageRenderer {
 			pass.bindTexture("Sampler2", minecraft.gameRenderer.lightmap(),
 					RenderSystem.getSamplerCache().getClampToEdge(FilterMode.LINEAR));
 			pass.setIndexBuffer(indexBuffer, indices.type());
-			pass.setUniform("FoliageSway", settings);
-			pass.setUniform("FoliageInteraction", interaction);
+			pass.setUniform(SWAY_SETTINGS_UNIFORM, settings);
+			pass.setUniform(GpuFoliageInteraction.UNIFORM, interaction);
 
 			int boundRegion = -1;
 			for (int i = 0; i < drawsSize; i += 3) {
@@ -702,13 +834,21 @@ public final class GpuFoliageRenderer {
 				if (regionIndex != boundRegion) {
 					Region region = drawn.get(regionIndex);
 					pass.setUniform("DynamicTransforms", offsets[regionIndex]);
+					//? >=26.2 {
 					pass.setVertexBuffer(0, region.vertices.slice());
 					pass.setVertexBuffer(1, region.weights.slice());
+					//?} else {
+					/*pass.setVertexBuffer(0, region.vertices);
+					*///?}
 					boundRegion = regionIndex;
 				}
 				// The sequential index buffer counts from zero, and the base vertex moves it to where
 				// this run of sections starts in the region's buffers.
+				//? >=26.2 {
 				pass.drawIndexed(indexCountFor(draws[i + 2]), 1, 0, draws[i + 1], 0);
+				//?} else {
+				/*pass.drawIndexed(draws[i + 1], 0, indexCountFor(draws[i + 2]), 1);
+				*///?}
 			}
 		}
 	}
@@ -844,7 +984,11 @@ public final class GpuFoliageRenderer {
 				continue;
 			}
 			int sectionY = level.getSectionYFromSectionIndex(index);
+			//? >=26.2 {
 			minecraft.levelExtractor.setSectionDirty(chunkX, sectionY, chunkZ);
+			//?} else {
+			/*minecraft.levelRenderer.setSectionDirty(chunkX, sectionY, chunkZ);
+			*///?}
 			if (nowNear) {
 				DIRTY.add(SectionPos.asLong(chunkX, sectionY, chunkZ));
 			}
@@ -967,7 +1111,11 @@ public final class GpuFoliageRenderer {
 		int offsetY = origin.getY() - regionOrigin.getY();
 		int offsetZ = origin.getZ() - regionOrigin.getZ();
 
+		//? >=26.2 {
 		BufferBuilder builder = new BufferBuilder(vertexScratch, PrimitiveTopology.QUADS, DefaultVertexFormat.BLOCK);
+		//?} else {
+		/*BufferBuilder builder = new BufferBuilder(vertexScratch, VertexFormat.Mode.QUADS, DefaultVertexFormat.BLOCK);
+		*///?}
 		// Vanilla writes the standard attributes; alongside each quad we append the sway weight of its
 		// four vertices, so both bindings stay in step without touching its output.
 		SwayAnchor anchor = new SwayAnchor();
@@ -975,11 +1123,13 @@ public final class GpuFoliageRenderer {
 			builder.putBlockBakedQuad(x, y, z, quad, instance);
 			reserveWeights(WEIGHT_BYTES * 4);
 			for (int vertex = 0; vertex < 4; vertex++) {
-				float worldY = regionOrigin.getY() + y + quad.position(vertex).y();
+				float localY = quad.position(vertex).y();
+				float worldY = regionOrigin.getY() + y + localY;
 				weightScratch.putFloat(anchor.weightAt(worldY));
 				weightScratch.putFloat(anchor.cellX - regionOrigin.getX());
 				weightScratch.putFloat(anchor.cellY - regionOrigin.getY());
 				weightScratch.putFloat(anchor.cellZ - regionOrigin.getZ());
+				weightScratch.putFloat(anchor.pushWeightAt(localY));
 			}
 		};
 

@@ -1,6 +1,6 @@
 package net.karto.mc2.mc2_interactivefoliage.mixin;
 
-//? >=26.2 {
+//? >=26.1.2 {
 
 import com.github.razorplay01.sway.client.behavior.force.ProximityForceBehavior;
 import net.karto.mc2.mc2_interactivefoliage.gpu.GpuFoliageInteraction;

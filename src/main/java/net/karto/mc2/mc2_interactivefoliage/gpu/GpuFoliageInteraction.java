@@ -1,6 +1,6 @@
 package net.karto.mc2.mc2_interactivefoliage.gpu;
 
-//? >=26.2 {
+//? >=26.1.2 {
 
 import com.github.razorplay01.sway.client.SwayData;
 import com.github.razorplay01.sway.client.SwayEngine;
@@ -11,7 +11,9 @@ import com.github.razorplay01.sway.config.SwayConfig;
 import com.mojang.blaze3d.buffers.GpuBuffer;
 import com.mojang.blaze3d.buffers.Std140Builder;
 import com.mojang.blaze3d.buffers.Std140SizeCalculator;
+//? >=26.2 {
 import com.mojang.blaze3d.pipeline.BindGroupLayout;
+//?}
 import com.mojang.blaze3d.shaders.UniformType;
 import com.mojang.blaze3d.systems.RenderSystem;
 import net.karto.mc2.mc2_interactivefoliage.ModTemplate;
@@ -49,10 +51,15 @@ public final class GpuFoliageInteraction {
 	/** How many plant pushes are sent. The nearest win. */
 	static final int MAX_CELLS = 128;
 
-	/** The {@code FoliageInteraction} uniform block. */
+	/** The name of the uniform block the shader reads these pushes from. */
+	static final String UNIFORM = "FoliageInteraction";
+
+	//? >=26.2 {
+	/** From 26.2 a pipeline declares its uniforms in bind group layouts. */
 	static final BindGroupLayout LAYOUT = BindGroupLayout.builder()
-			.withUniform("FoliageInteraction", UniformType.UNIFORM_BUFFER)
+			.withUniform(UNIFORM, UniformType.UNIFORM_BUFFER)
 			.build();
+	//?}
 
 	private static final int BUFFER_SIZE = bufferSize();
 

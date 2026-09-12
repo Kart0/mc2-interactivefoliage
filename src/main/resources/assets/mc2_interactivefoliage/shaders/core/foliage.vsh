@@ -19,6 +19,8 @@ in ivec2 UV2;
 in float WaveWeight;
 // The plant's anchor block, relative to the region: every vertex of a plant shares it.
 in vec3 SwayCell;
+// How far a push moves this vertex, straight from Sway, so a pushed plant bends the same whoever draws it.
+in float PushWeight;
 
 // GameTime is the fraction of a Minecraft day, so it advances from 0 to 1 over 24000 ticks --
 // twenty real minutes. Scaling by two pi times a whole number of cycles gives a visible rhythm
@@ -49,8 +51,9 @@ layout(std140) uniform FoliageInteraction {
     vec4 CellForce[MAX_CELLS];    // xy: push along x and z; z: the most this plant may be pushed
 };
 
-// How far the tip of a plant can be pushed, in blocks.
-const float INTERACT_STRENGTH = 0.55;
+// A last say over how hard entities push, on top of what Sway already decides. At 1.0 a plant bends exactly
+// as far as it would in the chunk mesh; the mod already sends a stronger push while it draws the foliage.
+const float INTERACT_STRENGTH = 1.0;
 // How much of its sway a plant keeps while an entity pushes it.
 const float PUSHED_SWAY = 0.25;
 // How hard a push has to be before a plant keeps only PUSHED_SWAY; lighter pushes calm it partly, so the
@@ -98,7 +101,7 @@ void main() {
     // Every vertex of a plant reads the same force, so the whole plant calms together.
     float calm = smoothstep(0.0, PUSH_FOR_CALM, length(force));
     float amount = WaveWeight * SWAY_STRENGTH * SwayIntensity * mix(1.0, PUSHED_SWAY, calm);
-    vec2 push = force * WaveWeight * INTERACT_STRENGTH;
+    vec2 push = force * PushWeight * INTERACT_STRENGTH;
     pos.x += sin(phase) * amount;
     pos.z += cos(phase * 1.3) * amount * 0.7;
     pos.xz += push;

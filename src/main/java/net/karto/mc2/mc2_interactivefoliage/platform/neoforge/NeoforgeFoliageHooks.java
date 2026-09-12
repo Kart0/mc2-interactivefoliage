@@ -2,7 +2,7 @@ package net.karto.mc2.mc2_interactivefoliage.platform.neoforge;
 
 //? neoforge && >=26.2 {
 
-import com.github.razorplay01.sway.api.SwayAPI;
+/*import com.github.razorplay01.sway.api.SwayAPI;
 import net.karto.mc2.mc2_interactivefoliage.ModTemplate;
 import net.karto.mc2.mc2_interactivefoliage.gpu.GpuFoliageRenderer;
 import net.karto.mc2.mc2_interactivefoliage.gpu.GpuFoliageSplit;
@@ -20,9 +20,9 @@ import net.neoforged.neoforge.event.level.ChunkEvent;
 import java.util.ArrayList;
 import java.util.Map;
 
-/**
+/^*
  * Where the GPU foliage renderer meets NeoForge: the model wrapper, the draw, and chunks coming and going.
- */
+ ^/
 @EventBusSubscriber(modid = ModTemplate.MOD_ID, value = Dist.CLIENT)
 public final class NeoforgeFoliageHooks {
 
@@ -48,11 +48,11 @@ public final class NeoforgeFoliageHooks {
 		}
 	}
 
-	/**
+	/^*
 	 * Wraps the model of every block Sway animates, first of all: Sway wraps afterwards, so ours ends up
 	 * inside its wrapper. That is what lets the renderer mesh plain geometry while the chunk mesh still gets
 	 * Sway's deformation on everything our wrapper hands over.
-	 */
+	 ^/
 	@SubscribeEvent(priority = EventPriority.HIGHEST)
 	public static void onModifyBakingResult(ModelEvent.ModifyBakingResult event) {
 		Map<BlockState, BlockStateModel> models = event.getBakingResult().blockStateModels();
@@ -66,4 +66,4 @@ public final class NeoforgeFoliageHooks {
 		}
 	}
 }
-//?}
+*///?}

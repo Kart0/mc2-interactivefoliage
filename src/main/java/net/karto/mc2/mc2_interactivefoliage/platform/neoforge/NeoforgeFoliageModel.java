@@ -2,7 +2,7 @@ package net.karto.mc2.mc2_interactivefoliage.platform.neoforge;
 
 //? neoforge && >=26.2 {
 
-import net.karto.mc2.mc2_interactivefoliage.gpu.GpuFoliageSplit;
+/*import net.karto.mc2.mc2_interactivefoliage.gpu.GpuFoliageSplit;
 import net.minecraft.client.renderer.block.BlockAndTintGetter;
 import net.minecraft.client.renderer.block.dispatch.BlockStateModel;
 import net.minecraft.client.renderer.block.dispatch.BlockStateModelPart;
@@ -13,14 +13,14 @@ import net.minecraft.world.level.block.state.BlockState;
 
 import java.util.List;
 
-/**
+/^*
  * Wraps the model of every foliage block so a chunk mesher leaves out the foliage the GPU renderer draws.
  * <p>
  * NeoForge has no rendering API of its own, so it hands the block's position to the model through its
  * {@code collectParts} extension, and that is the call this answers. It sits inside Sway's wrapper rather
  * than outside it: Sway deforms here too, so the renderer meshes through this model to get plain geometry,
  * which its shader then moves itself.
- */
+ ^/
 public final class NeoforgeFoliageModel implements BlockStateModel {
 
 	private final BlockStateModel parent;
@@ -78,4 +78,4 @@ public final class NeoforgeFoliageModel implements BlockStateModel {
 		return parent.hasMaterialFlag(level, pos, state, flag);
 	}
 }
-//?}
+*///?}

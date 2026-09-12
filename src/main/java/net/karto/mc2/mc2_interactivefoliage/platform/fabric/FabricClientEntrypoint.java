@@ -2,7 +2,7 @@ package net.karto.mc2.mc2_interactivefoliage.platform.fabric;
 
 //? fabric {
 
-/*import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
+import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.karto.mc2.mc2_interactivefoliage.ModTemplate;
 import dev.kikugie.fletching_table.annotation.fabric.Entrypoint;
 import net.fabricmc.api.ClientModInitializer;
@@ -17,7 +17,7 @@ public class FabricClientEntrypoint implements ClientModInitializer {
 		// are in the registry. Registering from the main entrypoint instead would depend on mod
 		// load order and silently miss mods that initialize after this one.
 		ModTemplate.onRegistriesReady();
-		//? >=26.2 {
+		//? >=26.1.2 {
 		FabricFoliageHooks.register();
 		//?}
 		FoliageKeyBindings.register();
@@ -25,4 +25,4 @@ public class FabricClientEntrypoint implements ClientModInitializer {
 	}
 
 }
-*///?}
+//?}

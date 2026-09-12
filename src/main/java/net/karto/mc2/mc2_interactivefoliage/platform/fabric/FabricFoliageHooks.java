@@ -1,8 +1,8 @@
 package net.karto.mc2.mc2_interactivefoliage.platform.fabric;
 
-//? fabric && >=26.2 {
+//? fabric && >=26.1.2 {
 
-/*import com.github.razorplay01.sway.api.SwayAPI;
+import com.github.razorplay01.sway.api.SwayAPI;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientChunkEvents;
 import net.fabricmc.fabric.api.client.model.loading.v1.ModelLoadingPlugin;
 import net.fabricmc.fabric.api.client.model.loading.v1.ModelModifier;
@@ -10,7 +10,7 @@ import net.fabricmc.fabric.api.client.rendering.v1.level.LevelRenderEvents;
 import net.karto.mc2.mc2_interactivefoliage.gpu.GpuFoliageModel;
 import net.karto.mc2.mc2_interactivefoliage.gpu.GpuFoliageRenderer;
 
-/^* Where the GPU foliage renderer meets Fabric: the model wrapper, the draw, and chunks coming and going. ^/
+/** Where the GPU foliage renderer meets Fabric: the model wrapper, the draw, and chunks coming and going. */
 public final class FabricFoliageHooks {
 
 	private FabricFoliageHooks() {
@@ -32,4 +32,4 @@ public final class FabricFoliageHooks {
 		ClientChunkEvents.CHUNK_UNLOAD.register(GpuFoliageRenderer::forgetChunk);
 	}
 }
-*///?}
+//?}
