@@ -1,6 +1,6 @@
 package net.karto.mc2.mc2_interactivefoliage.gpu;
 
-//? fabric && >=26.2 {
+//? >=26.2 {
 
 import com.github.razorplay01.sway.api.SwayAPI;
 import com.github.razorplay01.sway.api.behavior.BehaviorPipeline;
@@ -24,9 +24,6 @@ import com.mojang.blaze3d.vertex.ByteBufferBuilder;
 import com.mojang.blaze3d.vertex.DefaultVertexFormat;
 import com.mojang.blaze3d.vertex.MeshData;
 import com.mojang.blaze3d.vertex.VertexFormat;
-import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientChunkEvents;
-import net.fabricmc.fabric.api.client.rendering.v1.level.LevelRenderEvents;
-import net.fabricmc.fabric.api.client.rendering.v1.level.LevelTerrainRenderContext;
 import net.karto.mc2.mc2_interactivefoliage.FoliageSettings;
 import net.karto.mc2.mc2_interactivefoliage.ModTemplate;
 import net.minecraft.client.Minecraft;
@@ -38,6 +35,7 @@ import net.minecraft.client.renderer.block.BlockStateModelSet;
 import net.minecraft.client.renderer.block.ModelBlockRenderer;
 import net.minecraft.client.renderer.culling.Frustum;
 import net.minecraft.client.renderer.state.level.CameraRenderState;
+import net.minecraft.client.renderer.state.level.LevelRenderState;
 import net.minecraft.client.renderer.texture.AbstractTexture;
 import net.minecraft.client.renderer.texture.TextureAtlas;
 import net.minecraft.core.BlockPos;
@@ -399,15 +397,6 @@ public final class GpuFoliageRenderer {
 		}
 	}
 
-	public static void register() {
-		GpuFoliageSplit.registerModelWrapper();
-		LevelRenderEvents.AFTER_OPAQUE_TERRAIN.register(GpuFoliageRenderer::draw);
-		// Sodium overwrites every vanilla route that marks a section dirty when a chunk arrives, so
-		// chunk loads are followed through Fabric's own event, which fires whichever renderer is used.
-		ClientChunkEvents.CHUNK_LOAD.register(GpuFoliageRenderer::discoverChunk);
-		ClientChunkEvents.CHUNK_UNLOAD.register(GpuFoliageRenderer::forgetChunk);
-	}
-
 	/** Whether this renderer is drawing the near foliage, which is while it is switched on in a world. */
 	static boolean isActive() {
 		return active;
@@ -467,7 +456,7 @@ public final class GpuFoliageRenderer {
 	}
 
 	/** Queues the sections of a chunk whose palette could hold foliage. */
-	private static void discoverChunk(ClientLevel level, LevelChunk chunk) {
+	public static void discoverChunk(ClientLevel level, LevelChunk chunk) {
 		if (!active) {
 			return;
 		}
@@ -481,7 +470,7 @@ public final class GpuFoliageRenderer {
 		}
 	}
 
-	private static void forgetChunk(ClientLevel level, LevelChunk chunk) {
+	public static void forgetChunk(ClientLevel level, LevelChunk chunk) {
 		int chunkX = SectionPos.blockToSectionCoord(chunk.getPos().getMinBlockX());
 		int chunkZ = SectionPos.blockToSectionCoord(chunk.getPos().getMinBlockZ());
 		for (int sectionY = level.getMinSectionY(); sectionY <= level.getMaxSectionY(); sectionY++) {
@@ -566,7 +555,8 @@ public final class GpuFoliageRenderer {
 		}
 	}
 
-	private static void draw(LevelTerrainRenderContext context) {
+	/** Called by each loader's hooks once the opaque terrain is drawn. */
+	public static void draw(LevelRenderState levelState) {
 		Minecraft minecraft = Minecraft.getInstance();
 		if (minecraft.level == null) {
 			return;
@@ -587,7 +577,7 @@ public final class GpuFoliageRenderer {
 
 		// The render state carries the camera and the cull frustum vanilla already prepared this
 		// frame, which is available whether or not Sodium owns the terrain renderer.
-		CameraRenderState cameraState = context.levelState().cameraRenderState;
+		CameraRenderState cameraState = levelState.cameraRenderState;
 		if (cameraState == null || cameraState.pos == null) {
 			return;
 		}
@@ -1009,7 +999,8 @@ public final class GpuFoliageRenderer {
 					pos.set(origin.getX() + dx, origin.getY() + dy, origin.getZ() + dz);
 					anchor.prepare(state, pos, level);
 					modelRenderer.tesselateBlock(output, offsetX + dx, offsetY + dy, offsetZ + dz,
-							level, pos, state, models.get(state), state.getSeed(pos));
+							level, pos, state, GpuFoliageSplit.modelFor(state, models.get(state)),
+							state.getSeed(pos));
 				}
 			}
 		}

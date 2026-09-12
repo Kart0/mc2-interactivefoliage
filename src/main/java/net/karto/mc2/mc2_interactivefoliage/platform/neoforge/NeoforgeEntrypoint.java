@@ -2,14 +2,14 @@ package net.karto.mc2.mc2_interactivefoliage.platform.neoforge;
 
 //? neoforge {
 
-/*import net.karto.mc2.mc2_interactivefoliage.FoliageConfigScreen;
+import net.karto.mc2.mc2_interactivefoliage.FoliageConfigScreen;
 import net.karto.mc2.mc2_interactivefoliage.ModTemplate;
 //? <= 1.21.1 {
-/^import net.karto.mc2.mc2_interactivefoliage.ModCompatRegistry;
+/*import net.karto.mc2.mc2_interactivefoliage.ModCompatRegistry;
 import net.minecraft.client.renderer.ItemBlockRenderTypes;
 import net.minecraft.client.renderer.RenderType;
 import net.minecraft.world.level.block.Block;
-^///?}
+*///?}
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.fml.common.Mod;
 import net.neoforged.fml.ModContainer;
@@ -41,7 +41,7 @@ public class NeoforgeEntrypoint {
 			ModTemplate.onRegistriesReady();
 
 			//? <= 1.21.1 {
-			/^// Sway wraps every registered block's BakedModel in its own SwayModel, which does not
+			/*// Sway wraps every registered block's BakedModel in its own SwayModel, which does not
 			// delegate NeoForge's getRenderTypes(). Wrapped models therefore fall back to the
 			// ItemBlockRenderTypes lookup, losing any "render_type" declared in the model JSON and
 			// rendering foliage in the solid layer (transparent texels turn black). Populating the
@@ -53,8 +53,8 @@ public class NeoforgeEntrypoint {
 			for (Block block : ModCompatRegistry.registeredBlocks()) {
 				ItemBlockRenderTypes.setRenderLayer(block, RenderType.cutoutMipped());
 			}
-			^///?}
+			*///?}
 		});
 	}
 }
-*///?}
+//?}

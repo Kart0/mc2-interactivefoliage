@@ -1,8 +1,7 @@
 package net.karto.mc2.mc2_interactivefoliage.gpu;
 
-//? fabric && >=26.2 {
+//? >=26.2 {
 
-import net.fabricmc.loader.api.FabricLoader;
 import net.karto.mc2.mc2_interactivefoliage.ModTemplate;
 
 import java.lang.invoke.MethodHandle;
@@ -31,7 +30,7 @@ final class SodiumOcclusion {
 	static {
 		MethodHandle instance = null;
 		MethodHandle isBoxVisible = null;
-		if (FabricLoader.getInstance().isModLoaded("sodium")) {
+		if (ModTemplate.xplat().isModLoaded("sodium")) {
 			try {
 				Class<?> renderer = Class.forName(RENDERER);
 				MethodHandles.Lookup lookup = MethodHandles.publicLookup();

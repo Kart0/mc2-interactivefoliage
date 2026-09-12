@@ -123,7 +123,13 @@ sealed class Loader(val id: String) {
 						credits = "${ctx.authors.joinToString(", ")} Contributors: ${ctx.contributors.joinToString(", ")}",
 						description = ctx.description
 					)
-				), dependencies = mapOf(ctx.modId to forgeDeps), mixins = listOf(ForgeMixin("${ctx.modId}.mixins.json"))
+				), dependencies = mapOf(ctx.modId to forgeDeps),
+				// The GPU foliage mixins target classes that only exist from 26.2 onwards, as on Fabric.
+				mixins = if (ctx.stonecutter.eval(ctx.currentMcVersion, ">=26.2")) {
+					listOf(ForgeMixin("${ctx.modId}.mixins.json"), ForgeMixin("${ctx.modId}.gpu.mixins.json"))
+				} else {
+					listOf(ForgeMixin("${ctx.modId}.mixins.json"))
+				}
 			)
 
 			return TOML.encodeToString(manifest)

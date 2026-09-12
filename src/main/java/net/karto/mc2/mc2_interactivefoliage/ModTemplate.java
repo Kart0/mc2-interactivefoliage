@@ -7,10 +7,10 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 //? fabric {
-import net.karto.mc2.mc2_interactivefoliage.platform.fabric.FabricPlatform;
-//?} neoforge {
-/*import net.karto.mc2.mc2_interactivefoliage.platform.neoforge.NeoforgePlatform;
- *///?} forge {
+/*import net.karto.mc2.mc2_interactivefoliage.platform.fabric.FabricPlatform;
+*///?} neoforge {
+import net.karto.mc2.mc2_interactivefoliage.platform.neoforge.NeoforgePlatform;
+ //?} forge {
 /*import net.karto.mc2.mc2_interactivefoliage.platform.forge.ForgePlatform;
  *///?}
 
@@ -47,16 +47,16 @@ public class ModTemplate {
 		LOGGER.debug("{}: { version: {}; friendly_name: {} }", MOD_ID, MOD_VERSION, MOD_FRIENDLY_NAME);
 	}
 
-	static Platform xplat() {
+	public static Platform xplat() {
 		return PLATFORM;
 	}
 
 	private static Platform createPlatformInstance() {
 		//? fabric {
-		return new FabricPlatform();
-		//?} neoforge {
-		/*return new NeoforgePlatform();
-		 *///?} forge {
+		/*return new FabricPlatform();
+		*///?} neoforge {
+		return new NeoforgePlatform();
+		 //?} forge {
 		/*return new ForgePlatform();
 		 *///?}
 	}

@@ -2,12 +2,12 @@ package net.karto.mc2.mc2_interactivefoliage.platform.fabric;
 
 //? fabric {
 
-import com.terraformersmc.modmenu.api.ConfigScreenFactory;
+/*import com.terraformersmc.modmenu.api.ConfigScreenFactory;
 import com.terraformersmc.modmenu.api.ModMenuApi;
 import dev.kikugie.fletching_table.annotation.fabric.Entrypoint;
 import net.karto.mc2.mc2_interactivefoliage.FoliageConfigScreen;
 
-/**
+/^*
  * Hooks the config screen into Mod Menu's per-mod settings button.
  * <p>
  * NeoForge and Forge get the same screen through their own extension points, so without this the
@@ -15,7 +15,7 @@ import net.karto.mc2.mc2_interactivefoliage.FoliageConfigScreen;
  * <p>
  * Mod Menu is an optional dependency: the entrypoint is only queried when it is installed, so this
  * class never loads otherwise.
- */
+ ^/
 @Entrypoint("modmenu")
 public class FabricModMenuIntegration implements ModMenuApi {
 
@@ -24,4 +24,4 @@ public class FabricModMenuIntegration implements ModMenuApi {
 		return FoliageConfigScreen::new;
 	}
 }
-//?}
+*///?}

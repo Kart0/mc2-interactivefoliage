@@ -23,7 +23,7 @@ public class FoliageConfigScreen extends Screen {
 	private RadiusSlider radiusSlider;
 	private Button resetIntensityBtn;
 	private Button resetRadiusBtn;
-	//? fabric && >=26.2 {
+	//? >=26.2 {
 	private CycleButton<Boolean> wavingFoliageBtn;
 	private WavingIntensitySlider wavingIntensitySlider;
 	private Button resetWavingIntensityBtn;
@@ -43,7 +43,7 @@ public class FoliageConfigScreen extends Screen {
 	 */
 	private int topOfOptions() {
 		int rows = 3;
-		//? fabric && >=26.2 {
+		//? >=26.2 {
 		rows += 3;
 		//?}
 		int height = 20 + (rows - 1) * 30 + 60;
@@ -104,7 +104,7 @@ public class FoliageConfigScreen extends Screen {
 				Math.abs(config.maxDistance - DEFAULT_RADIUS) > 0.1f;
 		this.addRenderableWidget(resetRadiusBtn);
 
-		//? fabric && >=26.2 {
+		//? >=26.2 {
 		y += 30;
 
 		// ── Renderer: the chunk mesh as always, or the mod's own on the GPU ────
@@ -163,7 +163,7 @@ public class FoliageConfigScreen extends Screen {
 				Component.translatable("config.mc2_interactivefoliage.save"),
 				btn -> {
 					SwayConfig.save();
-					//? fabric && >=26.2 {
+					//? >=26.2 {
 					FoliageSettings.save();
 					//?}
 					//? >=26.2{
@@ -178,7 +178,7 @@ public class FoliageConfigScreen extends Screen {
 	@Override
 	public void onClose() {
 		SwayConfig.save();
-		//? fabric && >=26.2 {
+		//? >=26.2 {
 		FoliageSettings.save();
 		//?}
 		//? >=26.2{
@@ -295,7 +295,7 @@ public class FoliageConfigScreen extends Screen {
 		}
 	}
 
-	//? fabric && >=26.2 {
+	//? >=26.2 {
 	/**
 	 * The default sits in the middle of the slider: the left half runs down to the minimum and the right half
 	 * up to the maximum, so weaker and stronger each get half the travel.

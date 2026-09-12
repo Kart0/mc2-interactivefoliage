@@ -1,7 +1,7 @@
 package net.karto.mc2.mc2_interactivefoliage.platform.fabric.datagen;
 
 //? fabric {
-import net.fabricmc.fabric.api.datagen.v1.DataGeneratorEntrypoint;
+/*import net.fabricmc.fabric.api.datagen.v1.DataGeneratorEntrypoint;
 import net.fabricmc.fabric.api.datagen.v1.FabricDataGenerator;
 
 public class FabricDataGeneratorEntrypoint implements DataGeneratorEntrypoint {
@@ -12,4 +12,4 @@ public class FabricDataGeneratorEntrypoint implements DataGeneratorEntrypoint {
 	}
 
 }
-//?}
+*///?}

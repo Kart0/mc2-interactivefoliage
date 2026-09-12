@@ -1,12 +1,11 @@
 package net.karto.mc2.mc2_interactivefoliage.gpu;
 
-//? fabric && >=26.2 {
+//? >=26.2 {
 
 import com.github.razorplay01.sway.api.SwayAPI;
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
-import net.fabricmc.fabric.api.client.model.loading.v1.ModelLoadingPlugin;
-import net.fabricmc.fabric.api.client.model.loading.v1.ModelModifier;
 import net.minecraft.client.renderer.block.BlockAndTintGetter;
+import net.minecraft.client.renderer.block.dispatch.BlockStateModel;
 import net.minecraft.client.renderer.chunk.RenderSectionRegion;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.SectionPos;
@@ -16,6 +15,7 @@ import net.minecraft.world.level.block.state.BlockState;
 
 import java.util.Collections;
 import java.util.IdentityHashMap;
+import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
@@ -70,16 +70,17 @@ public final class GpuFoliageSplit {
 	/** Render thread only: sections whose chunk mesh was built without their foliage. */
 	private static final LongOpenHashSet MESHED_WITHOUT_FOLIAGE = new LongOpenHashSet();
 
+	/**
+	 * The models the mod wrapped, by state. Where Sway deforms inside the model rather than through a
+	 * rendering API -- NeoForge -- meshing through vanilla's model set would bake its own deformation into
+	 * geometry the GPU is about to move again. Meshing goes through these instead: they sit inside Sway's
+	 * wrapper and hand over plain geometry.
+	 */
+	private static final Map<BlockState, BlockStateModel> GPU_MODELS = new IdentityHashMap<>();
+
 	private static Set<Block> foliage;
 
 	private GpuFoliageSplit() {
-	}
-
-	/** Wraps the model of every block Sway animates, outside Sway's own wrapper. */
-	static void registerModelWrapper() {
-		ModelLoadingPlugin.register(context -> context.modifyBlockModelAfterBake().register(
-				ModelModifier.WRAP_LAST_PHASE,
-				(model, bake) -> SwayAPI.isInteractive(bake.state().getBlock()) ? new GpuFoliageModel(model) : model));
 	}
 
 	/**
@@ -87,7 +88,7 @@ public final class GpuFoliageSplit {
 	 * renderer draws this block. Only chunk builds are split. Anything else that asks -- a block pushed by a
 	 * piston, a falling block, the GPU renderer meshing its own sections -- always gets the full geometry.
 	 */
-	static boolean leaveToGpu(BlockAndTintGetter level, BlockPos pos) {
+	public static boolean leaveToGpu(BlockAndTintGetter level, BlockPos pos) {
 		if (!(level instanceof RenderSectionRegion) && (SODIUM_LEVEL_SLICE == null || !SODIUM_LEVEL_SLICE.isInstance(level))) {
 			return false;
 		}
@@ -126,6 +127,17 @@ public final class GpuFoliageSplit {
 	/** Render thread: whether this section's chunk mesh was built without its foliage. */
 	static boolean chunkMeshLeftFoliage(long sectionKey) {
 		return MESHED_WITHOUT_FOLIAGE.contains(sectionKey);
+	}
+
+	/** Remembers a model the mod wrapped, so the renderer can mesh from it. */
+	public static void registerGpuModel(BlockState state, BlockStateModel model) {
+		GPU_MODELS.put(state, model);
+	}
+
+	/** The model to mesh this block from: the one the mod wrapped where there is one, or vanilla's. */
+	static BlockStateModel modelFor(BlockState state, BlockStateModel fallback) {
+		BlockStateModel model = GPU_MODELS.get(state);
+		return model == null ? fallback : model;
 	}
 
 	/** Render thread: the section was unloaded, and its next build has to be recorded afresh. */
