@@ -122,6 +122,21 @@ public final class GpuFoliageRenderer {
 	private static final int SECTION_SIZE = 16;
 	/** The near area never shrinks below this many chunks, however short the render distance. */
 	private static final int MIN_NEAR_RADIUS = 2;
+
+	/**
+	 * Up to this render distance, in chunks, the near area reaches half of it. Further than this the share
+	 * shrinks, since a sway is too small to see far off while the foliage the renderer holds grows with the
+	 * square of the distance.
+	 */
+	private static final int FULL_NEAR_SHARE_UP_TO = 8;
+	private static final float FULL_NEAR_SHARE = 0.5F;
+	/** How much the share shrinks for each chunk of render distance past that: 30% by 16. */
+	private static final float NEAR_SHARE_DROP_PER_CHUNK = 0.025F;
+	/**
+	 * The smallest share, reached at 18 chunks. At 32 it leaves the near area 8 chunks out, about as far as a
+	 * sway of a third of a block still shows on screen.
+	 */
+	private static final float MIN_NEAR_SHARE = 0.25F;
 	/** Sections are built this many chunks past the near area, so ones crossing into it are ready. */
 	private static final int BUILD_MARGIN = 2;
 
@@ -991,13 +1006,27 @@ public final class GpuFoliageRenderer {
 	 * <p>
 	 * Only the old and the new area are walked, so even a teleport costs two squares of chunks.
 	 */
+	/**
+	 * How far out, in chunks, the renderer draws the foliage for a render distance. Half of it up to 8 chunks, as
+	 * it always was; past that a share shrinking steadily to a quarter, which keeps the near area close to 5
+	 * chunks all the way from 10 to 20 and lets it reach no further than 8 at 32.
+	 */
+	static int nearRadius(int renderDistance) {
+		if (renderDistance <= FULL_NEAR_SHARE_UP_TO) {
+			return Math.max(MIN_NEAR_RADIUS, renderDistance / 2);
+		}
+		float share = Math.max(MIN_NEAR_SHARE,
+				FULL_NEAR_SHARE - (renderDistance - FULL_NEAR_SHARE_UP_TO) * NEAR_SHARE_DROP_PER_CHUNK);
+		return Math.max(MIN_NEAR_RADIUS, Math.round(renderDistance * share));
+	}
+
 	private static void updateNearArea(Minecraft minecraft) {
 		if (minecraft.player == null) {
 			return;
 		}
 		int centreX = SectionPos.blockToSectionCoord(minecraft.player.getBlockX());
 		int centreZ = SectionPos.blockToSectionCoord(minecraft.player.getBlockZ());
-		int radius = Math.max(MIN_NEAR_RADIUS, minecraft.options.renderDistance().get() / 2);
+		int radius = nearRadius(minecraft.options.renderDistance().get());
 		boolean hadArea = GpuFoliageSplit.hasArea();
 		int oldX = GpuFoliageSplit.centreX();
 		int oldZ = GpuFoliageSplit.centreZ();
