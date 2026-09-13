@@ -5,6 +5,9 @@ package net.karto.mc2.mc2_interactivefoliage.gpu;
 import com.github.razorplay01.sway.api.SwayAPI;
 import it.unimi.dsi.fastutil.longs.Long2LongMap;
 import it.unimi.dsi.fastutil.longs.Long2LongOpenHashMap;
+//? neoforge && <1.21.11 {
+/*import it.unimi.dsi.fastutil.longs.LongArrayList;
+*///?}
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 //? >=26.1.2 {
 import net.minecraft.client.renderer.block.BlockAndTintGetter;
@@ -34,6 +37,9 @@ import java.util.IdentityHashMap;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentLinkedQueue;
+//? neoforge && <1.21.11 {
+/*import java.util.concurrent.ConcurrentHashMap;
+*///?}
 import java.util.function.LongConsumer;
 
 /**
@@ -67,6 +73,12 @@ public final class GpuFoliageSplit {
 	private record MeshDecision(long sectionKey, boolean leftFoliage) {
 	}
 
+	//? neoforge && <1.21.11 {
+	/*/^* A chunk mesh built for this section has just replaced the one on screen. ^/
+	private record MeshSwap(long sectionKey) {
+	}
+	*///?}
+
 	/** The last decision a meshing thread recorded, so a build records once rather than once per block. */
 	private static final class LastDecision {
 		long sectionKey;
@@ -83,7 +95,12 @@ public final class GpuFoliageSplit {
 
 	private static final ThreadLocal<LastDecision> LAST_DECISION = ThreadLocal.withInitial(LastDecision::new);
 	/** Decisions reported by meshing threads, waiting for the render thread to apply them. */
+	//? neoforge && <1.21.11 {
+	/*// The chunk mesh swaps travel in the same queue, so each is seen after the decisions its own build recorded.
+	private static final ConcurrentLinkedQueue<Record> DECISIONS = new ConcurrentLinkedQueue<>();
+	*///?} else {
 	private static final ConcurrentLinkedQueue<MeshDecision> DECISIONS = new ConcurrentLinkedQueue<>();
+	//?}
 	/** Render thread only: sections whose chunk mesh was built without their foliage. */
 	private static final LongOpenHashSet MESHED_WITHOUT_FOLIAGE = new LongOpenHashSet();
 
@@ -112,6 +129,52 @@ public final class GpuFoliageSplit {
 	 * section is being built for the first time at once, so that is the only time it is watched for.
 	 */
 	private static long radarUntil;
+
+	//? neoforge && <1.21.11 {
+	/*/^*
+	 * Render thread only: sections handed back to the chunk mesh whose new mesh is not on screen yet, and when to
+	 * stop waiting for it.
+	 * <p>
+	 * A section's decision is recorded while the chunk mesher reaches its foliage, not when the mesh it builds
+	 * replaces the old one: the rest of the section still has to be meshed and uploaded. Letting go at the
+	 * decision left the old mesh, the one without the foliage, on screen alone until then, and the foliage blinked
+	 * out. The renderer keeps drawing the section until the chunk mesh reports its new mesh in place instead
+	 * ({@link #onChunkMeshSwapped}), and stops on that very frame.
+	 ^/
+	private static final Long2LongOpenHashMap HANDING_BACK = new Long2LongOpenHashMap();
+	/^*
+	 * A safety net, not the mechanism: should the new mesh never be reported -- its build dropped for good -- the
+	 * section is let go of after this long, so it is never drawn twice for good.
+	 ^/
+	private static final long HAND_BACK_GIVE_UP_MILLIS = 5000L;
+
+	/^*
+	 * Render thread only: near sections whose latest chunk build kept their foliage when it should have left it out,
+	 * waiting for that build to be on screen so a rebuild can be asked for.
+	 * <p>
+	 * Asking again on a timer, as other versions do, cancels vanilla's build in progress each time, and a build that
+	 * takes longer than the timer -- a heavy resource pack is enough -- never finishes. Asking once the build is in
+	 * place never interrupts one, and Sodium accepts it too: by then the section has been built.
+	 ^/
+	private static final LongOpenHashSet NEEDS_REBUILD = new LongOpenHashSet();
+	/^* Render thread only: sections whose chunk mesh is to be built again, collected for the renderer to ask for. ^/
+	private static final LongArrayList REBUILD_NOW = new LongArrayList();
+
+	/^*
+	 * Sections the GPU renderer holds uploaded geometry for. Only these may be left out of the chunk mesh: until then the
+	 * chunk mesh keeps their foliage, rather than leave it to a renderer with nothing to show yet -- as it would for the
+	 * sections of a chunk that arrives inside the near area while the renderer is still working through its queue.
+	 * Written by the render thread, read by the meshing threads.
+	 ^/
+	private static final Set<Long> GPU_READY = ConcurrentHashMap.newKeySet();
+
+	/^*
+	 * Render thread only: sections whose chunk mesh has been built without their foliage, but is not on screen yet. The
+	 * renderer starts drawing them the moment it is, and not before: until then the old mesh, still holding the
+	 * foliage, is what is showing.
+	 ^/
+	private static final LongOpenHashSet TAKING_OVER = new LongOpenHashSet();
+	*///?}
 
 	/**
 	 * The models the mod wrapped, by state. Where Sway deforms inside the model rather than through a
@@ -147,10 +210,28 @@ public final class GpuFoliageSplit {
 		}
 		int sectionX = SectionPos.blockToSectionCoord(pos.getX());
 		int sectionZ = SectionPos.blockToSectionCoord(pos.getZ());
+		//? neoforge && <1.21.11 {
+		/*long sectionKey = SectionPos.asLong(sectionX, SectionPos.blockToSectionCoord(pos.getY()), sectionZ);
+		// A build asks once per foliage block, so the answer is kept for the rest of its section until something it
+		// depends on changes: the near area, or what the renderer holds.
+		LastDecision last = LAST_DECISION.get();
+		int currentGeneration = generation;
+		if (last.sectionKey == sectionKey && last.generation == currentGeneration) {
+			return last.leftFoliage;
+		}
+		Area current = area;
+		boolean leave = current != null && current.contains(sectionX, sectionZ) && GPU_READY.contains(sectionKey);
+		last.sectionKey = sectionKey;
+		last.leftFoliage = leave;
+		last.generation = currentGeneration;
+		DECISIONS.add(new MeshDecision(sectionKey, leave));
+		return leave;
+		*///?} else {
 		Area current = area;
 		boolean near = current != null && current.contains(sectionX, sectionZ);
 		record(SectionPos.asLong(sectionX, SectionPos.blockToSectionCoord(pos.getY()), sectionZ), near);
 		return near;
+		//?}
 	}
 
 	private static void record(long sectionKey, boolean leftFoliage) {
@@ -166,6 +247,97 @@ public final class GpuFoliageSplit {
 	}
 
 	/** Render thread: applies the decisions recorded since the last frame. */
+	//? neoforge && <1.21.11 {
+	/*static void applyMeshDecisions() {
+		Record event;
+		while ((event = DECISIONS.poll()) != null) {
+			if (event instanceof MeshSwap swap) {
+				long key = swap.sectionKey();
+				// The chunk mesh that took the foliage back is on screen now: the renderer can stop drawing it.
+				HANDING_BACK.remove(key);
+				// The chunk mesh that let the foliage go is on screen now: the renderer starts drawing it, on this frame.
+				if (TAKING_OVER.remove(key)) {
+					MESHED_WITHOUT_FOLIAGE.add(key);
+				}
+				// A near section built with its foliage still in: now that the build is in place, ask for one without.
+				if (NEEDS_REBUILD.remove(key) && isNear(SectionPos.x(key), SectionPos.z(key))
+						&& !MESHED_WITHOUT_FOLIAGE.contains(key)) {
+					REBUILD_NOW.add(key);
+				}
+				continue;
+			}
+			MeshDecision decision = (MeshDecision) event;
+			long key = decision.sectionKey();
+			if (decision.leftFoliage()) {
+				// Not drawn yet: the old mesh, which still holds the foliage, stays on screen until this build replaces it.
+				// A section still being handed back keeps being drawn meanwhile, as that is what is showing.
+				if (!MESHED_WITHOUT_FOLIAGE.contains(key)) {
+					TAKING_OVER.add(key);
+				}
+				NEEDS_REBUILD.remove(key);
+			} else {
+				TAKING_OVER.remove(key);
+				if (MESHED_WITHOUT_FOLIAGE.remove(key)) {
+					HANDING_BACK.put(key, System.currentTimeMillis() + HAND_BACK_GIVE_UP_MILLIS);
+				}
+				// Kept on purpose while the renderer has nothing for it; kept by mistake once it has, and asked again.
+				if (isNear(SectionPos.x(key), SectionPos.z(key)) && GPU_READY.contains(key)) {
+					NEEDS_REBUILD.add(key);
+				}
+			}
+		}
+	}
+
+	/^*
+	 * Render thread: the chunk mesh of a section has just been replaced by a newly built one. Called by the chunk
+	 * mesher itself, vanilla's or Sodium's, as the new mesh takes the old one's place.
+	 ^/
+	public static void onChunkMeshSwapped(int sectionX, int sectionY, int sectionZ) {
+		long key = SectionPos.asLong(sectionX, sectionY, sectionZ);
+		// Only a section the renderer draws, or a near one it is about to, can be waiting on its chunk mesh; every other
+		// one is left out of the queue.
+		if (MESHED_WITHOUT_FOLIAGE.contains(key) || HANDING_BACK.containsKey(key) || TAKING_OVER.contains(key)
+				|| isNear(sectionX, sectionZ)) {
+			DECISIONS.add(new MeshSwap(key));
+		}
+	}
+
+	/^*
+	 * Any thread: as {@link #onChunkMeshSwapped}, for a chunk mesh that took its place off the render thread. Vanilla
+	 * does that for a build with nothing to draw at all -- a section holding only foliage, once the foliage is left out
+	 * of it -- so it cannot be skipped. Only the sections the renderer holds geometry for are queued.
+	 ^/
+	public static void onChunkMeshSwappedElsewhere(int sectionX, int sectionY, int sectionZ) {
+		long key = SectionPos.asLong(sectionX, sectionY, sectionZ);
+		if (GPU_READY.contains(key)) {
+			DECISIONS.add(new MeshSwap(key));
+		}
+	}
+
+	/^*
+	 * Render thread: the GPU renderer now holds uploaded geometry for this section. Returns whether it did not before,
+	 * in which case a near section's chunk mesh is due to be built again without its foliage.
+	 ^/
+	static boolean markGpuReady(long sectionKey) {
+		if (!GPU_READY.add(sectionKey)) {
+			return false;
+		}
+		generation++;
+		return true;
+	}
+
+	/^* Render thread: the GPU renderer no longer holds geometry for this section. ^/
+	static void unmarkGpuReady(long sectionKey) {
+		if (GPU_READY.remove(sectionKey)) {
+			generation++;
+		}
+	}
+
+	/^* Whether the GPU renderer holds uploaded geometry for this section. ^/
+	static boolean isGpuReady(long sectionKey) {
+		return GPU_READY.contains(sectionKey);
+	}
+	*///?} else {
 	static void applyMeshDecisions() {
 		MeshDecision decision;
 		while ((decision = DECISIONS.poll()) != null) {
@@ -181,6 +353,7 @@ public final class GpuFoliageSplit {
 			}
 		}
 	}
+	//?}
 
 	/**
 	 * Render thread: a near section should come to have its foliage left out of the chunk mesh, and is to be
@@ -188,10 +361,15 @@ public final class GpuFoliageSplit {
 	 * build comes back still holding its foliage.
 	 */
 	static void expectFoliageLeft(long sectionKey) {
+		//? neoforge && <1.21.11 {
+		/*// Nothing to watch for here: a build that keeps the foliage reports so, and is asked for again once it is in
+		// place (see NEEDS_REBUILD).
+		*///?} else {
 		long now = System.currentTimeMillis();
 		if (now <= radarUntil && !MESHED_WITHOUT_FOLIAGE.contains(sectionKey)) {
 			STALE.putIfAbsent(sectionKey, now + STALE_GIVE_UP_MILLIS);
 		}
+		//?}
 	}
 
 	/** Render thread: a world was joined, so near sections are watched for the next few seconds. */
@@ -205,6 +383,13 @@ public final class GpuFoliageSplit {
 	 * chunk mesh is right to keep their foliage -- and so are the ones that have been asked for long enough.
 	 */
 	static void forEachStaleDue(LongConsumer rebuild) {
+		//? neoforge && <1.21.11 {
+		/*// Only the sections whose build has just come back still holding their foliage.
+		for (int i = 0; i < REBUILD_NOW.size(); i++) {
+			rebuild.accept(REBUILD_NOW.getLong(i));
+		}
+		REBUILD_NOW.clear();
+		*///?} else {
 		if (STALE.isEmpty()) {
 			return;
 		}
@@ -224,11 +409,28 @@ public final class GpuFoliageSplit {
 			}
 			rebuild.accept(key);
 		}
+		//?}
 	}
 
 	/** Render thread: whether this section's chunk mesh was built without its foliage. */
 	static boolean chunkMeshLeftFoliage(long sectionKey) {
+		//? neoforge && <1.21.11 {
+		/*if (MESHED_WITHOUT_FOLIAGE.contains(sectionKey)) {
+			return true;
+		}
+		// Handed back, but the chunk mesh holding the foliage again is not on screen yet.
+		long giveUp = HANDING_BACK.get(sectionKey);
+		if (giveUp == 0L) {
+			return false;
+		}
+		if (System.currentTimeMillis() > giveUp) {
+			HANDING_BACK.remove(sectionKey);
+			return false;
+		}
+		return true;
+		*///?} else {
 		return MESHED_WITHOUT_FOLIAGE.contains(sectionKey);
+		//?}
 	}
 
 	//? >=1.21.11 {
@@ -258,6 +460,11 @@ public final class GpuFoliageSplit {
 	/** Render thread: the section was unloaded, and its next build has to be recorded afresh. */
 	static void forgetSection(long sectionKey) {
 		STALE.remove(sectionKey);
+		//? neoforge && <1.21.11 {
+		/*HANDING_BACK.remove(sectionKey);
+		NEEDS_REBUILD.remove(sectionKey);
+		TAKING_OVER.remove(sectionKey);
+		*///?}
 		if (MESHED_WITHOUT_FOLIAGE.remove(sectionKey)) {
 			generation++;
 		}
@@ -298,6 +505,12 @@ public final class GpuFoliageSplit {
 	static void clearArea() {
 		area = null;
 		STALE.clear();
+		//? neoforge && <1.21.11 {
+		/*HANDING_BACK.clear();
+		NEEDS_REBUILD.clear();
+		REBUILD_NOW.clear();
+		TAKING_OVER.clear();
+		*///?}
 		radarUntil = 0L;
 		generation++;
 	}

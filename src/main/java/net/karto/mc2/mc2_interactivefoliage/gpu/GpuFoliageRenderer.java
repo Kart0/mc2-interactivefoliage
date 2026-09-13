@@ -42,6 +42,9 @@ import org.lwjgl.opengl.GL31;
 import org.lwjgl.opengl.GL32;
 *///?}
 import com.mojang.blaze3d.vertex.BufferBuilder;
+//? neoforge && <1.21.11 {
+/*import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
+*///?}
 import com.mojang.blaze3d.vertex.ByteBufferBuilder;
 import com.mojang.blaze3d.vertex.DefaultVertexFormat;
 import com.mojang.blaze3d.vertex.MeshData;
@@ -137,6 +140,18 @@ public final class GpuFoliageRenderer {
 
 	/** Rebuilds run on the render thread, so only a few are allowed per frame. */
 	private static final int REBUILD_BUDGET = 6;
+	//? neoforge && <1.21.11 {
+	/*/^*
+	 * A region is uploaded once the sections queued for it are built, so one whose sections arrive over several frames
+	 * is uploaded once rather than once a frame. If sections keep arriving for longer than this -- flying over new
+	 * ground -- it is uploaded anyway, so what is built reaches the screen.
+	 ^/
+	private static final long REGION_UPLOAD_MAX_WAIT_MILLIS = 500L;
+	*///?}
+	//? neoforge && <1.21.11 {
+	/*/^* And only for this long a frame, after the first one, so a frame is never held up by meshing. ^/
+	private static final long REBUILD_BUDGET_NANOS = 4_000_000L;
+	*///?}
 	/**
 	 * Padding on cull boxes so foliage leaning into view is not culled away: room for the sway at its strongest
 	 * plus the strongest push from an entity, on a tall plant with Sway's intensity turned up.
@@ -414,6 +429,9 @@ public final class GpuFoliageRenderer {
 	 * region's corner, which keeps them small enough for float precision however far out it sits.
 	 */
 	private static final class Region {
+		//? neoforge && <1.21.11 {
+		/*final long key;
+		*///?}
 		final BlockPos origin;
 		final AABB bounds;
 		/** The region's blocks without padding, for asking whether it lies wholly inside the frustum. */
@@ -425,6 +443,15 @@ public final class GpuFoliageRenderer {
 		final int[] occupied = new int[SECTIONS_PER_REGION];
 		int occupiedCount;
 		int sectionCount;
+		//? neoforge && <1.21.11 {
+		/*/^*
+		 * The sections as they were when the region was last uploaded, which is what its buffer holds and what is drawn
+		 * from. A section rebuilt since keeps its old counterpart here until the region is uploaded again.
+		 ^/
+		final Section[] uploadedSections = new Section[SECTIONS_PER_REGION];
+		/^* When the region first had a change waiting to be uploaded. ^/
+		long pendingSince;
+		*///?}
 		//? >=1.21.11 {
 		GpuBuffer vertices;
 		//?} else {
@@ -432,6 +459,9 @@ public final class GpuFoliageRenderer {
 		*///?}
 
 		Region(long regionKey) {
+			//? neoforge && <1.21.11 {
+			/*key = regionKey;
+			*///?}
 			origin = regionOrigin(regionKey);
 			bounds = new AABB(
 					origin.getX() - SWAY_MARGIN,
@@ -464,6 +494,9 @@ public final class GpuFoliageRenderer {
 			if (section == null) {
 				return false;
 			}
+			//? neoforge && <1.21.11 {
+			/*GpuFoliageSplit.unmarkGpuReady(section.key);
+			*///?}
 			section.free();
 			sections[slot] = null;
 			sectionCount--;
@@ -471,10 +504,17 @@ public final class GpuFoliageRenderer {
 		}
 
 		void upload() {
+			//? neoforge && <1.21.11 {
+			/*// The buffer is uploaded over rather than deleted and made again.
+			*///?} else {
 			closeBuffers();
+			//?}
 			int vertexCount = 0;
 			occupiedCount = 0;
 			for (int slot = 0; slot < SECTIONS_PER_REGION; slot++) {
+				//? neoforge && <1.21.11 {
+				/*uploadedSections[slot] = sections[slot];
+				*///?}
 				if (sections[slot] != null) {
 					firstVertex[slot] = vertexCount;
 					vertexCount += sections[slot].vertexCount;
@@ -513,13 +553,38 @@ public final class GpuFoliageRenderer {
 			}
 			MeshData mesh = new MeshData(staging.build(), new MeshData.DrawState(FOLIAGE_FORMAT, vertexCount,
 					indexCountFor(vertexCount), VertexFormat.Mode.QUADS, VertexFormat.IndexType.least(vertexCount)));
+			//? neoforge {
+			/^if (vertices == null) {
+				vertices = new VertexBuffer(VertexBuffer.Usage.STATIC);
+			}
+			^///?} else {
 			vertices = new VertexBuffer(VertexBuffer.Usage.STATIC);
+			//?}
 			vertices.bind();
 			// Closes the mesh once it is on the GPU.
 			vertices.upload(mesh);
 			VertexBuffer.unbind();
+			//? neoforge {
+			/^markSectionsReady();
+			^///?}
 			*///?}
 		}
+
+		//? neoforge && <1.21.11 {
+		/*/^*
+		 * Every section now on the GPU may have its foliage left out of the chunk mesh. A near one that was not ready
+		 * before still has it there, so its chunk mesh is asked to be built again.
+		 ^/
+		void markSectionsReady() {
+			Minecraft minecraft = Minecraft.getInstance();
+			for (int i = 0; i < occupiedCount; i++) {
+				long key = sections[occupied[i]].key;
+				if (GpuFoliageSplit.markGpuReady(key) && GpuFoliageSplit.isNear(SectionPos.x(key), SectionPos.z(key))) {
+					rebuildChunkMesh(minecraft, SectionPos.x(key), SectionPos.y(key), SectionPos.z(key));
+				}
+			}
+		}
+		*///?}
 
 		void closeBuffers() {
 			if (vertices != null) {
@@ -790,7 +855,13 @@ public final class GpuFoliageRenderer {
 	private static void putSection(long key, Section section) {
 		Region region = REGIONS.computeIfAbsent(regionKeyOf(key), Region::new);
 		region.put(slotOf(key), section);
+		//? neoforge && <1.21.11 {
+		/*if (DIRTY_REGIONS.add(region)) {
+			region.pendingSince = System.currentTimeMillis();
+		}
+		*///?} else {
 		DIRTY_REGIONS.add(region);
+		//?}
 	}
 
 	private static void removeSection(long key) {
@@ -804,7 +875,13 @@ public final class GpuFoliageRenderer {
 			REGIONS.remove(regionKey);
 			DIRTY_REGIONS.remove(region);
 		} else {
+			//? neoforge && <1.21.11 {
+			/*if (DIRTY_REGIONS.add(region)) {
+				region.pendingSince = System.currentTimeMillis();
+			}
+			*///?} else {
 			DIRTY_REGIONS.add(region);
+			//?}
 		}
 	}
 
@@ -877,8 +954,12 @@ public final class GpuFoliageRenderer {
 		buildNearest(minecraft, camera);
 		// Every change is folded into its region before anything is drawn, so a region's buffers and
 		// the layout used to draw from them always agree.
+		//? neoforge && <1.21.11 {
+		/*uploadDueRegion();
+		*///?} else {
 		DIRTY_REGIONS.forEach(Region::upload);
 		DIRTY_REGIONS.clear();
+		//?}
 
 		//? <26.1.2 {
 		/*if (frustum == null) {
@@ -896,6 +977,9 @@ public final class GpuFoliageRenderer {
 			if (!regionWithinRange(minecraft, entry.getKey())) {
 				region.free();
 				regions.remove();
+				//? neoforge && <1.21.11 {
+				/*DIRTY_REGIONS.remove(region);
+				*///?}
 				continue;
 			}
 			if (frustum != null && !frustum.isVisible(region.bounds)) {
@@ -919,7 +1003,12 @@ public final class GpuFoliageRenderer {
 			int runEnd = -1;
 			for (int i = 0; i < region.occupiedCount; i++) {
 				int slot = region.occupied[i];
+				//? neoforge && <1.21.11 {
+				/*// Drawn as uploaded: a section rebuilt since is not in the buffer yet.
+				Section section = region.uploadedSections[slot];
+				*///?} else {
 				Section section = region.sections[slot];
+				//?}
 				if (!isVisible(section, sectionFrustum, sodium)) {
 					if (runStart >= 0) {
 						addDraw(regionIndex, runStart, runEnd - runStart);
@@ -1153,6 +1242,38 @@ public final class GpuFoliageRenderer {
 	}
 	//?}
 
+	//? neoforge && <1.21.11 {
+	/*private static final LongOpenHashSet REGIONS_WITH_QUEUED_SECTIONS = new LongOpenHashSet();
+
+	/^*
+	 * Uploads at most one region this frame: the one waiting longest among those with nothing left in the queue, or
+	 * that have waited too long. A region upload can be tens of megabytes with a detailed resource pack, and uploading
+	 * a region for every section built into it, every frame, was most of what the renderer cost.
+	 ^/
+	private static void uploadDueRegion() {
+		if (DIRTY_REGIONS.isEmpty()) {
+			return;
+		}
+		REGIONS_WITH_QUEUED_SECTIONS.clear();
+		for (long key : DIRTY) {
+			REGIONS_WITH_QUEUED_SECTIONS.add(regionKeyOf(key));
+		}
+		long now = System.currentTimeMillis();
+		// Oldest first: the set keeps the order regions started waiting in.
+		var waiting = DIRTY_REGIONS.iterator();
+		while (waiting.hasNext()) {
+			Region region = waiting.next();
+			if (now - region.pendingSince < REGION_UPLOAD_MAX_WAIT_MILLIS
+					&& REGIONS_WITH_QUEUED_SECTIONS.contains(region.key)) {
+				continue;
+			}
+			waiting.remove();
+			region.upload();
+			return;
+		}
+	}
+	*///?}
+
 	private static boolean isVisible(Section section, Frustum frustum, Object sodium) {
 		// Only the sections whose chunk mesh on screen went without their foliage are drawn here; every
 		// other one still has it in the chunk mesh.
@@ -1267,6 +1388,7 @@ public final class GpuFoliageRenderer {
 	 * Sodium's, which does not follow vanilla's. Asking both costs nothing when only one is listening.
 	 */
 	private static void rebuildChunkMesh(Minecraft minecraft, int sectionX, int sectionY, int sectionZ) {
+
 		//? >=26.2 {
 		minecraft.levelExtractor.setSectionDirty(sectionX, sectionY, sectionZ);
 		//?} else {
@@ -1287,6 +1409,16 @@ public final class GpuFoliageRenderer {
 				continue;
 			}
 			int sectionY = level.getSectionYFromSectionIndex(index);
+			//? neoforge && <1.21.11 {
+			/*long key = SectionPos.asLong(chunkX, sectionY, chunkZ);
+			if (!nowNear || GpuFoliageSplit.isGpuReady(key)) {
+				// Leaving: the chunk mesh takes the foliage back. Entering, already on the GPU: it lets it go.
+				rebuildChunkMesh(minecraft, chunkX, sectionY, chunkZ);
+			} else {
+				// Entering, not built yet: the chunk mesh keeps the foliage until it is, and is asked to let go then.
+				DIRTY.add(key);
+			}
+			*///?} else {
 			rebuildChunkMesh(minecraft, chunkX, sectionY, chunkZ);
 			if (nowNear) {
 				long key = SectionPos.asLong(chunkX, sectionY, chunkZ);
@@ -1294,6 +1426,7 @@ public final class GpuFoliageRenderer {
 				// This first request is often too early to count: see GpuFoliageSplit.expectFoliageLeft.
 				GpuFoliageSplit.expectFoliageLeft(key);
 			}
+			//?}
 		}
 	}
 
@@ -1334,7 +1467,16 @@ public final class GpuFoliageRenderer {
 			}
 		}
 
+		//? neoforge && <1.21.11 {
+		/*long budgetEnd = System.nanoTime() + REBUILD_BUDGET_NANOS;
+		*///?}
 		for (int i = 0; i < found; i++) {
+			//? neoforge && <1.21.11 {
+			/*// However few sections that is: a heavy resource pack makes a single one cost several milliseconds.
+			if (i > 0 && System.nanoTime() >= budgetEnd) {
+				break;
+			}
+			*///?}
 			DIRTY.remove(nearest[i]);
 			rebuild(minecraft, minecraft.level, nearest[i]);
 		}

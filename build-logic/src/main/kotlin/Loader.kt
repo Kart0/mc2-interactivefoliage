@@ -124,11 +124,19 @@ sealed class Loader(val id: String) {
 						description = ctx.description
 					)
 				), dependencies = mapOf(ctx.modId to forgeDeps),
-				// The GPU foliage mixins are only declared where the GPU renderer has been ported, as on Fabric.
-				mixins = if (ctx.stonecutter.eval(ctx.currentMcVersion, ">=1.21.1")) {
-					listOf(ForgeMixin("${ctx.modId}.mixins.json"), ForgeMixin("${ctx.modId}.gpu.mixins.json"))
-				} else {
-					listOf(ForgeMixin("${ctx.modId}.mixins.json"))
+				mixins = buildList {
+					add(ForgeMixin("${ctx.modId}.mixins.json"))
+					// The GPU foliage mixins are only declared where the GPU renderer has been ported, as on Fabric.
+					if (ctx.stonecutter.eval(ctx.currentMcVersion, ">=1.21.1")) {
+						add(ForgeMixin("${ctx.modId}.gpu.mixins.json"))
+					}
+					// Only NeoForge 1.21.1 hears from its chunk meshers when a new mesh is on screen: it is the one
+					// version where foliage handed back to them blinked out while their new mesh was on its way.
+					if (this@ForgeLike is NeoForge
+							&& ctx.stonecutter.eval(ctx.currentMcVersion, ">=1.21.1")
+							&& ctx.stonecutter.eval(ctx.currentMcVersion, "<1.21.11")) {
+						add(ForgeMixin("${ctx.modId}.handback.mixins.json"))
+					}
 				}
 			)
 
