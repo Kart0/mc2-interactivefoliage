@@ -66,6 +66,7 @@ public class ModCompatRegistry {
 				"biomesoplenty:dead_grass",
 				"biomesoplenty:tundra_shrub",
 				"biomesoplenty:bush",
+				"biomesoplenty:barley",
 				"biomesoplenty:enderphyte",
 				"biomesoplenty:tiny_cactus",
 				"biomesoplenty:yellow_maple_sapling",
