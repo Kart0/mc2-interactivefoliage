@@ -8,6 +8,18 @@ stonecutter {
 	properties.tags(version, loader)
 }
 
+// Minecraft before 1.20.5 ships LWJGL 3.3.1, which cannot run on Java 19 or later. Loom launches the dev
+// client on Gradle's own Java and, seeing a newer one, swaps in LWJGL 3.3.2 to cope -- which Sodium 0.5
+// refuses to start with. Those versions are run on the Java they were made for instead, and Loom is told
+// so, which leaves their own LWJGL in place.
+if (stonecutter.eval(stonecutter.current.version, "<1.20.5")) {
+	val runtimeJava = 17
+	extra["fabric.loom.runtimeJavaCompatibilityVersion"] = runtimeJava.toString()
+	tasks.withType<JavaExec>().configureEach {
+		javaLauncher = javaToolchains.launcherFor { languageVersion = JavaLanguageVersion.of(runtimeJava) }
+	}
+}
+
 platform {
 	loader = "fabric-o"
 	dependencies {

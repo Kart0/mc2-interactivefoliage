@@ -76,6 +76,17 @@ dependencies {
 // Production jars ship SRG names while the Forge dev runtime uses named mappings, and only the
 // "mod" prefixed configurations get remapped; an unremapped jar fails to apply its own mixins and
 // kills the client during the FML loading screen, before the main menu appears.
+dependencies {
+	// Biomes O' Plenty and the two libraries it needs, for foliage from another mod.
+	modRuntimeOnly("maven.modrinth:biomes-o-plenty:jxUqRzSD") // 19.0.0.96
+	modRuntimeOnly("maven.modrinth:glitchcore:pYPZ5MNI") // 0.0.1.1
+	modRuntimeOnly("maven.modrinth:terrablender:zGconCHG") // 3.0.1.10
+	// Embeddium, the chunk mesher Forge players use instead of Sodium. Left out with -PwithoutEmbeddium, to
+	// compare against vanilla's own. The name has no dot in it: PowerShell splits a bare argument at one.
+	if (!hasProperty("withoutEmbeddium")) {
+		modRuntimeOnly("maven.modrinth:embeddium:UTbfe5d1") // 0.3.31+mc1.20.1
+	}
+}
 
 sourceSets {
 	main {
