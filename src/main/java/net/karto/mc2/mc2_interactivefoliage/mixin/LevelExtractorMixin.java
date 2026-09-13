@@ -1,6 +1,6 @@
 package net.karto.mc2.mc2_interactivefoliage.mixin;
 
-//? >=1.21.11 {
+//? >=1.21.1 {
 
 import net.karto.mc2.mc2_interactivefoliage.gpu.GpuFoliageRenderer;
 //? >=26.2 {
@@ -12,7 +12,7 @@ import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
-//? <26.1.2 {
+//? >=1.21.11 && <26.1.2 {
 /*import net.minecraft.client.renderer.culling.Frustum;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 *///?}
@@ -46,11 +46,12 @@ public abstract class LevelExtractorMixin {
 		GpuFoliageRenderer.discardAll();
 	}
 
-	//? <26.1.2 {
+	//? >=1.21.11 && <26.1.2 {
 	/*/^*
 	 * From 26.1.2 on the camera render state carries the cull frustum, and the renderer reads it there.
 	 * Before that nothing hands it out, so it is caught here as vanilla prepares it -- on the frame path
-	 * itself, which Sodium leaves in place, rather than on the terrain culling it replaces.
+	 * itself, which Sodium leaves in place, rather than on the terrain culling it replaces. On 1.21.1 it
+	 * returns nothing, and Fabric's render event hands the frustum over instead.
 	 ^/
 	@Inject(method = "prepareCullFrustum", at = @At("RETURN"))
 	private void mc2$foliageCullFrustum(CallbackInfoReturnable<Frustum> cir) {

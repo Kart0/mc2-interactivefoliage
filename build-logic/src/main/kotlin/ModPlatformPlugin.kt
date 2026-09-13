@@ -140,6 +140,13 @@ abstract class ModPlatformPlugin @Inject constructor() : Plugin<Project> {
 				expand("java" to "JAVA_${ctx.javaVersion.majorVersion}")
 			}
 			exclude(ctx.loader.excludedResources)
+			// The GPU foliage renderer has one set of shaders per generation of Minecraft's renderer, each in
+			// the shading language that generation speaks; a jar only carries the set its version loads.
+			if (ctx.stonecutter.eval(ctx.currentMcVersion, "<1.21.11")) {
+				exclude("assets/*/shaders/core/foliage.*")
+			} else {
+				exclude("assets/*/shaders/core/foliage_legacy.*")
+			}
 		}
 	}
 

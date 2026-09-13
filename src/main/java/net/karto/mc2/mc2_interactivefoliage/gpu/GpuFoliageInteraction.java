@@ -1,24 +1,38 @@
 package net.karto.mc2.mc2_interactivefoliage.gpu;
 
-//? >=1.21.11 {
+//? >=1.21.1 {
 
 import com.github.razorplay01.sway.client.SwayData;
 import com.github.razorplay01.sway.client.SwayEngine;
 import com.github.razorplay01.sway.config.SwayConfig;
+//? >=1.21.11 {
 import com.mojang.blaze3d.buffers.GpuBuffer;
 import com.mojang.blaze3d.buffers.Std140Builder;
 import com.mojang.blaze3d.buffers.Std140SizeCalculator;
+//?}
 //? >=26.2 {
 import com.mojang.blaze3d.pipeline.BindGroupLayout;
 //?}
+//? >=1.21.11 {
 import com.mojang.blaze3d.shaders.UniformType;
 import com.mojang.blaze3d.systems.RenderSystem;
+//?}
 import net.karto.mc2.mc2_interactivefoliage.ModTemplate;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
+//? >=1.21.11 {
 import org.lwjgl.system.MemoryStack;
+//?} else {
+/*import com.mojang.blaze3d.platform.GlStateManager;
+import org.lwjgl.opengl.GL15;
+import org.lwjgl.opengl.GL30;
+import org.lwjgl.opengl.GL31;
+import org.lwjgl.system.MemoryUtil;
+
+import java.nio.ByteBuffer;
+*///?}
 
 import java.lang.reflect.Field;
 import java.util.ArrayList;
@@ -56,7 +70,10 @@ public final class GpuFoliageInteraction {
 			.build();
 	//?}
 
+	//? >=1.21.11 {
 	private static final int BUFFER_SIZE = bufferSize();
+	private static GpuBuffer buffer;
+	//?}
 
 	/**
 	 * How many times wider an entity counts as when it pushes plants, along x and z. Its height is kept. Only
@@ -115,7 +132,6 @@ public final class GpuFoliageInteraction {
 	/** Min then max corner of the cells sent, relative to the camera. */
 	private static final float[] CELL_BOUNDS = new float[6];
 
-	private static GpuBuffer buffer;
 	private static long lastNanos;
 
 	private GpuFoliageInteraction() {
@@ -142,8 +158,8 @@ public final class GpuFoliageInteraction {
 		lastNanos = 0L;
 	}
 
-	/** Writes this frame's pushes. Render thread only, and before any render pass is opened. */
-	static GpuBuffer upload(Vec3 camera) {
+	/** Moves every spring on and gathers this frame's pushes, nearest first. Returns how many there are. */
+	private static int update(Vec3 camera) {
 		long now = System.nanoTime();
 		// Real time rather than game time, so a plant rocks the same at any frame rate.
 		float delta = lastNanos == 0L ? 0.0F : Math.min((now - lastNanos) / 1.0E9F, 0.1F);
@@ -152,15 +168,19 @@ public final class GpuFoliageInteraction {
 		Arrays.fill(CELL_POSITIONS, 0.0F);
 		Arrays.fill(CELL_FORCES, 0.0F);
 		Arrays.fill(CELL_BOUNDS, 0.0F);
-		int cellCount = 0;
 		// Sway's own interaction switch turns it off.
-		if (SwayConfig.INSTANCE.enabled) {
-			followSway(delta);
-			cellCount = collectCells(camera);
-		} else {
+		if (!SwayConfig.INSTANCE.enabled) {
 			CELLS.clear();
+			return 0;
 		}
+		followSway(delta);
+		return collectCells(camera);
+	}
 
+	//? >=1.21.11 {
+	/** Writes this frame's pushes. Render thread only, and before any render pass is opened. */
+	static GpuBuffer upload(Vec3 camera) {
+		int cellCount = update(camera);
 		if (buffer == null) {
 			buffer = RenderSystem.getDevice().createBuffer(
 					() -> "MC2 foliage interaction",
@@ -178,6 +198,7 @@ public final class GpuFoliageInteraction {
 		}
 		return buffer;
 	}
+	//?}
 
 	/** Moves every plant's spring towards Sway's current push, or back to upright once Sway lets go. */
 	private static void followSway(float delta) {
@@ -278,6 +299,55 @@ public final class GpuFoliageInteraction {
 		}
 	}
 
+	//? <1.21.11 {
+	/*/^*
+	 * The {@code FoliageInteraction} block laid out by hand, the same way std140 lays it out on newer versions: a
+	 * count, then vec4s from byte 16 on, the positions and then the forces.
+	 ^/
+	private static final int LEGACY_VEC4_START = 16;
+	private static final int LEGACY_BUFFER_SIZE = LEGACY_VEC4_START + (2 + MAX_CELLS * 2) * 16;
+
+	private static ByteBuffer legacyData;
+	private static int legacyBuffer;
+
+	/^*
+	 * Writes this frame's pushes into a uniform buffer and binds it where the foliage shader reads them. Render
+	 * thread only. Before 1.21.11 vanilla has no uniform buffers of its own, so this is plain OpenGL; the block
+	 * is too large for the loose uniforms a shader's JSON can declare.
+	 ^/
+	static void uploadLegacy(Vec3 camera, int binding) {
+		int cellCount = update(camera);
+		if (legacyData == null) {
+			legacyData = MemoryUtil.memCalloc(LEGACY_BUFFER_SIZE);
+		}
+		ByteBuffer data = legacyData;
+		data.putInt(0, cellCount);
+		putVec4(data, 0, CELL_BOUNDS[0], CELL_BOUNDS[1], CELL_BOUNDS[2], 0.0F);
+		putVec4(data, 1, CELL_BOUNDS[3], CELL_BOUNDS[4], CELL_BOUNDS[5], 0.0F);
+		for (int i = 0; i < MAX_CELLS; i++) {
+			int at = i * 4;
+			putVec4(data, 2 + i,
+					CELL_POSITIONS[at], CELL_POSITIONS[at + 1], CELL_POSITIONS[at + 2], CELL_POSITIONS[at + 3]);
+			putVec4(data, 2 + MAX_CELLS + i,
+					CELL_FORCES[at], CELL_FORCES[at + 1], CELL_FORCES[at + 2], CELL_FORCES[at + 3]);
+		}
+		if (legacyBuffer == 0) {
+			legacyBuffer = GlStateManager._glGenBuffers();
+			GL15.glBindBuffer(GL31.GL_UNIFORM_BUFFER, legacyBuffer);
+			GL15.glBufferData(GL31.GL_UNIFORM_BUFFER, LEGACY_BUFFER_SIZE, GL15.GL_DYNAMIC_DRAW);
+		}
+		GL15.glBindBuffer(GL31.GL_UNIFORM_BUFFER, legacyBuffer);
+		GL15.glBufferSubData(GL31.GL_UNIFORM_BUFFER, 0L, data);
+		GL30.glBindBufferBase(GL31.GL_UNIFORM_BUFFER, binding, legacyBuffer);
+	}
+
+	private static void putVec4(ByteBuffer data, int vec4, float x, float y, float z, float w) {
+		int at = LEGACY_VEC4_START + vec4 * 16;
+		data.putFloat(at, x).putFloat(at + 4, y).putFloat(at + 8, z).putFloat(at + 12, w);
+	}
+	*///?}
+
+	//? >=1.21.11 {
 	private static void putAll(Std140Builder data, float[] vectors) {
 		for (int i = 0; i < vectors.length; i += 4) {
 			data.putVec4(vectors[i], vectors[i + 1], vectors[i + 2], vectors[i + 3]);
@@ -292,5 +362,6 @@ public final class GpuFoliageInteraction {
 		}
 		return size.get();
 	}
+	//?}
 }
 //?}

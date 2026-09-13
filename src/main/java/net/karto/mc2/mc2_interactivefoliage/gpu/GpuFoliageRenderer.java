@@ -1,6 +1,6 @@
 package net.karto.mc2.mc2_interactivefoliage.gpu;
 
-//? >=1.21.11 {
+//? >=1.21.1 {
 
 import com.github.razorplay01.sway.api.SwayAPI;
 import com.github.razorplay01.sway.api.behavior.BehaviorPipeline;
@@ -11,25 +11,36 @@ import com.github.razorplay01.sway.client.behavior.multiblock.HangingVineMultibl
 import com.mojang.blaze3d.GpuFormat;
 import com.mojang.blaze3d.PrimitiveTopology;
 //?}
+//? >=1.21.11 {
 import com.mojang.blaze3d.buffers.GpuBuffer;
 import com.mojang.blaze3d.buffers.GpuBufferSlice;
 import com.mojang.blaze3d.buffers.Std140Builder;
 import com.mojang.blaze3d.buffers.Std140SizeCalculator;
+//?}
 //? >=26.2 {
 import com.mojang.blaze3d.pipeline.BindGroupLayout;
-//?} else {
-/*//? >=26.1.2 {
-import com.mojang.blaze3d.pipeline.DepthStencilState;
-//?} else {
-/^import com.mojang.blaze3d.platform.DepthTestFunction;
-^///?}
+//?} elif >=26.1.2 {
+/*import com.mojang.blaze3d.pipeline.DepthStencilState;
+*///?} elif >=1.21.11 {
+/*import com.mojang.blaze3d.platform.DepthTestFunction;
 *///?}
+//? >=1.21.11 {
 import com.mojang.blaze3d.pipeline.RenderPipeline;
 import com.mojang.blaze3d.pipeline.RenderTarget;
 import com.mojang.blaze3d.shaders.UniformType;
 import com.mojang.blaze3d.systems.RenderPass;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.textures.FilterMode;
+//?} else {
+/*import com.mojang.blaze3d.shaders.Uniform;
+import com.mojang.blaze3d.systems.RenderSystem;
+import com.mojang.blaze3d.vertex.VertexBuffer;
+import net.minecraft.client.renderer.RenderType;
+import net.minecraft.client.renderer.ShaderInstance;
+import org.lwjgl.opengl.GL11;
+import org.lwjgl.opengl.GL31;
+import org.lwjgl.opengl.GL32;
+*///?}
 import com.mojang.blaze3d.vertex.BufferBuilder;
 import com.mojang.blaze3d.vertex.ByteBufferBuilder;
 import com.mojang.blaze3d.vertex.DefaultVertexFormat;
@@ -40,33 +51,45 @@ import net.karto.mc2.mc2_interactivefoliage.FoliageSettings;
 import net.karto.mc2.mc2_interactivefoliage.ModTemplate;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
+//? >=1.21.11 {
 import net.minecraft.client.renderer.DynamicUniforms;
 import net.minecraft.client.renderer.RenderPipelines;
+//?}
 //? >=26.1.2 {
 import net.minecraft.client.renderer.block.BlockQuadOutput;
 import net.minecraft.client.renderer.block.BlockStateModelSet;
 //?} else {
 /*import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
-import net.minecraft.client.renderer.block.model.BlockModelPart;
 import net.minecraft.client.renderer.block.BlockModelShaper;
 import net.minecraft.client.renderer.texture.OverlayTexture;
 import net.minecraft.util.RandomSource;
+*///?}
+//? >=1.21.11 && <26.1.2 {
+/*import net.minecraft.client.renderer.block.model.BlockModelPart;
+*///?}
+//? <1.21.11 {
+/*import com.mojang.blaze3d.vertex.MeshData;
+import net.minecraft.client.resources.model.BakedModel;
 *///?}
 import net.minecraft.client.renderer.block.ModelBlockRenderer;
 import net.minecraft.client.renderer.culling.Frustum;
 //? >=26.1.2 {
 import net.minecraft.client.renderer.state.level.CameraRenderState;
 import net.minecraft.client.renderer.state.level.LevelRenderState;
-//?} else {
+//?} elif >=1.21.11 {
 /*import net.minecraft.client.renderer.state.LevelRenderState;
 *///?}
+//? >=1.21.11 {
 import net.minecraft.client.renderer.texture.AbstractTexture;
 import net.minecraft.client.renderer.texture.TextureAtlas;
+//?}
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.SectionPos;
 import net.minecraft.util.Mth;
+//? >=1.21.11 {
 import net.minecraft.resources.Identifier;
+//?}
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.level.chunk.LevelChunkSection;
@@ -231,8 +254,10 @@ public final class GpuFoliageRenderer {
 			.withUniform(SWAY_SETTINGS_UNIFORM, UniformType.UNIFORM_BUFFER)
 			.build();
 	//?}
+	//? >=1.21.11 {
 	/** A whole vec4 for one float, so the buffer is never smaller than the block once a driver pads it. */
 	private static final int SWAY_SETTINGS_SIZE = new Std140SizeCalculator().putVec4().get();
+	//?}
 
 	/**
 	 * Our own pipeline, so the vertex shader can displace foliage on the GPU.
@@ -251,7 +276,7 @@ public final class GpuFoliageRenderer {
 			.withBindGroupLayout(GpuFoliageInteraction.LAYOUT)
 			.withShaderDefine("ALPHA_CUTOUT", 0.5F)
 			.build();
-	//?} else {
+	//?} elif >=1.21.11 {
 	/*// Vanilla's block snippet is private before 26.2, so the same state is spelled out here: the samplers
 	// and uniforms its shaders read, one vertex format, and the depth state every block pipeline uses.
 	private static final RenderPipeline PIPELINE = RenderPipeline.builder()
@@ -337,9 +362,11 @@ public final class GpuFoliageRenderer {
 	/** The world the near-area radar last went off for. Weak, so a world left behind is not kept alive. */
 	private static WeakReference<ClientLevel> radarLevel = new WeakReference<>(null);
 
+	//? >=1.21.11 {
 	/** Holds the sway settings the shader reads; rewritten only when one of them changes. */
 	private static GpuBuffer swaySettings;
 	private static float uploadedIntensity = Float.NaN;
+	//?}
 
 	/** Reused by every rebuild and grown to the largest section seen, so no rebuild has a size limit. */
 	private static ByteBufferBuilder vertexScratch;
@@ -398,7 +425,11 @@ public final class GpuFoliageRenderer {
 		final int[] occupied = new int[SECTIONS_PER_REGION];
 		int occupiedCount;
 		int sectionCount;
+		//? >=1.21.11 {
 		GpuBuffer vertices;
+		//?} else {
+		/*VertexBuffer vertices;
+		*///?}
 
 		Region(long regionKey) {
 			origin = regionOrigin(regionKey);
@@ -454,6 +485,7 @@ public final class GpuFoliageRenderer {
 			// whenever any of its sections changes, and there are up to sixteen of them, so doing the
 			// per-vertex work here instead would repeat it for every section that did not change.
 			int stride = VERTEX_BYTES + WEIGHT_BYTES;
+			//? >=1.21.11 {
 			// Staging memory is borrowed rather than asked for: uploads happen one after another on the
 			// render thread, and a region can be hundreds of kilobytes, so this saves an allocation and a
 			// free every time any section in any region changes.
@@ -467,6 +499,26 @@ public final class GpuFoliageRenderer {
 					() -> "MC2 foliage vertices",
 					GpuBuffer.USAGE_VERTEX | GpuBuffer.USAGE_COPY_DST,
 					vertexData);
+			//?} else {
+			/*// Handed over as a mesh, the way vanilla uploads a chunk section, so the vertex buffer sets up its
+			// attributes from the mod's format and its indices from vanilla's shared quad index buffer. The
+			// staging builder is borrowed, as above, and is empty again once the mesh is closed.
+			ByteBufferBuilder staging = uploadBuilder();
+			long pointer = staging.reserve(vertexCount * stride);
+			for (int i = 0; i < occupiedCount; i++) {
+				int slot = occupied[i];
+				Section section = sections[slot];
+				MemoryUtil.memCopy(MemoryUtil.memAddress(section.data, 0),
+						pointer + (long) firstVertex[slot] * stride, (long) section.vertexCount * stride);
+			}
+			MeshData mesh = new MeshData(staging.build(), new MeshData.DrawState(FOLIAGE_FORMAT, vertexCount,
+					indexCountFor(vertexCount), VertexFormat.Mode.QUADS, VertexFormat.IndexType.least(vertexCount)));
+			vertices = new VertexBuffer(VertexBuffer.Usage.STATIC);
+			vertices.bind();
+			// Closes the mesh once it is on the GPU.
+			vertices.upload(mesh);
+			VertexBuffer.unbind();
+			*///?}
 		}
 
 		void closeBuffers() {
@@ -655,7 +707,7 @@ public final class GpuFoliageRenderer {
 	public static void forgetChunk(ClientLevel level, LevelChunk chunk) {
 		int chunkX = SectionPos.blockToSectionCoord(chunk.getPos().getMinBlockX());
 		int chunkZ = SectionPos.blockToSectionCoord(chunk.getPos().getMinBlockZ());
-		for (int sectionY = level.getMinSectionY(); sectionY <= level.getMaxSectionY(); sectionY++) {
+		for (int sectionY = minSectionY(level); sectionY <= maxSectionY(level); sectionY++) {
 			long key = SectionPos.asLong(chunkX, sectionY, chunkZ);
 			DIRTY.remove(key);
 			removeSection(key);
@@ -688,11 +740,30 @@ public final class GpuFoliageRenderer {
 
 	private static boolean mayHoldFoliage(ClientLevel level, long key) {
 		int sectionY = SectionPos.y(key);
-		if (sectionY < level.getMinSectionY() || sectionY > level.getMaxSectionY()) {
+		if (sectionY < minSectionY(level) || sectionY > maxSectionY(level)) {
 			return false;
 		}
 		return mayHoldFoliage(level.getChunk(SectionPos.x(key), SectionPos.z(key))
 				.getSection(level.getSectionIndexFromSectionY(sectionY)));
+	}
+
+	/** The lowest section of the world. */
+	private static int minSectionY(ClientLevel level) {
+		//? >=1.21.11 {
+		return level.getMinSectionY();
+		//?} else {
+		/*return level.getMinSection();
+		*///?}
+	}
+
+	/** The highest section of the world, itself included. */
+	private static int maxSectionY(ClientLevel level) {
+		//? >=1.21.11 {
+		return level.getMaxSectionY();
+		//?} else {
+		/*// Before 1.21.11 the world's top section is given as the one past it.
+		return level.getMaxSection() - 1;
+		*///?}
 	}
 
 	private static long regionKeyOf(long sectionKey) {
@@ -737,8 +808,34 @@ public final class GpuFoliageRenderer {
 		}
 	}
 
+	//? >=1.21.11 {
 	/** Called by each loader's hooks once the opaque terrain is drawn. */
 	public static void draw(LevelRenderState levelState) {
+		// The render state carries the camera and the cull frustum vanilla already prepared this
+		// frame, which is available whether or not Sodium owns the terrain renderer.
+		var cameraState = levelState.cameraRenderState;
+		boolean hasCamera = cameraState != null && cameraState.pos != null;
+		//? >=26.1.2 {
+		Frustum frustum = hasCamera ? cameraState.cullFrustum : null;
+		//?} else {
+		/*// Before 26.1.2 the camera state does not carry it, so it is caught as vanilla prepares it.
+		Frustum frustum = cullFrustum;
+		*///?}
+		drawFrame(hasCamera ? cameraState.pos : null, frustum);
+	}
+	//?} else {
+	/*/^*
+	 * Called by each loader's hooks once the opaque terrain is drawn. Before 1.21.11 there is no render state
+	 * to read the camera, the cull frustum and the terrain's matrices from, so the hook hands them over.
+	 ^/
+	public static void draw(Vec3 camera, Frustum frustum, Matrix4f modelView, Matrix4f projection) {
+		legacyModelView = modelView;
+		legacyProjection = projection;
+		drawFrame(camera, frustum);
+	}
+	*///?}
+
+	private static void drawFrame(Vec3 camera, Frustum frustum) {
 		Minecraft minecraft = Minecraft.getInstance();
 		if (minecraft.level == null) {
 			return;
@@ -757,13 +854,9 @@ public final class GpuFoliageRenderer {
 			reseedPending = true;
 		}
 
-		// The render state carries the camera and the cull frustum vanilla already prepared this
-		// frame, which is available whether or not Sodium owns the terrain renderer.
-		var cameraState = levelState.cameraRenderState;
-		if (cameraState == null || cameraState.pos == null) {
+		if (camera == null) {
 			return;
 		}
-		Vec3 camera = cameraState.pos;
 		// Joining a world is when near sections can be built before the near area reaches them, so the radar
 		// that catches them goes off then -- and only with the wind on, the one thing they would be missing.
 		if (radarLevel.get() != minecraft.level) {
@@ -787,12 +880,8 @@ public final class GpuFoliageRenderer {
 		DIRTY_REGIONS.forEach(Region::upload);
 		DIRTY_REGIONS.clear();
 
-		//? >=26.1.2 {
-		Frustum frustum = cameraState.cullFrustum;
-		//?} else {
-		/*// Before 26.1.2 the camera state does not carry it, so it is caught as vanilla prepares it.
-		Frustum frustum = cullFrustum;
-		if (frustum == null) {
+		//? <26.1.2 {
+		/*if (frustum == null) {
 			return;
 		}
 		*///?}
@@ -814,8 +903,13 @@ public final class GpuFoliageRenderer {
 			}
 			// A region wholly inside the frustum needs no per-section frustum test. Its unpadded box is
 			// used, so a section whose padding pokes outside is simply drawn -- never wrongly dropped.
+			//? >=1.21.11 {
 			Frustum sectionFrustum = frustum != null
 					&& frustum.cubeInFrustum(region.blockBounds) == FrustumIntersection.INSIDE ? null : frustum;
+			//?} else {
+			/*// Vanilla's frustum can only be asked about boxes before 1.21.11, so every section is tested.
+			Frustum sectionFrustum = frustum;
+			*///?}
 
 			// Walk the sections in buffer order, extending a run while they stay visible, so a region
 			// that is fully in view costs one draw call however many sections it holds.
@@ -850,6 +944,7 @@ public final class GpuFoliageRenderer {
 			return;
 		}
 
+		//? >=1.21.11 {
 		// Every region's offset is written in one mapping of the uniform ring buffer. The singular
 		// writeTransform maps and unmaps it per call, which costs a GPU round trip for each one.
 		//? >=26.2 {
@@ -941,8 +1036,98 @@ public final class GpuFoliageRenderer {
 				*///?}
 			}
 		}
+		//?} else {
+		/*drawLegacy(minecraft, camera, drawn);
+		*///?}
 	}
 
+	//? <1.21.11 {
+	/*/^* Where the foliage shader reads the plant pushes from. Nothing in vanilla binds uniform buffers here. ^/
+	private static final int INTERACTION_BINDING = 12;
+
+	/^* The foliage shader, as the game last loaded it, or null before it has been. ^/
+	private static ShaderInstance legacyShader;
+	private static Matrix4f legacyModelView;
+	private static Matrix4f legacyProjection;
+
+	/^* The vertex format the foliage shader is loaded for: the block's, with the mod's own two values. ^/
+	public static VertexFormat legacyVertexFormat() {
+		return FOLIAGE_FORMAT;
+	}
+
+	/^*
+	 * Called whenever the game has loaded the foliage shader, which it does again on every resource reload. The
+	 * push data's uniform block is tied to its binding here, once per program, as the shader's JSON has no way
+	 * to say it.
+	 ^/
+	public static void onLegacyShaderLoaded(ShaderInstance shader) {
+		legacyShader = shader;
+		int index = GL31.glGetUniformBlockIndex(shader.getId(), GpuFoliageInteraction.UNIFORM);
+		if (index != GL31.GL_INVALID_INDEX) {
+			GL31.glUniformBlockBinding(shader.getId(), index, INTERACTION_BINDING);
+		}
+	}
+
+	/^*
+	 * Draws the queued runs the way vanilla draws a chunk layer before 1.21.11: the cutout layer's render state,
+	 * the shader's default uniforms, then one offset and one vertex buffer per region. Only the draw call differs:
+	 * a vertex buffer can only draw the whole of itself, and a region is drawn in runs of visible sections, so each
+	 * run is drawn from where it starts in the buffer.
+	 ^/
+	private static void drawLegacy(Minecraft minecraft, Vec3 camera, List<Region> drawn) {
+		ShaderInstance shader = legacyShader;
+		if (shader == null || legacyModelView == null || legacyProjection == null) {
+			return;
+		}
+		GpuFoliageInteraction.uploadLegacy(camera, INTERACTION_BINDING);
+
+		RenderType renderType = RenderType.cutout();
+		renderType.setupRenderState();
+		RenderSystem.setShader(() -> shader);
+		shader.setDefaultUniforms(VertexFormat.Mode.QUADS, legacyModelView, legacyProjection, minecraft.getWindow());
+		shader.safeGetUniform("SwayIntensity").set(
+				FoliageSettings.wavingFoliage() ? FoliageSettings.wavingIntensity() : 0.0F);
+		BlockPos cameraBlock = BlockPos.containing(camera);
+		shader.safeGetUniform("CameraBlockPos").set(cameraBlock.getX(), cameraBlock.getY(), cameraBlock.getZ());
+		shader.safeGetUniform("CameraOffset").set(
+				(float) (cameraBlock.getX() - camera.x),
+				(float) (cameraBlock.getY() - camera.y),
+				(float) (cameraBlock.getZ() - camera.z));
+		shader.apply();
+
+		Uniform regionOffset = shader.CHUNK_OFFSET;
+		int boundRegion = -1;
+		int indexType = 0;
+		for (int i = 0; i < drawsSize; i += 3) {
+			int regionIndex = draws[i];
+			if (regionIndex != boundRegion) {
+				Region region = drawn.get(regionIndex);
+				if (regionOffset != null) {
+					regionOffset.set(
+							(float) (region.origin.getX() - camera.x),
+							(float) (region.origin.getY() - camera.y),
+							(float) (region.origin.getZ() - camera.z));
+					regionOffset.upload();
+				}
+				region.vertices.bind();
+				// Read after binding: binding is what grows vanilla's shared quad indices to fit the region, and
+				// growing them can widen the index type.
+				indexType = RenderSystem.getSequentialBuffer(VertexFormat.Mode.QUADS).type().asGLType;
+				boundRegion = regionIndex;
+			}
+			GL32.glDrawElementsBaseVertex(GL11.GL_TRIANGLES, indexCountFor(draws[i + 2]), indexType, 0L, draws[i + 1]);
+		}
+
+		if (regionOffset != null) {
+			regionOffset.set(0.0F, 0.0F, 0.0F);
+		}
+		shader.clear();
+		VertexBuffer.unbind();
+		renderType.clearRenderState();
+	}
+	*///?}
+
+	//? >=1.21.11 {
 	/**
 	 * The sway settings buffer, with the current intensity in it, or zero while the wind is switched off. It is
 	 * written only when the value changed, so moving the slider is seen live and costs nothing the rest of the
@@ -966,6 +1151,7 @@ public final class GpuFoliageRenderer {
 		}
 		return swaySettings;
 	}
+	//?}
 
 	private static boolean isVisible(Section section, Frustum frustum, Object sodium) {
 		// Only the sections whose chunk mesh on screen went without their foliage are drawn here; every
@@ -1264,11 +1450,13 @@ public final class GpuFoliageRenderer {
 			return this;
 		}
 
+		//? >=1.21.11 {
 		@Override
 		public VertexConsumer setLineWidth(float width) {
 			delegate.setLineWidth(width);
 			return this;
 		}
+		//?}
 	}
 	*///?}
 
@@ -1289,6 +1477,18 @@ public final class GpuFoliageRenderer {
 		}
 		return uploadStaging.clear().limit(bytes);
 	}
+
+	//? <1.21.11 {
+	/*/^* The same, for the versions that upload a region as a mesh. It is left empty by every upload. ^/
+	private static ByteBufferBuilder uploadBuilder;
+
+	private static ByteBufferBuilder uploadBuilder() {
+		if (uploadBuilder == null) {
+			uploadBuilder = new ByteBufferBuilder(64 * 1024);
+		}
+		return uploadBuilder;
+	}
+	*///?}
 
 	private static boolean warnedWeightCountMismatch;
 
@@ -1419,7 +1619,8 @@ public final class GpuFoliageRenderer {
 							level, pos, state, GpuFoliageSplit.modelFor(state, models.get(state)),
 							state.getSeed(pos));
 					//?} else {
-					/*random.setSeed(state.getSeed(pos));
+					/*//? >=1.21.11 {
+					random.setSeed(state.getSeed(pos));
 					List<BlockModelPart> parts = GpuFoliageSplit
 							.modelFor(state, models.getBlockModel(state))
 							.collectParts(random);
@@ -1432,6 +1633,14 @@ public final class GpuFoliageRenderer {
 					modelRenderer.tesselateBlock(level, parts, state, pos, poseStack, output, true,
 							OverlayTexture.NO_OVERLAY);
 					poseStack.popPose();
+					//?} else {
+					/^poseStack.pushPose();
+					poseStack.translate(offsetX + dx, offsetY + dy, offsetZ + dz);
+					output.beginBlock(offsetY + dy);
+					tesselate(level, GpuFoliageSplit.modelFor(state, models.getBlockModel(state)),
+							state, pos, poseStack, output, random);
+					poseStack.popPose();
+					^///?}
 					*///?}
 				}
 			}
@@ -1474,5 +1683,32 @@ public final class GpuFoliageRenderer {
 			putSection(key, new Section(key, origin, data, vertexCount));
 		}
 	}
+
+	//? <1.21.11 {
+	/*/^*
+	 * Vanilla's {@code tesselateBlock}, step for step: the same choice of smooth or flat lighting, and the same
+	 * random offset for plants that have one.
+	 * <p>
+	 * It is not called itself because, before 1.21.11, both Fabric's renderer and Sodium take it over for any
+	 * model that is not a plain vanilla one, and send it through the rendering API instead -- where Sway would
+	 * bake its own sway into geometry the shader is about to move again. The two methods it picks between are
+	 * left alone by both, and read the model's plain quads, which Sway's wrapper hands over untouched.
+	 ^/
+	private static void tesselate(ClientLevel level, BakedModel model, BlockState state, BlockPos pos,
+			PoseStack poseStack, VertexConsumer output, RandomSource random) {
+		boolean smoothLighting = Minecraft.useAmbientOcclusion() && state.getLightEmission() == 0
+				&& model.useAmbientOcclusion();
+		Vec3 offset = state.getOffset(level, pos);
+		poseStack.translate(offset.x, offset.y, offset.z);
+		long seed = state.getSeed(pos);
+		if (smoothLighting) {
+			modelRenderer.tesselateWithAO(level, model, state, pos, poseStack, output, true, random, seed,
+					OverlayTexture.NO_OVERLAY);
+		} else {
+			modelRenderer.tesselateWithoutAO(level, model, state, pos, poseStack, output, true, random, seed,
+					OverlayTexture.NO_OVERLAY);
+		}
+	}
+	*///?}
 }
 //?}

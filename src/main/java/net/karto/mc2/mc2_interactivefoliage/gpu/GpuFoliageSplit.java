@@ -1,6 +1,6 @@
 package net.karto.mc2.mc2_interactivefoliage.gpu;
 
-//? >=1.21.11 {
+//? >=1.21.1 {
 
 import com.github.razorplay01.sway.api.SwayAPI;
 import it.unimi.dsi.fastutil.longs.Long2LongMap;
@@ -13,10 +13,16 @@ import net.minecraft.client.renderer.block.BlockAndTintGetter;
 *///?}
 //? >=26.1.2 {
 import net.minecraft.client.renderer.block.dispatch.BlockStateModel;
-//?} else {
+//?} elif >=1.21.11 {
 /*import net.minecraft.client.renderer.block.model.BlockStateModel;
+*///?} else {
+/*import net.minecraft.client.resources.model.BakedModel;
 *///?}
+//? >=1.21.11 {
 import net.minecraft.client.renderer.chunk.RenderSectionRegion;
+//?} else {
+/*import net.minecraft.client.renderer.chunk.RenderChunkRegion;
+*///?}
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.SectionPos;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -113,7 +119,12 @@ public final class GpuFoliageSplit {
 	 * geometry the GPU is about to move again. Meshing goes through these instead: they sit inside Sway's
 	 * wrapper and hand over plain geometry.
 	 */
+	//? >=1.21.11 {
 	private static final Map<BlockState, BlockStateModel> GPU_MODELS = new IdentityHashMap<>();
+	//?} else {
+	/*// Before 1.21.11 a block's model is a BakedModel.
+	private static final Map<BlockState, BakedModel> GPU_MODELS = new IdentityHashMap<>();
+	*///?}
 
 	private static Set<Block> foliage;
 
@@ -126,7 +137,12 @@ public final class GpuFoliageSplit {
 	 * piston, a falling block, the GPU renderer meshing its own sections -- always gets the full geometry.
 	 */
 	public static boolean leaveToGpu(BlockAndTintGetter level, BlockPos pos) {
-		if (!(level instanceof RenderSectionRegion) && (SODIUM_LEVEL_SLICE == null || !SODIUM_LEVEL_SLICE.isInstance(level))) {
+		//? >=1.21.11 {
+		boolean chunkBuild = level instanceof RenderSectionRegion;
+		//?} else {
+		/*boolean chunkBuild = level instanceof RenderChunkRegion;
+		*///?}
+		if (!chunkBuild &&(SODIUM_LEVEL_SLICE == null || !SODIUM_LEVEL_SLICE.isInstance(level))) {
 			return false;
 		}
 		int sectionX = SectionPos.blockToSectionCoord(pos.getX());
@@ -215,6 +231,7 @@ public final class GpuFoliageSplit {
 		return MESHED_WITHOUT_FOLIAGE.contains(sectionKey);
 	}
 
+	//? >=1.21.11 {
 	/** Remembers a model the mod wrapped, so the renderer can mesh from it. */
 	public static void registerGpuModel(BlockState state, BlockStateModel model) {
 		GPU_MODELS.put(state, model);
@@ -225,6 +242,18 @@ public final class GpuFoliageSplit {
 		BlockStateModel model = GPU_MODELS.get(state);
 		return model == null ? fallback : model;
 	}
+	//?} else {
+	/*/^* Remembers a model the mod wrapped, so the renderer can mesh from it. ^/
+	public static void registerGpuModel(BlockState state, BakedModel model) {
+		GPU_MODELS.put(state, model);
+	}
+
+	/^* The model to mesh this block from: the one the mod wrapped where there is one, or vanilla's. ^/
+	static BakedModel modelFor(BlockState state, BakedModel fallback) {
+		BakedModel model = GPU_MODELS.get(state);
+		return model == null ? fallback : model;
+	}
+	*///?}
 
 	/** Render thread: the section was unloaded, and its next build has to be recorded afresh. */
 	static void forgetSection(long sectionKey) {

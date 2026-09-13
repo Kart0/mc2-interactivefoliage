@@ -21,7 +21,7 @@ public class FoliageConfigScreen extends Screen {
 	private RadiusSlider radiusSlider;
 	private Button resetIntensityBtn;
 	private Button resetRadiusBtn;
-	//? >=1.21.11 {
+	//? >=1.21.1 {
 	private CycleButton<Boolean> wavingFoliageBtn;
 	private WavingIntensitySlider wavingIntensitySlider;
 	private Button resetWavingIntensityBtn;
@@ -41,7 +41,7 @@ public class FoliageConfigScreen extends Screen {
 	 */
 	private int topOfOptions() {
 		int rows = 3;
-		//? >=1.21.11 {
+		//? >=1.21.1 {
 		rows += 3;
 		//?}
 		int height = 20 + (rows - 1) * 30 + 60;
@@ -99,7 +99,7 @@ public class FoliageConfigScreen extends Screen {
 		resetRadiusBtn.visible = !isDefaultRadius();
 		this.addRenderableWidget(resetRadiusBtn);
 
-		//? >=1.21.11 {
+		//? >=1.21.1 {
 		y += 30;
 
 		// ── Renderer: the chunk mesh as always, or the mod's own on the GPU ────
@@ -107,9 +107,15 @@ public class FoliageConfigScreen extends Screen {
 				CycleButton.booleanBuilder(
 						// Written out rather than translated: the two read the same in every language.
 						Component.literal("GPU"),
-						Component.literal("CPU"),
-						FoliageSettings.gpuRenderer()
-				).create(cx - 100, y, 200, 20,
+						Component.literal("CPU")
+						//? >1.21.1 {
+						, FoliageSettings.gpuRenderer()
+						//?}
+				)
+				//? <=1.21.1 {
+				/*.withInitialValue(FoliageSettings.gpuRenderer())
+				*///?}
+				.create(cx - 100, y, 200, 20,
 						Component.translatable("config.mc2_interactivefoliage.renderer"),
 						(btn, val) -> {
 							FoliageSettings.setGpuRenderer(val);
@@ -123,9 +129,15 @@ public class FoliageConfigScreen extends Screen {
 		// ── Wind, shown only with the GPU renderer on ──────────────────────────
 		wavingFoliageBtn = CycleButton.booleanBuilder(
 				Component.translatable("config.mc2_interactivefoliage.on"),
-				Component.translatable("config.mc2_interactivefoliage.off"),
-				FoliageSettings.wavingFoliage()
-		).create(cx - 100, y, 200, 20,
+				Component.translatable("config.mc2_interactivefoliage.off")
+				//? >1.21.1 {
+				, FoliageSettings.wavingFoliage()
+				//?}
+		)
+		//? <=1.21.1 {
+		/*.withInitialValue(FoliageSettings.wavingFoliage())
+		*///?}
+		.create(cx - 100, y, 200, 20,
 				Component.translatable("config.mc2_interactivefoliage.waving_foliage"),
 				(btn, val) -> {
 					FoliageSettings.setWavingFoliage(val);
@@ -158,7 +170,7 @@ public class FoliageConfigScreen extends Screen {
 				Component.translatable("config.mc2_interactivefoliage.save"),
 				btn -> {
 					SwayConfig.save();
-					//? >=1.21.11 {
+					//? >=1.21.1 {
 					FoliageSettings.save();
 					//?}
 					//? >=26.2{
@@ -173,7 +185,7 @@ public class FoliageConfigScreen extends Screen {
 	@Override
 	public void onClose() {
 		SwayConfig.save();
-		//? >=1.21.11 {
+		//? >=1.21.1 {
 		FoliageSettings.save();
 		//?}
 		//? >=26.2{
@@ -303,7 +315,7 @@ public class FoliageConfigScreen extends Screen {
 		return Math.abs(config.maxDistance - FoliageSettings.DEFAULT_INTERACTION_RADIUS) < 0.1f;
 	}
 
-	//? >=1.21.11 {
+	//? >=1.21.1 {
 	/**
 	 * The default sits in the middle of the slider: the left half runs down to the minimum and the right half
 	 * up to the maximum, so weaker and stronger each get half the travel.

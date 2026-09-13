@@ -1,6 +1,6 @@
 package net.karto.mc2.mc2_interactivefoliage.platform.fabric;
 
-//? fabric && >=1.21.11 {
+//? fabric && >=1.21.1 {
 
 import com.github.razorplay01.sway.api.SwayAPI;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientChunkEvents;
@@ -8,8 +8,15 @@ import net.fabricmc.fabric.api.client.model.loading.v1.ModelLoadingPlugin;
 import net.fabricmc.fabric.api.client.model.loading.v1.ModelModifier;
 //? >=26.1.2 {
 import net.fabricmc.fabric.api.client.rendering.v1.level.LevelRenderEvents;
-//?} else {
+//?} elif >=1.21.11 {
 /*import net.fabricmc.fabric.api.client.rendering.v1.world.WorldRenderEvents;
+*///?} else {
+/*import net.fabricmc.fabric.api.client.rendering.v1.CoreShaderRegistrationCallback;
+import net.fabricmc.fabric.api.client.rendering.v1.WorldRenderEvents;
+import net.karto.mc2.mc2_interactivefoliage.ModTemplate;
+import net.minecraft.client.resources.model.ModelResourceLocation;
+import net.minecraft.resources.ResourceLocation;
+import net.minecraft.core.registries.BuiltInRegistries;
 *///?}
 import net.karto.mc2.mc2_interactivefoliage.gpu.GpuFoliageModel;
 import net.karto.mc2.mc2_interactivefoliage.gpu.GpuFoliageRenderer;
@@ -24,17 +31,37 @@ public final class FabricFoliageHooks {
 		// Wrapped outside Sway's own wrapper, so everything our wrapper does not withhold still goes
 		// through Sway. Here that costs nothing extra: Fabric's meshing asks models through the rendering
 		// API, which Sway hooks, while the renderer meshes through vanilla's path, which it does not.
+		//? >=1.21.11 {
 		ModelLoadingPlugin.register(context -> context.modifyBlockModelAfterBake().register(
 				ModelModifier.WRAP_LAST_PHASE,
 				(model, bake) -> SwayAPI.isInteractive(bake.state().getBlock()) ? new GpuFoliageModel(model) : model));
+		//?} else {
+		/*// Before 1.21.11 a baked model is not told which block state it is for, only the id it was baked
+		// under. A block state's model is baked under the block's own id and the state's variant, so the
+		// block is read straight from that; item models and the models they are built from are left alone.
+		ModelLoadingPlugin.register(context -> context.modifyModelAfterBake().register(
+				ModelModifier.WRAP_LAST_PHASE,
+				(model, bake) -> isFoliageBlockModel(bake.topLevelId()) ? new GpuFoliageModel(model) : model));
+		*///?}
 
 		//? >=26.1.2 {
 		LevelRenderEvents.AFTER_OPAQUE_TERRAIN.register(context -> GpuFoliageRenderer.draw(context.levelState()));
-		//?} else {
+		//?} elif >=1.21.11 {
 		/*// There is no event for the moment the opaque terrain is done before 26.1.2. The one before the
 		// translucent pass is the nearest: the opaque blocks are drawn by then, and the foliage still lands
 		// before anything see-through, which is what it has to be behind.
 		WorldRenderEvents.BEFORE_TRANSLUCENT.register(context -> GpuFoliageRenderer.draw(context.worldState()));
+		*///?} else {
+		/*// Fired straight after the solid and cutout terrain, the same moment the newer event marks. The frustum
+		// comes with it, since nothing else hands it out on this version.
+		WorldRenderEvents.BEFORE_ENTITIES.register(context -> GpuFoliageRenderer.draw(
+				context.camera().getPosition(), context.frustum(), context.positionMatrix(), context.projectionMatrix()));
+
+		// The foliage shader is loaded with the game's own core shaders, and again on every resource reload.
+		CoreShaderRegistrationCallback.EVENT.register(shaders -> shaders.register(
+				ResourceLocation.fromNamespaceAndPath(ModTemplate.MOD_ID, "foliage_legacy"),
+				GpuFoliageRenderer.legacyVertexFormat(),
+				GpuFoliageRenderer::onLegacyShaderLoaded));
 		*///?}
 
 		// Sodium overwrites every vanilla route that marks a section dirty when a chunk arrives, so chunk
@@ -42,5 +69,14 @@ public final class FabricFoliageHooks {
 		ClientChunkEvents.CHUNK_LOAD.register(GpuFoliageRenderer::discoverChunk);
 		ClientChunkEvents.CHUNK_UNLOAD.register(GpuFoliageRenderer::forgetChunk);
 	}
+
+	//? <1.21.11 {
+	/*private static boolean isFoliageBlockModel(ModelResourceLocation id) {
+		if (id == null || ModelResourceLocation.INVENTORY_VARIANT.equals(id.variant())) {
+			return false;
+		}
+		return BuiltInRegistries.BLOCK.getOptional(id.id()).map(SwayAPI::isInteractive).orElse(false);
+	}
+	*///?}
 }
 //?}

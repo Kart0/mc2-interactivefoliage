@@ -56,9 +56,9 @@ sealed class Loader(val id: String) {
 					// Only queried when Mod Menu is installed, so it costs nothing when it is not.
 					"modmenu" to listOf("${ctx.modGroup}.${ctx.modId}.platform.fabric.FabricModMenuIntegration")
 				),
-				// The GPU foliage mixins target classes that only exist from 26.1.2 onwards, so the
-				// config listing them is only declared where those classes are there to be found.
-				mixins = if (ctx.stonecutter.eval(ctx.currentMcVersion, ">=1.21.11")) {
+				// The GPU foliage mixins are only declared where the GPU renderer has been ported, so
+				// their targets are known to be there.
+				mixins = if (ctx.stonecutter.eval(ctx.currentMcVersion, ">=1.21.1")) {
 					listOf("${ctx.modId}.mixins.json", "${ctx.modId}.gpu.mixins.json")
 				} else {
 					listOf("${ctx.modId}.mixins.json")
