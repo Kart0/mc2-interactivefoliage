@@ -43,7 +43,7 @@ publish.additionalVersions = ["1.21.10"]
 
 [fabric."26.1.2"]
 deps.minecraft = "26.1.2"
-deps.fabric-api = "0.146.1+26.1.2"
+deps.fabric-api = "0.155.3+26.1.2"
 deps.sway = "ypOBKU6c"
 deps.modmenu = "18.0.0-alpha.8"
 publish.additionalVersions = ["26.1.1", "26.1"]
