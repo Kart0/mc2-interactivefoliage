@@ -1,6 +1,6 @@
 package net.karto.mc2.mc2_interactivefoliage.gpu;
 
-//? >=1.21.1 {
+//? >=1.21.1 || fabric {
 
 import net.karto.mc2.mc2_interactivefoliage.ModTemplate;
 
@@ -14,7 +14,8 @@ import java.util.Collection;
  * culling, and a way to ask it to build a chunk again.
  * <p>
  * Sodium has no public API for either. They are public methods on an internal class, but they have kept
- * the same signatures from Sodium 0.5 through 0.9, and Sodium relies on them itself. They are reached by
+ * the same signatures from Sodium 0.5 through 0.9, and Sodium relies on them itself -- only the package moved,
+ * from {@code me.jellysquid} to {@code net.caffeinemc} with Sodium 0.6. They are reached by
  * reflection so the mod neither compiles against Sodium nor needs it; without them, culling falls back to
  * the camera frustum alone and rebuilds fall back to vanilla's own route.
  * <p>
@@ -24,7 +25,12 @@ import java.util.Collection;
 // Public for the mixin that reports Sodium's uploads.
 public final class SodiumBridge {
 
-	private static final String RENDERER = "net.caffeinemc.mods.sodium.client.render.SodiumWorldRenderer";
+	//? >=1.21.1 {
+	private static final String SODIUM = "net.caffeinemc.mods.sodium.client.";
+	//?} else {
+	/*private static final String SODIUM = "me.jellysquid.mods.sodium.client.";
+	*///?}
+	private static final String RENDERER = SODIUM + "render.SodiumWorldRenderer";
 
 	private static final MethodHandle INSTANCE;
 	private static final MethodHandle IS_BOX_VISIBLE;
@@ -64,6 +70,32 @@ public final class SodiumBridge {
 
 	private SodiumBridge() {
 	}
+
+	//? fabric && <1.21.1 {
+	/*private static boolean warnedWithoutIndium;
+
+	/^*
+	 * Whether the chunk mesher can be told to leave foliage out. Sodium 0.5 meshes a block without Fabric's rendering
+	 * API unless Indium is installed to provide it, and that API is the one call a foliage model can withhold its
+	 * geometry through. Without it the chunk mesh keeps all of the foliage, and the GPU renderer drawing it as well
+	 * would show every plant twice -- so it stays out of the way, as if switched off.
+	 ^/
+	static boolean canSplitChunkMeshes() {
+		if (!ModTemplate.xplat().isModLoaded("sodium") || ModTemplate.xplat().isModLoaded("indium")) {
+			return true;
+		}
+		if (!warnedWithoutIndium) {
+			warnedWithoutIndium = true;
+			ModTemplate.LOGGER.warn("Sodium is installed without Indium, so the chunk mesh cannot leave foliage to the "
+					+ "GPU renderer; foliage is drawn by the chunk mesh alone. Install Indium to use the GPU renderer.");
+		}
+		return false;
+	}
+	*///?} else {
+	static boolean canSplitChunkMeshes() {
+		return true;
+	}
+	//?}
 
 	/** Sodium's world renderer, or null when there is none to ask. */
 	static Object renderer() {
@@ -123,6 +155,14 @@ public final class SodiumBridge {
 	 * where that section is. Public members of internal classes, under the same names through each release line.
 	 */
 	private static final class MeshSwaps {
+		/**
+		 * The class declaring a build output's section: a common base from Sodium 0.6, the meshing output itself before.
+		 */
+		//? >=1.21.1 {
+		private static final String SECTION_OWNER = SODIUM + "render.chunk.compile.BuilderTaskOutput";
+		//?} else {
+		/*private static final String SECTION_OWNER = SODIUM + "render.chunk.compile.ChunkBuildOutput";
+		*///?}
 		/** The field holding a build output's section: {@code render} through Sodium 0.8, {@code section} from 0.9. */
 		//? >=26.1.2 {
 		private static final String SECTION_FIELD = "section";
@@ -143,8 +183,8 @@ public final class SodiumBridge {
 			MethodHandle chunkY = null;
 			MethodHandle chunkZ = null;
 			try {
-				Class<?> taskOutput = Class.forName("net.caffeinemc.mods.sodium.client.render.chunk.compile.BuilderTaskOutput");
-				Class<?> renderSection = Class.forName("net.caffeinemc.mods.sodium.client.render.chunk.RenderSection");
+				Class<?> taskOutput = Class.forName(SECTION_OWNER);
+				Class<?> renderSection = Class.forName(SODIUM + "render.chunk.RenderSection");
 				MethodHandles.Lookup lookup = MethodHandles.publicLookup();
 				section = lookup.findGetter(taskOutput, SECTION_FIELD, renderSection)
 						.asType(MethodType.methodType(Object.class, Object.class));
@@ -153,7 +193,7 @@ public final class SodiumBridge {
 				chunkX = lookup.findVirtual(renderSection, "getChunkX", coordinate).asType(erased);
 				chunkY = lookup.findVirtual(renderSection, "getChunkY", coordinate).asType(erased);
 				chunkZ = lookup.findVirtual(renderSection, "getChunkZ", coordinate).asType(erased);
-				buildOutput = Class.forName("net.caffeinemc.mods.sodium.client.render.chunk.compile.ChunkBuildOutput");
+				buildOutput = Class.forName(SODIUM + "render.chunk.compile.ChunkBuildOutput");
 			} catch (ReflectiveOperationException e) {
 				ModTemplate.LOGGER.warn("Sodium's chunk build results could not be read; foliage handed back to the "
 						+ "chunk mesh may blink out for a moment", e);

@@ -1,6 +1,6 @@
 package net.karto.mc2.mc2_interactivefoliage.gpu;
 
-//? >=1.21.1 {
+//? >=1.21.1 || fabric {
 
 import net.karto.mc2.mc2_interactivefoliage.ModTemplate;
 

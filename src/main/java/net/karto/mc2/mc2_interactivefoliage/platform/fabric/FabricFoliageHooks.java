@@ -1,6 +1,6 @@
 package net.karto.mc2.mc2_interactivefoliage.platform.fabric;
 
-//? fabric && >=1.21.1 {
+//? fabric {
 
 import com.github.razorplay01.sway.api.SwayAPI;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientChunkEvents;
@@ -41,7 +41,11 @@ public final class FabricFoliageHooks {
 		// block is read straight from that; item models and the models they are built from are left alone.
 		ModelLoadingPlugin.register(context -> context.modifyModelAfterBake().register(
 				ModelModifier.WRAP_LAST_PHASE,
+				//? >=1.21.1 {
 				(model, bake) -> isFoliageBlockModel(bake.topLevelId()) ? new GpuFoliageModel(model) : model));
+				//?} else {
+				/^(model, bake) -> isFoliageBlockModel(bake.id()) ? new GpuFoliageModel(model) : model));
+				^///?}
 		*///?}
 
 		//? >=26.1.2 {
@@ -55,11 +59,22 @@ public final class FabricFoliageHooks {
 		/*// Fired straight after the solid and cutout terrain, the same moment the newer event marks. The frustum
 		// comes with it, since nothing else hands it out on this version.
 		WorldRenderEvents.BEFORE_ENTITIES.register(context -> GpuFoliageRenderer.draw(
+				//? >=1.21.1 {
 				context.camera().getPosition(), context.frustum(), context.positionMatrix(), context.projectionMatrix()));
+				//?} else {
+				/^// The terrain's view matrix is the one on top of the pose stack it is drawn with.
+				context.camera().getPosition(), context.frustum(), context.matrixStack().last().pose(),
+				context.projectionMatrix()));
+				^///?}
 
 		// The foliage shader is loaded with the game's own core shaders, and again on every resource reload.
 		CoreShaderRegistrationCallback.EVENT.register(shaders -> shaders.register(
+				//? >=1.21.1 {
 				ResourceLocation.fromNamespaceAndPath(ModTemplate.MOD_ID, "foliage_legacy"),
+				//?} else {
+				/^// Its own copy before 1.21.1, whose shader library measures fog from the view rather than the camera.
+				new ResourceLocation(ModTemplate.MOD_ID, "foliage_legacy_1_20"),
+				^///?}
 				GpuFoliageRenderer.legacyVertexFormat(),
 				GpuFoliageRenderer::onLegacyShaderLoaded));
 		*///?}
@@ -70,12 +85,22 @@ public final class FabricFoliageHooks {
 		ClientChunkEvents.CHUNK_UNLOAD.register(GpuFoliageRenderer::forgetChunk);
 	}
 
-	//? <1.21.11 {
+	//? >=1.21.1 && <1.21.11 {
 	/*private static boolean isFoliageBlockModel(ModelResourceLocation id) {
 		if (id == null || ModelResourceLocation.INVENTORY_VARIANT.equals(id.variant())) {
 			return false;
 		}
 		return BuiltInRegistries.BLOCK.getOptional(id.id()).map(SwayAPI::isInteractive).orElse(false);
+	}
+	*///?} elif <1.21.1 {
+	/*// Before 1.21.1 every baked model comes through here, the ones block states and items are built from as well, and
+	// only a model location says which variant it is; a block state's carries the block's id and the state.
+	private static boolean isFoliageBlockModel(ResourceLocation id) {
+		if (!(id instanceof ModelResourceLocation location) || "inventory".equals(location.getVariant())) {
+			return false;
+		}
+		return BuiltInRegistries.BLOCK.getOptional(new ResourceLocation(location.getNamespace(), location.getPath()))
+				.map(SwayAPI::isInteractive).orElse(false);
 	}
 	*///?}
 }

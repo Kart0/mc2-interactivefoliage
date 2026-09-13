@@ -141,11 +141,15 @@ abstract class ModPlatformPlugin @Inject constructor() : Plugin<Project> {
 			}
 			exclude(ctx.loader.excludedResources)
 			// The GPU foliage renderer has one set of shaders per generation of Minecraft's renderer, each in
-			// the shading language that generation speaks; a jar only carries the set its version loads.
-			if (ctx.stonecutter.eval(ctx.currentMcVersion, "<1.21.11")) {
-				exclude("assets/*/shaders/core/foliage.*")
+			// the shading language that generation speaks; a jar only carries the set its version loads. Before
+			// 1.21.1 the legacy set has a vertex shader of its own, and shares the legacy fragment shader.
+			if (ctx.stonecutter.eval(ctx.currentMcVersion, ">=1.21.11")) {
+				exclude("assets/*/shaders/core/foliage_legacy.*", "assets/*/shaders/core/foliage_legacy_1_20.*")
+			} else if (ctx.stonecutter.eval(ctx.currentMcVersion, ">=1.21.1")) {
+				exclude("assets/*/shaders/core/foliage.*", "assets/*/shaders/core/foliage_legacy_1_20.*")
 			} else {
-				exclude("assets/*/shaders/core/foliage_legacy.*")
+				exclude("assets/*/shaders/core/foliage.*", "assets/*/shaders/core/foliage_legacy.json",
+						"assets/*/shaders/core/foliage_legacy.vsh")
 			}
 		}
 	}

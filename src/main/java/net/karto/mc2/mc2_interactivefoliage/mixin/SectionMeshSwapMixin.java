@@ -1,10 +1,15 @@
 package net.karto.mc2.mc2_interactivefoliage.mixin;
 
-//? >=1.21.1 {
+//? >=1.21.1 || fabric {
 
 import com.mojang.blaze3d.systems.RenderSystem;
 import net.karto.mc2.mc2_interactivefoliage.gpu.GpuFoliageSplit;
+//? >=1.21.1 {
 import net.minecraft.client.renderer.chunk.SectionRenderDispatcher;
+//?} else {
+/*import net.minecraft.client.renderer.LevelRenderer;
+import net.minecraft.client.renderer.chunk.ChunkRenderDispatcher;
+*///?}
 //? >=1.21.11 {
 import net.minecraft.client.renderer.chunk.SectionMesh;
 //?} else {
@@ -27,8 +32,14 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
  * The hooked method puts a section's new mesh in place once every layer of it is uploaded, and from then on vanilla
  * draws the new mesh. A build that was superseded is cancelled before it gets there, so an older mesh never reports
  * after a newer build has begun. The method is {@code setCompiled} before 1.21.11 and {@code setSectionMesh} after.
+ * Before 1.21.1 a chunk has no such method: its build sets the new mesh itself and tells the level renderer straight
+ * after, so that call is the one heard.
  */
+//? >=1.21.1 {
 @Mixin(SectionRenderDispatcher.RenderSection.class)
+//?} else {
+/*@Mixin(LevelRenderer.class)
+*///?}
 public abstract class SectionMeshSwapMixin {
 
 	//? >=26.1.2 {
@@ -43,10 +54,17 @@ public abstract class SectionMeshSwapMixin {
 		long node = ((SectionRenderDispatcher.RenderSection) (Object) this).getSectionNode();
 		mc2$reportSwap(SectionPos.x(node), SectionPos.y(node), SectionPos.z(node));
 	}
-	*///?} else {
+	*///?} elif >=1.21.1 {
 	/*@Inject(method = "setCompiled", at = @At("RETURN"))
 	private void mc2$foliageChunkMeshSwapped(SectionRenderDispatcher.CompiledSection compiled, CallbackInfo ci) {
 		BlockPos origin = ((SectionRenderDispatcher.RenderSection) (Object) this).getOrigin();
+		mc2$reportSwap(SectionPos.blockToSectionCoord(origin.getX()), SectionPos.blockToSectionCoord(origin.getY()),
+				SectionPos.blockToSectionCoord(origin.getZ()));
+	}
+	*///?} else {
+	/*@Inject(method = "addRecentlyCompiledChunk", at = @At("HEAD"))
+	private void mc2$foliageChunkMeshSwapped(ChunkRenderDispatcher.RenderChunk chunk, CallbackInfo ci) {
+		BlockPos origin = chunk.getOrigin();
 		mc2$reportSwap(SectionPos.blockToSectionCoord(origin.getX()), SectionPos.blockToSectionCoord(origin.getY()),
 				SectionPos.blockToSectionCoord(origin.getZ()));
 	}

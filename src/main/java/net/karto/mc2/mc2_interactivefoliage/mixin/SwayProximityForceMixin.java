@@ -1,6 +1,6 @@
 package net.karto.mc2.mc2_interactivefoliage.mixin;
 
-//? >=1.21.1 {
+//? >=1.21.1 || fabric {
 
 import com.github.razorplay01.sway.client.behavior.force.ProximityForceBehavior;
 import com.github.razorplay01.sway.config.SwayConfig;

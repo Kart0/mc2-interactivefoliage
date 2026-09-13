@@ -1,6 +1,6 @@
 package net.karto.mc2.mc2_interactivefoliage.gpu;
 
-//? >=1.21.1 {
+//? >=1.21.1 || fabric {
 
 import com.github.razorplay01.sway.api.SwayAPI;
 import it.unimi.dsi.fastutil.longs.Long2LongOpenHashMap;
@@ -53,10 +53,15 @@ import java.util.function.LongConsumer;
 public final class GpuFoliageSplit {
 
 	/**
-	 * Sodium's snapshot of the level for a chunk build, under the same name from Sodium 0.6 through 0.9. Null
-	 * without Sodium, where vanilla's {@link RenderSectionRegion} is the only snapshot there is.
+	 * Sodium's snapshot of the level for a chunk build, under the same name from Sodium 0.6 through 0.9, and as
+	 * {@code WorldSlice} in its old package before. Null without Sodium, where vanilla's own region is the only
+	 * snapshot there is.
 	 */
+	//? >=1.21.1 {
 	private static final Class<?> SODIUM_LEVEL_SLICE = findClass("net.caffeinemc.mods.sodium.client.world.LevelSlice");
+	//?} else {
+	/*private static final Class<?> SODIUM_LEVEL_SLICE = findClass("me.jellysquid.mods.sodium.client.world.WorldSlice");
+	*///?}
 
 	/** The chunks around the player whose foliage the GPU renderer draws. Replaced whole, never edited. */
 	private record Area(int centreX, int centreZ, int radius) {

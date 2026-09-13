@@ -1,6 +1,6 @@
 package net.karto.mc2.mc2_interactivefoliage.gpu;
 
-//? >=1.21.1 {
+//? >=1.21.1 || fabric {
 
 import com.github.razorplay01.sway.api.SwayAPI;
 import com.github.razorplay01.sway.api.behavior.BehaviorPipeline;
@@ -45,9 +45,13 @@ import com.mojang.blaze3d.vertex.BufferBuilder;
 //? <1.21.11 {
 /*import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 *///?}
+//? >=1.21.1 {
 import com.mojang.blaze3d.vertex.ByteBufferBuilder;
-import com.mojang.blaze3d.vertex.DefaultVertexFormat;
 import com.mojang.blaze3d.vertex.MeshData;
+//?} else {
+/*import com.google.common.collect.ImmutableMap;
+*///?}
+import com.mojang.blaze3d.vertex.DefaultVertexFormat;
 import com.mojang.blaze3d.vertex.VertexFormat;
 import com.mojang.blaze3d.vertex.VertexFormatElement;
 import net.karto.mc2.mc2_interactivefoliage.FoliageSettings;
@@ -72,8 +76,7 @@ import net.minecraft.util.RandomSource;
 /*import net.minecraft.client.renderer.block.model.BlockModelPart;
 *///?}
 //? <1.21.11 {
-/*import com.mojang.blaze3d.vertex.MeshData;
-import net.minecraft.client.resources.model.BakedModel;
+/*import net.minecraft.client.resources.model.BakedModel;
 *///?}
 import net.minecraft.client.renderer.block.ModelBlockRenderer;
 import net.minecraft.client.renderer.culling.Frustum;
@@ -96,7 +99,11 @@ import net.minecraft.resources.Identifier;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.level.chunk.LevelChunkSection;
+//? >=1.21.1 {
 import net.minecraft.world.level.chunk.status.ChunkStatus;
+//?} else {
+/*import net.minecraft.world.level.chunk.ChunkStatus;
+*///?}
 import net.minecraft.world.level.levelgen.structure.BoundingBox;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
@@ -222,18 +229,18 @@ public final class GpuFoliageRenderer {
 				.addAttribute("SwayWeights", GpuFormat.R32_FLOAT)
 				.build();
 	}
-	//?} else {
+	//?} elif >=1.21.1 {
 	/*//? >=26.1.2 {
-	private static final VertexFormatElement SWAY_CELL_ELEMENT =
+	/^private static final VertexFormatElement SWAY_CELL_ELEMENT =
 			VertexFormatElement.register(10, 0, VertexFormatElement.Type.FLOAT, false, 1);
 	private static final VertexFormatElement SWAY_WEIGHTS_ELEMENT =
 			VertexFormatElement.register(11, 0, VertexFormatElement.Type.FLOAT, false, 1);
-	//?} else {
-	/^private static final VertexFormatElement SWAY_CELL_ELEMENT =
+	^///?} else {
+	private static final VertexFormatElement SWAY_CELL_ELEMENT =
 			VertexFormatElement.register(10, 0, VertexFormatElement.Type.FLOAT, VertexFormatElement.Usage.GENERIC, 1);
 	private static final VertexFormatElement SWAY_WEIGHTS_ELEMENT =
 			VertexFormatElement.register(11, 0, VertexFormatElement.Type.FLOAT, VertexFormatElement.Usage.GENERIC, 1);
-	^///?}
+	//?}
 	private static final VertexFormat FOLIAGE_FORMAT = foliageFormat();
 
 	private static VertexFormat foliageFormat() {
@@ -254,6 +261,23 @@ public final class GpuFoliageRenderer {
 				.add("SwayCell", SWAY_CELL_ELEMENT)
 				.add("SwayWeights", SWAY_WEIGHTS_ELEMENT)
 				.build();
+	}
+	*///?} else {
+	/*// Before 1.21.1 a format is a map of named elements, and a generic attribute is read from the location its place
+	// in the map gives it -- the block's padding counts as a place -- so the shader lists its attributes the same way.
+	private static final VertexFormat FOLIAGE_FORMAT = foliageFormat();
+
+	private static VertexFormat foliageFormat() {
+		VertexFormat block = DefaultVertexFormat.BLOCK;
+		ImmutableMap.Builder<String, VertexFormatElement> elements = ImmutableMap.builder();
+		// The block's names and elements come in the same order, the one they are written in.
+		for (int i = 0; i < block.getElements().size(); i++) {
+			elements.put(block.getElementAttributeNames().get(i), block.getElements().get(i));
+		}
+		return new VertexFormat(elements
+				.put("SwayCell", new VertexFormatElement(0, VertexFormatElement.Type.FLOAT, VertexFormatElement.Usage.GENERIC, 1))
+				.put("SwayWeights", new VertexFormatElement(0, VertexFormatElement.Type.FLOAT, VertexFormatElement.Usage.GENERIC, 1))
+				.build());
 	}
 	*///?}
 
@@ -381,7 +405,11 @@ public final class GpuFoliageRenderer {
 	//?}
 
 	/** Reused by every rebuild and grown to the largest section seen, so no rebuild has a size limit. */
+	//? >=1.21.1 {
 	private static ByteBufferBuilder vertexScratch;
+	//?} else {
+	/*private static BufferBuilder vertexScratch;
+	*///?}
 	private static ByteBuffer weightScratch;
 
 	/** This frame's draw calls, three ints each: index into the drawn regions, first vertex, vertex count. */
@@ -499,9 +527,8 @@ public final class GpuFoliageRenderer {
 		}
 
 		void upload() {
-			//? <1.21.11 {
-			/*// The buffer is uploaded over rather than deleted and made again.
-			*///?} else {
+			// Before 1.21.11 the buffer is uploaded over rather than deleted and made again.
+			//? >=1.21.11 {
 			closeBuffers();
 			//?}
 			int vertexCount = 0;
@@ -538,16 +565,31 @@ public final class GpuFoliageRenderer {
 			/*// Handed over as a mesh, the way vanilla uploads a chunk section, so the vertex buffer sets up its
 			// attributes from the mod's format and its indices from vanilla's shared quad index buffer. The
 			// staging builder is borrowed, as above, and is empty again once the mesh is closed.
+			//? >=1.21.1 {
 			ByteBufferBuilder staging = uploadBuilder();
 			long pointer = staging.reserve(vertexCount * stride);
+			//?} else {
+			/^// Before 1.21.1 a mesh only comes out of a buffer builder, and the builder has no way to take a block of
+			// vertices written elsewhere; it is opened up for this (see the access widener), and written straight into.
+			BufferBuilder staging = uploadBuilder();
+			staging.begin(VertexFormat.Mode.QUADS, FOLIAGE_FORMAT);
+			staging.ensureCapacity(vertexCount * stride + stride);
+			long pointer = MemoryUtil.memAddress(staging.buffer, staging.nextElementByte);
+			^///?}
 			for (int i = 0; i < occupiedCount; i++) {
 				int slot = occupied[i];
 				Section section = sections[slot];
 				MemoryUtil.memCopy(MemoryUtil.memAddress(section.data, 0),
 						pointer + (long) firstVertex[slot] * stride, (long) section.vertexCount * stride);
 			}
+			//? >=1.21.1 {
 			MeshData mesh = new MeshData(staging.build(), new MeshData.DrawState(FOLIAGE_FORMAT, vertexCount,
 					indexCountFor(vertexCount), VertexFormat.Mode.QUADS, VertexFormat.IndexType.least(vertexCount)));
+			//?} else {
+			/^staging.nextElementByte += vertexCount * stride;
+			staging.vertices = vertexCount;
+			BufferBuilder.RenderedBuffer mesh = staging.end();
+			^///?}
 			if (vertices == null) {
 				vertices = new VertexBuffer(VertexBuffer.Usage.STATIC);
 			}
@@ -679,7 +721,7 @@ public final class GpuFoliageRenderer {
 
 		float weightAt(float worldY) {
 			float distance = hanging ? anchorY - worldY : worldY - anchorY;
-			return Math.clamp(distance / SWAY_SPAN, 0.0F, 1.0F) * damping;
+			return Mth.clamp(distance / SWAY_SPAN, 0.0F, 1.0F) * damping;
 		}
 	}
 
@@ -906,7 +948,9 @@ public final class GpuFoliageRenderer {
 		}
 		// Decisions keep being applied while switched off, so the record is accurate when switched back on.
 		GpuFoliageSplit.applyMeshDecisions();
-		if (!FoliageSettings.gpuRenderer()) {
+		// Where the chunk mesher cannot be told to leave foliage out, the renderer stays out of the way too, or every
+		// plant it drew would be drawn twice.
+		if (!FoliageSettings.gpuRenderer() || !SodiumBridge.canSplitChunkMeshes()) {
 			if (active) {
 				deactivate(minecraft);
 			}
@@ -1152,7 +1196,40 @@ public final class GpuFoliageRenderer {
 		RenderType renderType = RenderType.cutout();
 		renderType.setupRenderState();
 		RenderSystem.setShader(() -> shader);
+		//? >=1.21.1 {
 		shader.setDefaultUniforms(VertexFormat.Mode.QUADS, legacyModelView, legacyProjection, minecraft.getWindow());
+		//?} else {
+		/^// Before 1.21.1 nothing sets the uniforms every shader shares in one call: they are set the way the terrain's
+		// own layers set them.
+		for (int sampler = 0; sampler < 12; sampler++) {
+			shader.setSampler("Sampler" + sampler, RenderSystem.getShaderTexture(sampler));
+		}
+		if (shader.MODEL_VIEW_MATRIX != null) {
+			shader.MODEL_VIEW_MATRIX.set(legacyModelView);
+		}
+		if (shader.PROJECTION_MATRIX != null) {
+			shader.PROJECTION_MATRIX.set(legacyProjection);
+		}
+		if (shader.COLOR_MODULATOR != null) {
+			shader.COLOR_MODULATOR.set(RenderSystem.getShaderColor());
+		}
+		if (shader.FOG_START != null) {
+			shader.FOG_START.set(RenderSystem.getShaderFogStart());
+		}
+		if (shader.FOG_END != null) {
+			shader.FOG_END.set(RenderSystem.getShaderFogEnd());
+		}
+		if (shader.FOG_COLOR != null) {
+			shader.FOG_COLOR.set(RenderSystem.getShaderFogColor());
+		}
+		if (shader.FOG_SHAPE != null) {
+			shader.FOG_SHAPE.set(RenderSystem.getShaderFogShape().getIndex());
+		}
+		if (shader.GAME_TIME != null) {
+			shader.GAME_TIME.set(RenderSystem.getShaderGameTime());
+		}
+		RenderSystem.setupShaderLights(shader);
+		^///?}
 		shader.safeGetUniform("SwayIntensity").set(
 				FoliageSettings.wavingFoliage() ? FoliageSettings.wavingIntensity() : 0.0F);
 		BlockPos cameraBlock = BlockPos.containing(camera);
@@ -1479,12 +1556,12 @@ public final class GpuFoliageRenderer {
 		int minY = SectionPos.y(regionKey) << REGION_HEIGHT_SHIFT;
 		int minZ = SectionPos.z(regionKey) << REGION_WIDTH_SHIFT;
 		return withinRange(minecraft, SectionPos.asLong(
-				Math.clamp(SectionPos.blockToSectionCoord(minecraft.player.getBlockX()), minX, minX + REGION_WIDTH - 1),
-				Math.clamp(SectionPos.blockToSectionCoord(minecraft.player.getBlockY()), minY, minY + REGION_HEIGHT - 1),
-				Math.clamp(SectionPos.blockToSectionCoord(minecraft.player.getBlockZ()), minZ, minZ + REGION_WIDTH - 1)));
+				Mth.clamp(SectionPos.blockToSectionCoord(minecraft.player.getBlockX()), minX, minX + REGION_WIDTH - 1),
+				Mth.clamp(SectionPos.blockToSectionCoord(minecraft.player.getBlockY()), minY, minY + REGION_HEIGHT - 1),
+				Mth.clamp(SectionPos.blockToSectionCoord(minecraft.player.getBlockZ()), minZ, minZ + REGION_WIDTH - 1)));
 	}
 
-	//? <26.1.2 {
+	//? >=1.21.1 && <26.1.2 {
 	/*/^*
 	 * Appends the mod's per-vertex data as vanilla writes each vertex, for the versions where a block is
 	 * tesselated into a vertex consumer rather than handed over one quad at a time.
@@ -1562,12 +1639,108 @@ public final class GpuFoliageRenderer {
 		}
 
 		//? >=1.21.11 {
-		@Override
+		/^@Override
 		public VertexConsumer setLineWidth(float width) {
 			delegate.setLineWidth(width);
 			return this;
 		}
-		//?}
+		^///?}
+	}
+	*///?} elif <1.21.1 {
+	/*/^*
+	 * Appends the mod's per-vertex data as vanilla writes each vertex, as the newer writer does, against the vertex
+	 * consumer of before 1.21.1: a vertex is either written whole in one call, which is how a block's quads arrive,
+	 * or element by element and then ended, and its weights are written as it is finished either way.
+	 ^/
+	private static final class FoliageVertexWriter implements VertexConsumer {
+
+		private final VertexConsumer delegate;
+		private final SwayAnchor anchor;
+		private final BlockPos regionOrigin;
+		private float blockY;
+		/^* The height of a vertex being written element by element, kept until it is ended. ^/
+		private float pendingY;
+
+		FoliageVertexWriter(VertexConsumer delegate, SwayAnchor anchor, BlockPos regionOrigin) {
+			this.delegate = delegate;
+			this.anchor = anchor;
+			this.regionOrigin = regionOrigin;
+		}
+
+		/^* The height of the block about to be tesselated, relative to the region. ^/
+		void beginBlock(float blockY) {
+			this.blockY = blockY;
+		}
+
+		private void writeWeights(float y) {
+			float localY = y - blockY;
+			reserveWeights(WEIGHT_BYTES);
+			weightScratch.putFloat(packCell(anchor.cellX - regionOrigin.getX(),
+					anchor.cellY - regionOrigin.getY(),
+					anchor.cellZ - regionOrigin.getZ()));
+			weightScratch.putFloat(packWeights(anchor.weightAt(regionOrigin.getY() + y),
+					anchor.pushWeightAt(localY)));
+		}
+
+		@Override
+		public void vertex(float x, float y, float z, float red, float green, float blue, float alpha,
+				float u, float v, int overlay, int light, float normalX, float normalY, float normalZ) {
+			delegate.vertex(x, y, z, red, green, blue, alpha, u, v, overlay, light, normalX, normalY, normalZ);
+			writeWeights(y);
+		}
+
+		@Override
+		public VertexConsumer vertex(double x, double y, double z) {
+			delegate.vertex(x, y, z);
+			pendingY = (float) y;
+			return this;
+		}
+
+		@Override
+		public VertexConsumer color(int red, int green, int blue, int alpha) {
+			delegate.color(red, green, blue, alpha);
+			return this;
+		}
+
+		@Override
+		public VertexConsumer uv(float u, float v) {
+			delegate.uv(u, v);
+			return this;
+		}
+
+		@Override
+		public VertexConsumer overlayCoords(int u, int v) {
+			delegate.overlayCoords(u, v);
+			return this;
+		}
+
+		@Override
+		public VertexConsumer uv2(int u, int v) {
+			delegate.uv2(u, v);
+			return this;
+		}
+
+		@Override
+		public VertexConsumer normal(float x, float y, float z) {
+			delegate.normal(x, y, z);
+			return this;
+		}
+
+		@Override
+		public void endVertex() {
+			delegate.endVertex();
+			writeWeights(pendingY);
+		}
+
+		@Override
+		public void defaultColor(int red, int green, int blue, int alpha) {
+			delegate.defaultColor(red, green, blue, alpha);
+		}
+
+		@Override
+		public void unsetDefaultColor() {
+			delegate.unsetDefaultColor();
+		}
 	}
 	*///?}
 
@@ -1589,13 +1762,23 @@ public final class GpuFoliageRenderer {
 		return uploadStaging.clear().limit(bytes);
 	}
 
-	//? <1.21.11 {
+	//? >=1.21.1 && <1.21.11 {
 	/*/^* The same, for the versions that upload a region as a mesh. It is left empty by every upload. ^/
 	private static ByteBufferBuilder uploadBuilder;
 
 	private static ByteBufferBuilder uploadBuilder() {
 		if (uploadBuilder == null) {
 			uploadBuilder = new ByteBufferBuilder(64 * 1024);
+		}
+		return uploadBuilder;
+	}
+	*///?} elif <1.21.1 {
+	/*/^* The same, as a builder: before 1.21.1 a mesh only comes out of one. It is left empty by every upload. ^/
+	private static BufferBuilder uploadBuilder;
+
+	private static BufferBuilder uploadBuilder() {
+		if (uploadBuilder == null) {
+			uploadBuilder = new BufferBuilder(64 * 1024);
 		}
 		return uploadBuilder;
 	}
@@ -1663,7 +1846,11 @@ public final class GpuFoliageRenderer {
 			*///?}
 		}
 		if (vertexScratch == null) {
+			//? >=1.21.1 {
 			vertexScratch = new ByteBufferBuilder(VERTEX_BYTES * 4 * INITIAL_SCRATCH_QUADS);
+			//?} else {
+			/*vertexScratch = new BufferBuilder(VERTEX_BYTES * 4 * INITIAL_SCRATCH_QUADS);
+			*///?}
 			weightScratch = MemoryUtil.memAlloc(WEIGHT_BYTES * 4 * INITIAL_SCRATCH_QUADS);
 		}
 		vertexScratch.clear();
@@ -1681,8 +1868,11 @@ public final class GpuFoliageRenderer {
 
 		//? >=26.2 {
 		BufferBuilder builder = new BufferBuilder(vertexScratch, PrimitiveTopology.QUADS, DefaultVertexFormat.BLOCK);
-		//?} else {
+		//?} elif >=1.21.1 {
 		/*BufferBuilder builder = new BufferBuilder(vertexScratch, VertexFormat.Mode.QUADS, DefaultVertexFormat.BLOCK);
+		*///?} else {
+		/*BufferBuilder builder = vertexScratch;
+		builder.begin(VertexFormat.Mode.QUADS, DefaultVertexFormat.BLOCK);
 		*///?}
 		// Vanilla writes the standard attributes; alongside each quad we append the sway weight of its
 		// four vertices, so both bindings stay in step without touching its output.
@@ -1757,12 +1947,21 @@ public final class GpuFoliageRenderer {
 			}
 		}
 
+		//? >=1.21.1 {
 		MeshData mesh = builder.build();
+		//?} else {
+		/*BufferBuilder.RenderedBuffer mesh = builder.endOrDiscardIfEmpty();
+		*///?}
 		if (mesh == null) {
 			removeSection(key);
 			return;
 		}
+		//? >=1.21.1 {
 		try (mesh) {
+		//?} else {
+		/*// Before 1.21.1 the mesh is not closeable: it hands its memory back to the builder when released.
+		try {
+		*///?}
 			// The mesh says how many vertices it holds and in what format, rather than dividing its size by
 			// the block format's stride: another mod may widen the buffer behind our back -- Iris does, for
 			// shader packs -- and the vertices would then be read at a stride they were not written at. A
@@ -1792,7 +1991,13 @@ public final class GpuFoliageRenderer {
 				data.put(vertex * stride + VERTEX_BYTES, weightScratch, vertex * WEIGHT_BYTES, WEIGHT_BYTES);
 			}
 			putSection(key, new Section(key, origin, data, vertexCount));
+		//? >=1.21.1 {
 		}
+		//?} else {
+		/*} finally {
+			mesh.release();
+		}
+		*///?}
 	}
 
 	//? <1.21.11 {

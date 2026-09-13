@@ -1,6 +1,6 @@
 package net.karto.mc2.mc2_interactivefoliage.mixin;
 
-//? >=1.21.1 {
+//? >=1.21.1 || fabric {
 
 import net.karto.mc2.mc2_interactivefoliage.gpu.SodiumBridge;
 import org.spongepowered.asm.mixin.Mixin;
@@ -20,12 +20,17 @@ import java.util.Collection;
  * results it uploads for a section always come in the order they were built.
  * <p>
  * The method is named with its parameters: a private overload of the same name uploads each region's share, and
- * would report every section twice. Its parameters differ between Sodium's release lines.
+ * would report every section twice. Its parameters differ between Sodium's release lines, and before Sodium 0.6 --
+ * still under its old package on 1.20.1 -- it is called {@code uploadMeshes}.
  * <p>
  * Sodium is optional, and not on the compile classpath: the target is named, and does nothing when it is absent.
  */
 @Pseudo
+//? >=1.21.1 {
 @Mixin(targets = "net.caffeinemc.mods.sodium.client.render.chunk.region.RenderRegionManager", remap = false)
+//?} else {
+/*@Mixin(targets = "me.jellysquid.mods.sodium.client.render.chunk.region.RenderRegionManager", remap = false)
+*///?}
 public abstract class SodiumMeshSwapMixin {
 
 	//? >=26.2 {
@@ -41,8 +46,14 @@ public abstract class SodiumMeshSwapMixin {
 			CallbackInfo ci) {
 		SodiumBridge.onResultsUploaded(results);
 	}
-	*///?} else {
+	*///?} elif >=1.21.1 {
 	/*@Inject(method = "uploadResults(Lnet/caffeinemc/mods/sodium/client/gl/device/CommandList;Ljava/util/Collection;)V",
+			at = @At("RETURN"), require = 0, remap = false)
+	private void mc2$foliageChunkMeshesSwapped(@Coerce Object commandList, Collection<?> results, CallbackInfo ci) {
+		SodiumBridge.onResultsUploaded(results);
+	}
+	*///?} else {
+	/*@Inject(method = "uploadMeshes(Lme/jellysquid/mods/sodium/client/gl/device/CommandList;Ljava/util/Collection;)V",
 			at = @At("RETURN"), require = 0, remap = false)
 	private void mc2$foliageChunkMeshesSwapped(@Coerce Object commandList, Collection<?> results, CallbackInfo ci) {
 		SodiumBridge.onResultsUploaded(results);

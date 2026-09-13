@@ -58,7 +58,7 @@ sealed class Loader(val id: String) {
 				),
 				// The GPU foliage mixins are only declared where the GPU renderer has been ported, so
 				// their targets are known to be there.
-				mixins = if (ctx.stonecutter.eval(ctx.currentMcVersion, ">=1.21.1")) {
+				mixins = if (ctx.stonecutter.eval(ctx.currentMcVersion, ">=1.20.1")) {
 					listOf("${ctx.modId}.mixins.json", "${ctx.modId}.gpu.mixins.json")
 				} else {
 					listOf("${ctx.modId}.mixins.json")

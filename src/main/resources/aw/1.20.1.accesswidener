@@ -1,2 +1,9 @@
 accessWidener v2 named
 
+# The GPU foliage renderer uploads a region as one block of vertices it has already written. A mesh only comes out of
+# a buffer builder on this version, and the builder takes vertices one element at a time, so it is written into
+# directly instead: grown to fit, the block copied in, and the vertex count set before the mesh is taken out.
+accessible field com/mojang/blaze3d/vertex/BufferBuilder buffer Ljava/nio/ByteBuffer;
+accessible field com/mojang/blaze3d/vertex/BufferBuilder nextElementByte I
+accessible field com/mojang/blaze3d/vertex/BufferBuilder vertices I
+accessible method com/mojang/blaze3d/vertex/BufferBuilder ensureCapacity (I)V
