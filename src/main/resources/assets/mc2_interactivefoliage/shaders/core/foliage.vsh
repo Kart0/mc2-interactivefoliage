@@ -39,10 +39,28 @@ const float SWAY_SCALE = 6.2831853 * 230.0 / 4096.0;
 const float SWAY_STRENGTH = 0.33;
 
 // Settings the player changes in game, written by the mod into a buffer so they apply on the next frame.
-// SwayIntensity multiplies SWAY_STRENGTH, from 0.5 to 2.0.
+// SwayIntensity multiplies SWAY_STRENGTH, from 0.5 to 2.0. SwayEdge is the edge of the area this renderer draws,
+// relative to the camera: x and y its lowest x and z, z and w its highest.
 layout(std140) uniform FoliageSway {
     float SwayIntensity;
+    vec4 SwayEdge;
 };
+
+// The wind eases off over this many blocks before that edge, so it does not stop dead where the chunk mesh takes
+// over.
+const float EDGE_EASE_BLOCKS = 6.0;
+
+// How much of the wind a plant keeps, by how far its anchor block sits inside the edge. It rises along a curve
+// that starts and ends gently, so the plants by the edge barely stir and no one plant moves much more than the
+// next; and continuously, so the edge following the player changes each plant's sway smoothly rather than in
+// steps. Measured from the anchor, so the whole plant eases off together; outside the edge, while the chunk mesh
+// takes a plant back, it keeps none.
+float edgeEase(vec3 cell) {
+    vec2 centre = cell.xz + 0.5;
+    float inside = min(min(centre.x - SwayEdge.x, SwayEdge.z - centre.x),
+                       min(centre.y - SwayEdge.y, SwayEdge.w - centre.y));
+    return smoothstep(0.0, EDGE_EASE_BLOCKS, inside);
+}
 
 // Sway's pushes on the plants near the player this frame, one per plant by its anchor block, already
 // followed through a spring by the mod so plants lean in smoothly and rock back when let go.
@@ -120,11 +138,12 @@ void main() {
     // Phase varies with world position so neighbouring plants never move in lockstep.
     float phase = (world.x + world.z) * SWAY_SCALE + GameTime * SWAY_SPEED;
     // ModelOffset is the region's corner relative to the camera, which SwayCell is measured from.
-    vec2 force = swayCellPush(unpackCell(SwayCell) + ModelOffset);
+    vec3 cell = unpackCell(SwayCell) + ModelOffset;
+    vec2 force = swayCellPush(cell);
     vec2 weights = unpackWeights(SwayWeights);
     // Every vertex of a plant reads the same force, so the whole plant calms together.
     float calm = smoothstep(0.0, PUSH_FOR_CALM, length(force));
-    float amount = weights.x * SWAY_STRENGTH * SwayIntensity * mix(1.0, PUSHED_SWAY, calm);
+    float amount = weights.x * SWAY_STRENGTH * SwayIntensity * edgeEase(cell) * mix(1.0, PUSHED_SWAY, calm);
     vec2 push = force * weights.y * INTERACT_STRENGTH;
     pos.x += sin(phase) * amount;
     pos.z += cos(phase * 1.3) * amount * 0.7;

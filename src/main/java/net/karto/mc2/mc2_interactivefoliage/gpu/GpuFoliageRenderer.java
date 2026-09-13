@@ -188,6 +188,17 @@ public final class GpuFoliageRenderer {
 	 * which covers the entity's own width and the plant's block.
 	 */
 	private static final float PUSH_REACH_PAST_RADIUS = 4.0F;
+	/**
+	 * How fast the edge the wind eases off at follows the near area, in blocks a second. The near area moves a
+	 * whole chunk at once; were the edge to jump with it, a band of plants would change how far they sway mid-swing
+	 * and visibly jerk. Following it lets each plant's sway grow or settle over about a second.
+	 */
+	private static final double WIND_EDGE_SPEED = 16.0D;
+	/**
+	 * Past this many blocks from the near area the edge jumps straight to it rather than following: after a
+	 * teleport, or a new render distance or setting, following would take seconds.
+	 */
+	private static final double WIND_EDGE_JUMP = 48.0D;
 	/** Sections are built this many chunks past the near area, so ones crossing into it are ready. */
 	private static final int BUILD_MARGIN = 2;
 
@@ -300,8 +311,8 @@ public final class GpuFoliageRenderer {
 			.build();
 	//?}
 	//? >=1.21.11 {
-	/** A whole vec4 for one float, so the buffer is never smaller than the block once a driver pads it. */
-	private static final int SWAY_SETTINGS_SIZE = new Std140SizeCalculator().putVec4().get();
+	/** The intensity, then the edge the wind eases off at. */
+	private static final int SWAY_SETTINGS_SIZE = new Std140SizeCalculator().putFloat().putVec4().get();
 	//?}
 
 	/**
@@ -382,6 +393,13 @@ public final class GpuFoliageRenderer {
 	}
 	private static final int INITIAL_SCRATCH_QUADS = 1024;
 
+	/**
+	 * The edge the wind eases off at, in world blocks: lowest x, lowest z, highest x, highest z. It follows the near
+	 * area's edge; see {@link #followWindEdge}. NaN until there is a near area to follow.
+	 */
+	private static final double[] WIND_EDGE = {Double.NaN, Double.NaN, Double.NaN, Double.NaN};
+	private static long windEdgeMovedNanos;
+
 	private static final Map<Long, Region> REGIONS = new HashMap<>();
 	/** Sections waiting to be meshed, by section key. */
 	private static final Set<Long> DIRTY = new LinkedHashSet<>();
@@ -409,6 +427,7 @@ public final class GpuFoliageRenderer {
 	/** Holds the sway settings the shader reads; rewritten only when one of them changes. */
 	private static GpuBuffer swaySettings;
 	private static float uploadedIntensity = Float.NaN;
+	private static final Vector4f UPLOADED_EDGE = new Vector4f(Float.NaN);
 	//?}
 
 	/** Reused by every rebuild and grown to the largest section seen, so no rebuild has a size limit. */
@@ -988,6 +1007,7 @@ public final class GpuFoliageRenderer {
 			return;
 		}
 		updateNearArea(minecraft);
+		followWindEdge();
 		// Near sections whose build is on screen still holding their foliage are asked for again; see
 		// GpuFoliageSplit.NEEDS_REBUILD for why only once the build is in place.
 		GpuFoliageSplit.forEachRebuildDue(key ->
@@ -1119,7 +1139,7 @@ public final class GpuFoliageRenderer {
 		/*RenderTarget target = minecraft.getMainRenderTarget();
 		*///?}
 		// Written before the pass opens: a buffer cannot be written to while a render pass is open.
-		GpuBuffer settings = swaySettings();
+		GpuBuffer settings = swaySettings(camera);
 		GpuBuffer interaction = GpuFoliageInteraction.upload(camera);
 
 		try (RenderPass pass = RenderSystem.getDevice()
@@ -1254,6 +1274,8 @@ public final class GpuFoliageRenderer {
 		^///?}
 		shader.safeGetUniform("SwayIntensity").set(
 				FoliageSettings.wavingFoliage() ? FoliageSettings.wavingIntensity() : 0.0F);
+		Vector4f edge = windEdgeFrom(camera);
+		shader.safeGetUniform("SwayEdge").set(edge.x, edge.y, edge.z, edge.w);
 		BlockPos cameraBlock = BlockPos.containing(camera);
 		shader.safeGetUniform("CameraBlockPos").set(cameraBlock.getX(), cameraBlock.getY(), cameraBlock.getZ());
 		shader.safeGetUniform("CameraOffset").set(
@@ -1296,11 +1318,11 @@ public final class GpuFoliageRenderer {
 
 	//? >=1.21.11 {
 	/**
-	 * The sway settings buffer, with the current intensity in it, or zero while the wind is switched off. It is
-	 * written only when the value changed, so moving the slider is seen live and costs nothing the rest of the
-	 * time.
+	 * The sway settings buffer, with the current intensity in it, or zero while the wind is switched off, and the
+	 * edge the wind eases off at. It is written only when a value changed, so moving the slider is seen live and
+	 * standing still costs nothing.
 	 */
-	private static GpuBuffer swaySettings() {
+	private static GpuBuffer swaySettings(Vec3 camera) {
 		if (swaySettings == null) {
 			swaySettings = RenderSystem.getDevice().createBuffer(
 					() -> "MC2 foliage sway settings",
@@ -1309,16 +1331,61 @@ public final class GpuFoliageRenderer {
 			uploadedIntensity = Float.NaN;
 		}
 		float intensity = FoliageSettings.wavingFoliage() ? FoliageSettings.wavingIntensity() : 0.0F;
-		if (intensity != uploadedIntensity) {
+		Vector4f edge = windEdgeFrom(camera);
+		if (intensity != uploadedIntensity || !edge.equals(UPLOADED_EDGE)) {
 			try (MemoryStack stack = MemoryStack.stackPush()) {
-				ByteBuffer data = Std140Builder.onStack(stack, SWAY_SETTINGS_SIZE).putFloat(intensity).get();
+				ByteBuffer data = Std140Builder.onStack(stack, SWAY_SETTINGS_SIZE)
+						.putFloat(intensity)
+						.putVec4(edge)
+						.get();
 				RenderSystem.getDevice().createCommandEncoder().writeToBuffer(swaySettings.slice(), data);
 			}
 			uploadedIntensity = intensity;
+			UPLOADED_EDGE.set(edge);
 		}
 		return swaySettings;
 	}
 	//?}
+
+	/**
+	 * Moves the wind's edge towards the near area's, at {@link #WIND_EDGE_SPEED}, or straight onto it when it is
+	 * far off or there was none yet.
+	 */
+	private static void followWindEdge() {
+		long now = System.nanoTime();
+		// A long pause, like a paused game, counts as a short one, so the edge never skips a band of plants at once.
+		double step = WIND_EDGE_SPEED * Math.min((now - windEdgeMovedNanos) / 1.0E9D, 0.1D);
+		windEdgeMovedNanos = now;
+		if (!GpuFoliageSplit.hasArea()) {
+			Arrays.fill(WIND_EDGE, Double.NaN);
+			return;
+		}
+		int radius = GpuFoliageSplit.radius();
+		double[] target = {
+				SectionPos.sectionToBlockCoord(GpuFoliageSplit.centreX() - radius),
+				SectionPos.sectionToBlockCoord(GpuFoliageSplit.centreZ() - radius),
+				SectionPos.sectionToBlockCoord(GpuFoliageSplit.centreX() + radius + 1),
+				SectionPos.sectionToBlockCoord(GpuFoliageSplit.centreZ() + radius + 1)
+		};
+		boolean jump = false;
+		for (int i = 0; i < target.length; i++) {
+			// NaN fails every comparison, so a missing edge jumps too.
+			jump |= !(Math.abs(target[i] - WIND_EDGE[i]) <= WIND_EDGE_JUMP);
+		}
+		for (int i = 0; i < target.length; i++) {
+			double gap = target[i] - WIND_EDGE[i];
+			WIND_EDGE[i] = jump || Math.abs(gap) <= step ? target[i] : WIND_EDGE[i] + Math.signum(gap) * step;
+		}
+	}
+
+	/** The wind's edge relative to the camera, as the shader reads it. */
+	private static Vector4f windEdgeFrom(Vec3 camera) {
+		return new Vector4f(
+				(float) (WIND_EDGE[0] - camera.x),
+				(float) (WIND_EDGE[1] - camera.z),
+				(float) (WIND_EDGE[2] - camera.x),
+				(float) (WIND_EDGE[3] - camera.z));
+	}
 
 	//? <1.21.11 {
 	/*private static final LongOpenHashSet REGIONS_WITH_QUEUED_SECTIONS = new LongOpenHashSet();
