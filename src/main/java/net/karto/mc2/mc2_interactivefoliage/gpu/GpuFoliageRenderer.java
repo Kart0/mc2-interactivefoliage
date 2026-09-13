@@ -1691,13 +1691,23 @@ public final class GpuFoliageRenderer {
 	 * <p>
 	 * It is not called itself because, before 1.21.11, both Fabric's renderer and Sodium take it over for any
 	 * model that is not a plain vanilla one, and send it through the rendering API instead -- where Sway would
-	 * bake its own sway into geometry the shader is about to move again. The two methods it picks between are
+	 * bake its own sway into geometry the shader is about to move again. On NeoForge, Sway hooks it too. The two methods it picks between are
 	 * left alone by both, and read the model's plain quads, which Sway's wrapper hands over untouched.
 	 ^/
 	private static void tesselate(ClientLevel level, BakedModel model, BlockState state, BlockPos pos,
 			PoseStack poseStack, VertexConsumer output, RandomSource random) {
+		//? neoforge {
+		/^// NeoForge lets a model decide, and only falls back to the block's light where it does not.
+		boolean smoothLighting = Minecraft.useAmbientOcclusion()
+				&& switch (model.useAmbientOcclusion(state, net.neoforged.neoforge.client.model.data.ModelData.EMPTY, null)) {
+					case TRUE -> true;
+					case DEFAULT -> state.getLightEmission(level, pos) == 0;
+					case FALSE -> false;
+				};
+		^///?} else {
 		boolean smoothLighting = Minecraft.useAmbientOcclusion() && state.getLightEmission() == 0
 				&& model.useAmbientOcclusion();
+		//?}
 		Vec3 offset = state.getOffset(level, pos);
 		poseStack.translate(offset.x, offset.y, offset.z);
 		long seed = state.getSeed(pos);

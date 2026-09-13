@@ -65,7 +65,7 @@ deps.sway = "PR1dEUPc"
 
 [neoforge."1.21.1"]
 deps.minecraft = "1.21.1"
-deps.neoforge = "21.1.213"
+deps.neoforge = "21.1.250"
 deps.sway = "qABBijPL"
 
 [neoforge."1.21.11"]

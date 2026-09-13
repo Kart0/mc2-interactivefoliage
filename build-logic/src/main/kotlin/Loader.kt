@@ -124,8 +124,8 @@ sealed class Loader(val id: String) {
 						description = ctx.description
 					)
 				), dependencies = mapOf(ctx.modId to forgeDeps),
-				// The GPU foliage mixins target classes that only exist from 26.1.2 onwards, as on Fabric.
-				mixins = if (ctx.stonecutter.eval(ctx.currentMcVersion, ">=1.21.11")) {
+				// The GPU foliage mixins are only declared where the GPU renderer has been ported, as on Fabric.
+				mixins = if (ctx.stonecutter.eval(ctx.currentMcVersion, ">=1.21.1")) {
 					listOf(ForgeMixin("${ctx.modId}.mixins.json"), ForgeMixin("${ctx.modId}.gpu.mixins.json"))
 				} else {
 					listOf(ForgeMixin("${ctx.modId}.mixins.json"))
