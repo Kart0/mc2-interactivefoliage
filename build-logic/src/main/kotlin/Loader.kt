@@ -127,7 +127,7 @@ sealed class Loader(val id: String) {
 				mixins = buildList {
 					add(ForgeMixin("${ctx.modId}.mixins.json"))
 					// The GPU foliage mixins are only declared where the GPU renderer has been ported, as on Fabric.
-					if (ctx.stonecutter.eval(ctx.currentMcVersion, ">=1.21.1")) {
+					if (ctx.stonecutter.eval(ctx.currentMcVersion, ">=1.20.1")) {
 						add(ForgeMixin("${ctx.modId}.gpu.mixins.json"))
 					}
 				}

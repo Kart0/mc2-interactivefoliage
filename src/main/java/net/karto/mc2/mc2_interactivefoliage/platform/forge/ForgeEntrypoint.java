@@ -31,6 +31,7 @@ public class ForgeEntrypoint {
 		IEventBus modEventBus = FMLJavaModLoadingContext.get().getModEventBus();
 		modEventBus.addListener(this::onClientSetup);
 		modEventBus.addListener(this::onRegisterKeyMappings);
+		DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> ForgeFoliageHooks.register(modEventBus));
 		DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> ModLoadingContext.get().registerExtensionPoint(
 				ConfigScreenHandler.ConfigScreenFactory.class,
 				() -> new ConfigScreenHandler.ConfigScreenFactory(

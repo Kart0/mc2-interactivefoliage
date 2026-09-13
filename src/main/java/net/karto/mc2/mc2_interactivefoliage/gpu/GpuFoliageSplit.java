@@ -1,6 +1,6 @@
 package net.karto.mc2.mc2_interactivefoliage.gpu;
 
-//? >=1.21.1 || fabric {
+//? >=1.20.1 {
 
 import com.github.razorplay01.sway.api.SwayAPI;
 import it.unimi.dsi.fastutil.longs.Long2LongOpenHashMap;
@@ -161,6 +161,10 @@ public final class GpuFoliageSplit {
 
 	private static Set<Block> foliage;
 
+	//? forge {
+	/*private static final String EMBEDDIUM_SLICE_VIEW = "org.embeddedt.embeddium.render.world.WorldSliceLocal";
+	*///?}
+
 	private GpuFoliageSplit() {
 	}
 
@@ -174,6 +178,11 @@ public final class GpuFoliageSplit {
 		boolean chunkBuild = level instanceof RenderSectionRegion;
 		//?} else {
 		/*boolean chunkBuild = level instanceof RenderChunkRegion;
+		*///?}
+		//? forge {
+		/*// Embeddium hands a model a view of its level snapshot, a class it makes up as the game runs, rather than the
+		// snapshot itself, so it is known by name.
+		chunkBuild = chunkBuild || EMBEDDIUM_SLICE_VIEW.equals(level.getClass().getName());
 		*///?}
 		if (!chunkBuild &&(SODIUM_LEVEL_SLICE == null || !SODIUM_LEVEL_SLICE.isInstance(level))) {
 			return false;

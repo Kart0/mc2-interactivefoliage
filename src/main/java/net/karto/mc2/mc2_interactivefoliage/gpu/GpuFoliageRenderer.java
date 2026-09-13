@@ -1,6 +1,6 @@
 package net.karto.mc2.mc2_interactivefoliage.gpu;
 
-//? >=1.21.1 || fabric {
+//? >=1.20.1 {
 
 import com.github.razorplay01.sway.api.SwayAPI;
 import com.github.razorplay01.sway.api.behavior.BehaviorPipeline;
@@ -568,26 +568,41 @@ public final class GpuFoliageRenderer {
 			//? >=1.21.1 {
 			ByteBufferBuilder staging = uploadBuilder();
 			long pointer = staging.reserve(vertexCount * stride);
-			//?} else {
-			/^// Before 1.21.1 a mesh only comes out of a buffer builder, and the builder has no way to take a block of
-			// vertices written elsewhere; it is opened up for this (see the access widener), and written straight into.
-			BufferBuilder staging = uploadBuilder();
-			staging.begin(VertexFormat.Mode.QUADS, FOLIAGE_FORMAT);
-			staging.ensureCapacity(vertexCount * stride + stride);
-			long pointer = MemoryUtil.memAddress(staging.buffer, staging.nextElementByte);
-			^///?}
 			for (int i = 0; i < occupiedCount; i++) {
 				int slot = occupied[i];
 				Section section = sections[slot];
 				MemoryUtil.memCopy(MemoryUtil.memAddress(section.data, 0),
 						pointer + (long) firstVertex[slot] * stride, (long) section.vertexCount * stride);
 			}
-			//? >=1.21.1 {
 			MeshData mesh = new MeshData(staging.build(), new MeshData.DrawState(FOLIAGE_FORMAT, vertexCount,
 					indexCountFor(vertexCount), VertexFormat.Mode.QUADS, VertexFormat.IndexType.least(vertexCount)));
-			//?} else {
-			/^staging.nextElementByte += vertexCount * stride;
+			//?} elif fabric {
+			/^// Before 1.21.1 a mesh only comes out of a buffer builder, and the builder has no way to take a block of
+			// vertices written elsewhere; it is opened up for this (see the access widener), and written straight into.
+			BufferBuilder staging = uploadBuilder();
+			staging.begin(VertexFormat.Mode.QUADS, FOLIAGE_FORMAT);
+			staging.ensureCapacity(vertexCount * stride + stride);
+			long pointer = MemoryUtil.memAddress(staging.buffer, staging.nextElementByte);
+			for (int i = 0; i < occupiedCount; i++) {
+				int slot = occupied[i];
+				Section section = sections[slot];
+				MemoryUtil.memCopy(MemoryUtil.memAddress(section.data, 0),
+						pointer + (long) firstVertex[slot] * stride, (long) section.vertexCount * stride);
+			}
+			staging.nextElementByte += vertexCount * stride;
 			staging.vertices = vertexCount;
+			BufferBuilder.RenderedBuffer mesh = staging.end();
+			^///?} else {
+			/^// Before 1.21.1 a mesh only comes out of a buffer builder. Forge's takes a block of vertices whole, so each
+			// section goes in as it stands, in the order the region's layout was worked out in.
+			BufferBuilder staging = uploadBuilder();
+			staging.begin(VertexFormat.Mode.QUADS, FOLIAGE_FORMAT);
+			for (int i = 0; i < occupiedCount; i++) {
+				ByteBuffer data = sections[occupied[i]].data;
+				staging.putBulkData(data);
+				// Read to its end by the copy; set back for the region's next upload.
+				data.rewind();
+			}
 			BufferBuilder.RenderedBuffer mesh = staging.end();
 			^///?}
 			if (vertices == null) {
@@ -2020,6 +2035,11 @@ public final class GpuFoliageRenderer {
 					case DEFAULT -> state.getLightEmission(level, pos) == 0;
 					case FALSE -> false;
 				};
+		^///?} elif forge {
+		/^// Forge's rule, as its own tesselateBlock applies it: the block's light where it is placed, and the model asked
+		// with no layer in particular, as a block outside a chunk is.
+		boolean smoothLighting = Minecraft.useAmbientOcclusion() && state.getLightEmission(level, pos) == 0
+				&& model.useAmbientOcclusion(state, null);
 		^///?} else {
 		boolean smoothLighting = Minecraft.useAmbientOcclusion() && state.getLightEmission() == 0
 				&& model.useAmbientOcclusion();

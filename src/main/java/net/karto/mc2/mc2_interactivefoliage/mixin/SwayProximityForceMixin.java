@@ -1,6 +1,6 @@
 package net.karto.mc2.mc2_interactivefoliage.mixin;
 
-//? >=1.21.1 || fabric {
+//? >=1.20.1 {
 
 import com.github.razorplay01.sway.client.behavior.force.ProximityForceBehavior;
 import com.github.razorplay01.sway.config.SwayConfig;
@@ -22,14 +22,15 @@ import org.objectweb.asm.Opcodes;
 @Mixin(ProximityForceBehavior.class)
 public abstract class SwayProximityForceMixin {
 
-	@Redirect(method = "contributeForce", at = @At(value = "INVOKE",
+	// Sway's own method is never renamed, only Minecraft's: the call it makes is the one part looked up in the mappings.
+	@Redirect(method = "contributeForce", remap = false, at = @At(value = "INVOKE", remap = true,
 			target = "Lnet/minecraft/world/entity/Entity;getBoundingBox()Lnet/minecraft/world/phys/AABB;"))
 	private AABB mc2$plantHitbox(Entity entity) {
 		return GpuFoliageInteraction.plantHitbox(entity.getBoundingBox());
 	}
 
 	/** The intensity Sway pushes with. Raising it here moves plants alike in the chunk mesh and on the GPU. */
-	@Redirect(method = "contributeForce", at = @At(value = "FIELD",
+	@Redirect(method = "contributeForce", remap = false, at = @At(value = "FIELD",
 			target = "Lcom/github/razorplay01/sway/config/SwayConfig;intensity:F", opcode = Opcodes.GETFIELD))
 	private float mc2$plantPushIntensity(SwayConfig config) {
 		return GpuFoliageInteraction.plantPushIntensity(config.intensity);

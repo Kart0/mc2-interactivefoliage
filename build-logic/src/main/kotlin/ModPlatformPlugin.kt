@@ -138,6 +138,13 @@ abstract class ModPlatformPlugin @Inject constructor() : Plugin<Project> {
 			dependsOn(tasks.named("stonecutterGenerate"), "kspKotlin")
 			filesMatching("*.mixins.json") {
 				expand("java" to "JAVA_${ctx.javaVersion.majorVersion}")
+				// Forge runs on SRG names, and a mixin config only finds the names it was compiled against through a
+				// refmap it names itself. Every config shares the one the annotation processor writes.
+				if (ctx.loader is Loader.Forge) {
+					filter { line ->
+						line.replace("\"package\":", "\"refmap\": \"${ctx.modId}.mixins.refmap.json\", \"package\":")
+					}
+				}
 			}
 			exclude(ctx.loader.excludedResources)
 			// The GPU foliage renderer has one set of shaders per generation of Minecraft's renderer, each in
@@ -160,7 +167,9 @@ abstract class ModPlatformPlugin @Inject constructor() : Plugin<Project> {
 			archiveBaseName.set(ctx.modId)
 			dependsOn(generateTask)
 			if (ctx.loader is Loader.Forge) {
-				manifest.attributes(ctx.loader.mixinConfigAttribute to "${ctx.modId}.mixins.json")
+				// Forge reads a jar's mixin configs from its manifest, not from mods.toml.
+				manifest.attributes(ctx.loader.mixinConfigAttribute to
+						"${ctx.modId}.mixins.json,${ctx.modId}.gpu.mixins.json")
 			}
 		}
 	}

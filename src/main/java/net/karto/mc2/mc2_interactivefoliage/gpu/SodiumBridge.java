@@ -1,6 +1,6 @@
 package net.karto.mc2.mc2_interactivefoliage.gpu;
 
-//? >=1.21.1 || fabric {
+//? >=1.20.1 {
 
 import net.karto.mc2.mc2_interactivefoliage.ModTemplate;
 
@@ -31,6 +31,12 @@ public final class SodiumBridge {
 	/*private static final String SODIUM = "me.jellysquid.mods.sodium.client.";
 	*///?}
 	private static final String RENDERER = SODIUM + "render.SodiumWorldRenderer";
+	/** On Forge it is Embeddium, which keeps Sodium 0.5's classes under a mod id of its own. */
+	//? forge {
+	/*private static final String MOD_ID = "embeddium";
+	*///?} else {
+	private static final String MOD_ID = "sodium";
+	//?}
 
 	private static final MethodHandle INSTANCE;
 	private static final MethodHandle IS_BOX_VISIBLE;
@@ -40,7 +46,7 @@ public final class SodiumBridge {
 		MethodHandle instance = null;
 		MethodHandle isBoxVisible = null;
 		MethodHandle scheduleRebuild = null;
-		if (ModTemplate.xplat().isModLoaded("sodium")) {
+		if (ModTemplate.xplat().isModLoaded(MOD_ID)) {
 			try {
 				Class<?> renderer = Class.forName(RENDERER);
 				MethodHandles.Lookup lookup = MethodHandles.publicLookup();
@@ -139,6 +145,12 @@ public final class SodiumBridge {
 				if (!MeshSwaps.BUILD_OUTPUT.isInstance(output)) {
 					continue;
 				}
+				//? forge {
+				/*// Embeddium sends a translucency sort through the same upload, as an output with no geometry in it.
+				if (MeshSwaps.INDEX_ONLY != null && (boolean) MeshSwaps.INDEX_ONLY.invokeExact(output)) {
+					continue;
+				}
+				*///?}
 				Object section = (Object) MeshSwaps.SECTION.invokeExact(output);
 				GpuFoliageSplit.onChunkMeshSwapped(
 						(int) MeshSwaps.CHUNK_X.invokeExact(section),
@@ -175,6 +187,19 @@ public final class SodiumBridge {
 		static final MethodHandle CHUNK_X;
 		static final MethodHandle CHUNK_Y;
 		static final MethodHandle CHUNK_Z;
+		//? forge {
+		/*static final MethodHandle INDEX_ONLY = indexOnly();
+
+		private static MethodHandle indexOnly() {
+			try {
+				return MethodHandles.publicLookup().findVirtual(Class.forName(SODIUM + "render.chunk.compile.ChunkBuildOutput"),
+						"isIndexOnlyUpload", MethodType.methodType(boolean.class))
+						.asType(MethodType.methodType(boolean.class, Object.class));
+			} catch (ReflectiveOperationException e) {
+				return null;
+			}
+		}
+		*///?}
 
 		static {
 			Class<?> buildOutput = null;

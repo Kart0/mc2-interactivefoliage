@@ -54,6 +54,7 @@ legacyForge {
 mixin {
 	add(sourceSets.main.get(), "${prop("mod.id")}.mixins.refmap.json")
 	config("${prop("mod.id")}.mixins.json")
+	config("${prop("mod.id")}.gpu.mixins.json")
 }
 
 repositories {
