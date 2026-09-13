@@ -38,6 +38,14 @@ platform {
 			fabricLikeVersionRange = "*"
 		}
 		optional("modmenu") {}
+		// Sodium 0.5 meshes blocks without Fabric's rendering API, which both Sway and the GPU renderer work through,
+		// so under Sodium alone the mod does nothing at all; Indium adds that API back. Indium itself requires Sodium.
+		// Required only where the mod is published, so launchers install both, while the jar still runs without them.
+		if (stonecutter.eval(stonecutter.current.version, "<1.21.1")) {
+			publishRequired("indium") {
+				slug("indium")
+			}
+		}
 	}
 }
 

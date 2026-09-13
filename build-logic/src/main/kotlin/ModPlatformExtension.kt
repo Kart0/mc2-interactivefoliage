@@ -35,8 +35,14 @@ abstract class DependenciesConfig @Inject constructor(val objects: ObjectFactory
 	val optional: NamedDomainObjectContainer<Dependency> = container()
 	val incompatible: NamedDomainObjectContainer<Dependency> = container()
 	val embeds: NamedDomainObjectContainer<Dependency> = container()
+	/**
+	 * Required on Modrinth and CurseForge, so launchers install it alongside the mod, but left out of the jar's own
+	 * metadata: the game still starts without it, and a player can remove it through their launcher.
+	 */
+	val publishRequired: NamedDomainObjectContainer<Dependency> = container()
 
 	fun required(modid: String, action: Action<Dependency>): Dependency? = required.create(modid, action)
+	fun publishRequired(modid: String, action: Action<Dependency>): Dependency? = publishRequired.create(modid, action)
 	fun optional(modid: String, action: Action<Dependency>): Dependency? = optional.create(modid, action)
 	fun incompatible(modid: String, action: Action<Dependency>): Dependency? = incompatible.create(modid, action)
 	fun embeds(modid: String, action: Action<Dependency>): Dependency? = embeds.create(modid, action)

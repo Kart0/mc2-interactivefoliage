@@ -104,6 +104,7 @@ private fun ModPublishExtension.modrinth(
 
 	if (!staging) {
 		deps.required.forEach { dep -> whenNotNull(dep.modrinth) { requires(it) } }
+		deps.publishRequired.forEach { dep -> whenNotNull(dep.modrinth) { requires(it) } }
 		deps.optional.forEach { dep -> whenNotNull(dep.modrinth) { optional(it) } }
 		deps.incompatible.forEach { dep -> whenNotNull(dep.modrinth) { incompatible(it) } }
 		deps.embeds.forEach { dep -> whenNotNull(dep.modrinth) { embeds(it) } }
@@ -121,6 +122,7 @@ private fun ModPublishExtension.curseforge(
 	minecraftVersions.addAll(listOf(ctx.currentMcVersion) + additionalVersions)
 
 	deps.required.forEach { dep -> whenNotNull(dep.curseforge) { requires(it) } }
+	deps.publishRequired.forEach { dep -> whenNotNull(dep.curseforge) { requires(it) } }
 	deps.optional.forEach { dep -> whenNotNull(dep.curseforge) { optional(it) } }
 	deps.incompatible.forEach { dep -> whenNotNull(dep.curseforge) { incompatible(it) } }
 	deps.embeds.forEach { dep -> whenNotNull(dep.curseforge) { embeds(it) } }
