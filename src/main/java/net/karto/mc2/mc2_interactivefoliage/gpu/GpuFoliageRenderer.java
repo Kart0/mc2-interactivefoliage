@@ -107,7 +107,6 @@ import org.joml.Vector4f;
 import org.lwjgl.system.MemoryStack;
 import org.lwjgl.system.MemoryUtil;
 
-import java.lang.ref.WeakReference;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -374,8 +373,6 @@ public final class GpuFoliageRenderer {
 	*///?}
 	/** Set when every buffer was thrown away, so the chunks already loaded get queued again. */
 	private static boolean reseedPending;
-	/** The world the near-area radar last went off for. Weak, so a world left behind is not kept alive. */
-	private static WeakReference<ClientLevel> radarLevel = new WeakReference<>(null);
 
 	//? >=1.21.11 {
 	/** Holds the sway settings the shader reads; rewritten only when one of them changes. */
@@ -494,9 +491,7 @@ public final class GpuFoliageRenderer {
 			if (section == null) {
 				return false;
 			}
-			//? neoforge && <1.21.11 {
-			/*GpuFoliageSplit.unmarkGpuReady(section.key);
-			*///?}
+			GpuFoliageSplit.unmarkGpuReady(section.key);
 			section.free();
 			sections[slot] = null;
 			sectionCount--;
@@ -564,17 +559,14 @@ public final class GpuFoliageRenderer {
 			// Closes the mesh once it is on the GPU.
 			vertices.upload(mesh);
 			VertexBuffer.unbind();
-			//? neoforge {
-			/^markSectionsReady();
-			^///?}
 			*///?}
+			markSectionsReady();
 		}
 
-		//? neoforge && <1.21.11 {
-		/*/^*
+		/**
 		 * Every section now on the GPU may have its foliage left out of the chunk mesh. A near one that was not ready
 		 * before still has it there, so its chunk mesh is asked to be built again.
-		 ^/
+		 */
 		void markSectionsReady() {
 			Minecraft minecraft = Minecraft.getInstance();
 			for (int i = 0; i < occupiedCount; i++) {
@@ -584,7 +576,6 @@ public final class GpuFoliageRenderer {
 				}
 			}
 		}
-		*///?}
 
 		void closeBuffers() {
 			if (vertices != null) {
@@ -934,18 +925,10 @@ public final class GpuFoliageRenderer {
 		if (camera == null) {
 			return;
 		}
-		// Joining a world is when near sections can be built before the near area reaches them, so the radar
-		// that catches them goes off then -- and only with the wind on, the one thing they would be missing.
-		if (radarLevel.get() != minecraft.level) {
-			radarLevel = new WeakReference<>(minecraft.level);
-			if (FoliageSettings.wavingFoliage()) {
-				GpuFoliageSplit.openRadar();
-			}
-		}
 		updateNearArea(minecraft);
-		// Near sections whose chunk mesh has not let go of their foliage yet are asked for again until it does;
-		// see GpuFoliageSplit for why asking once is not enough.
-		GpuFoliageSplit.forEachStaleDue(key ->
+		// Near sections whose build is on screen still holding their foliage are asked for again; see
+		// GpuFoliageSplit.NEEDS_REBUILD for why only once the build is in place.
+		GpuFoliageSplit.forEachRebuildDue(key ->
 				rebuildChunkMesh(minecraft, SectionPos.x(key), SectionPos.y(key), SectionPos.z(key)));
 		if (reseedPending && minecraft.player != null) {
 			reseedPending = false;
@@ -1409,8 +1392,7 @@ public final class GpuFoliageRenderer {
 				continue;
 			}
 			int sectionY = level.getSectionYFromSectionIndex(index);
-			//? neoforge && <1.21.11 {
-			/*long key = SectionPos.asLong(chunkX, sectionY, chunkZ);
+			long key = SectionPos.asLong(chunkX, sectionY, chunkZ);
 			if (!nowNear || GpuFoliageSplit.isGpuReady(key)) {
 				// Leaving: the chunk mesh takes the foliage back. Entering, already on the GPU: it lets it go.
 				rebuildChunkMesh(minecraft, chunkX, sectionY, chunkZ);
@@ -1418,15 +1400,6 @@ public final class GpuFoliageRenderer {
 				// Entering, not built yet: the chunk mesh keeps the foliage until it is, and is asked to let go then.
 				DIRTY.add(key);
 			}
-			*///?} else {
-			rebuildChunkMesh(minecraft, chunkX, sectionY, chunkZ);
-			if (nowNear) {
-				long key = SectionPos.asLong(chunkX, sectionY, chunkZ);
-				DIRTY.add(key);
-				// This first request is often too early to count: see GpuFoliageSplit.expectFoliageLeft.
-				GpuFoliageSplit.expectFoliageLeft(key);
-			}
-			//?}
 		}
 	}
 
