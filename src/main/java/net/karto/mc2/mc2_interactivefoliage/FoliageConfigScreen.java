@@ -121,8 +121,7 @@ public class FoliageConfigScreen extends Screen {
 		y += spacing;
 
 		// ── Renderer: the chunk mesh as always, or the mod's own on the GPU ────
-		this.addRenderableWidget(
-				CycleButton.booleanBuilder(
+		CycleButton<Boolean> rendererBtn = CycleButton.booleanBuilder(
 						// Written out rather than translated: the two read the same in every language.
 						Component.literal("GPU"),
 						Component.literal("CPU")
@@ -139,8 +138,11 @@ public class FoliageConfigScreen extends Screen {
 							FoliageSettings.setGpuRenderer(val);
 							updateGpuOptions();
 						}
-				)
-		);
+				);
+		// Shown but greyed out where the chunk mesh cannot move plants, so it reads GPU rather than offering a CPU
+		// setting that would leave the mod doing nothing.
+		rendererBtn.active = FoliageSettings.cpuRendererAvailable();
+		this.addRenderableWidget(rendererBtn);
 
 		y += spacing;
 

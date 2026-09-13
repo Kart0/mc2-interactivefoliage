@@ -77,7 +77,21 @@ public final class FoliageSettings {
 	 * the chunk mesh as it always was, and the mod adds nothing to it.
 	 */
 	public static boolean gpuRenderer() {
-		return values.gpuRenderer;
+		return values.gpuRenderer || !cpuRendererAvailable();
+	}
+
+	/**
+	 * Whether the chunk mesh can draw the foliage the way Sway moves it. Embeddium meshes blocks without going through
+	 * the vanilla call Sway reads each block's position from, so under it plants in the chunk mesh never move: the
+	 * GPU renderer is then the only way the mod does anything, and is kept on whatever the file says.
+	 */
+	public static boolean cpuRendererAvailable() {
+		//? forge {
+		/*// Rubidium is Embeddium's earlier name, and still installed under it.
+		return !ModTemplate.xplat().isModLoaded("embeddium") && !ModTemplate.xplat().isModLoaded("rubidium");
+		*///?} else {
+		return true;
+		//?}
 	}
 
 	public static void setGpuRenderer(boolean enabled) {
