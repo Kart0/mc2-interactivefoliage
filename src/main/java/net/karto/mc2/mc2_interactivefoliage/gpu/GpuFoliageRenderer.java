@@ -7,6 +7,7 @@ import com.github.razorplay01.sway.api.behavior.BehaviorPipeline;
 import com.github.razorplay01.sway.api.behavior.contributors.DeformationContributor;
 import com.github.razorplay01.sway.api.behavior.contributors.MultiBlockContributor;
 import com.github.razorplay01.sway.client.behavior.multiblock.HangingVineMultiblockBehavior;
+import com.github.razorplay01.sway.config.SwayConfig;
 //? >=26.2 {
 import com.mojang.blaze3d.GpuFormat;
 import com.mojang.blaze3d.PrimitiveTopology;
@@ -181,6 +182,12 @@ public final class GpuFoliageRenderer {
 	 * sway of a third of a block still shows on screen.
 	 */
 	private static final float MIN_NEAR_SHARE = 0.25F;
+	/**
+	 * How far past Sway's interaction radius a plant can still be pushed, in blocks. Sway takes the entities whose
+	 * hitbox reaches into that radius around the player, and pushes the plants that hitbox overlaps once widened,
+	 * which covers the entity's own width and the plant's block.
+	 */
+	private static final float PUSH_REACH_PAST_RADIUS = 4.0F;
 	/** Sections are built this many chunks past the near area, so ones crossing into it are ready. */
 	private static final int BUILD_MARGIN = 2;
 
@@ -1378,26 +1385,48 @@ public final class GpuFoliageRenderer {
 	}
 
 	/**
-	 * Keeps the near area on the player. When it moves, every section with foliage that crossed its
-	 * edge is meshed again, which is what hands that foliage over between the chunk mesh and this
+	 * How far out, in chunks, the renderer draws the foliage for a render distance, as the config screen's
+	 * setting asks. It is read every frame, so changing either takes effect at once.
+	 */
+	static int nearRadius(int renderDistance) {
+		int radius = switch (FoliageSettings.gpuDistance()) {
+			case PERFORMANCE -> pushRadius();
+			case ADAPTIVE -> adaptiveRadius(renderDistance);
+			case HALF -> renderDistance / 2;
+			case FULL -> renderDistance;
+		};
+		return Math.max(MIN_NEAR_RADIUS, radius);
+	}
+
+	/**
+	 * Every chunk a plant pushed by an entity can be in. The player can stand anywhere in their own chunk, and a
+	 * ring of whole chunks around it reaches at least 16 blocks each way per chunk.
+	 */
+	private static int pushRadius() {
+		return (int) Math.ceil((SwayConfig.INSTANCE.maxDistance + PUSH_REACH_PAST_RADIUS) / SECTION_SIZE);
+	}
+
+	/**
+	 * Half of the render distance up to 8 chunks, as it always was; past that a share shrinking steadily to a
+	 * quarter, which keeps the near area close to 5 chunks all the way from 10 to 20 and lets it reach no further
+	 * than 8 at 32.
+	 */
+	private static int adaptiveRadius(int renderDistance) {
+		if (renderDistance <= FULL_NEAR_SHARE_UP_TO) {
+			return renderDistance / 2;
+		}
+		float share = Math.max(MIN_NEAR_SHARE,
+				FULL_NEAR_SHARE - (renderDistance - FULL_NEAR_SHARE_UP_TO) * NEAR_SHARE_DROP_PER_CHUNK);
+		return Math.round(renderDistance * share);
+	}
+
+	/**
+	 * Keeps the near area on the player. When it moves or changes size, every section with foliage that crossed
+	 * its edge is meshed again, which is what hands that foliage over between the chunk mesh and this
 	 * renderer; sections that came inside are also queued here, so their geometry is built in time.
 	 * <p>
 	 * Only the old and the new area are walked, so even a teleport costs two squares of chunks.
 	 */
-	/**
-	 * How far out, in chunks, the renderer draws the foliage for a render distance. Half of it up to 8 chunks, as
-	 * it always was; past that a share shrinking steadily to a quarter, which keeps the near area close to 5
-	 * chunks all the way from 10 to 20 and lets it reach no further than 8 at 32.
-	 */
-	static int nearRadius(int renderDistance) {
-		if (renderDistance <= FULL_NEAR_SHARE_UP_TO) {
-			return Math.max(MIN_NEAR_RADIUS, renderDistance / 2);
-		}
-		float share = Math.max(MIN_NEAR_SHARE,
-				FULL_NEAR_SHARE - (renderDistance - FULL_NEAR_SHARE_UP_TO) * NEAR_SHARE_DROP_PER_CHUNK);
-		return Math.max(MIN_NEAR_RADIUS, Math.round(renderDistance * share));
-	}
-
 	private static void updateNearArea(Minecraft minecraft) {
 		if (minecraft.player == null) {
 			return;

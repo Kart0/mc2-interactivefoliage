@@ -3,6 +3,7 @@ package net.karto.mc2.mc2_interactivefoliage;
 import com.github.razorplay01.sway.config.SwayConfig;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
+import com.google.gson.annotations.SerializedName;
 
 import java.io.IOException;
 import java.io.Reader;
@@ -34,9 +35,32 @@ public final class FoliageSettings {
 	private static final Path PATH = ModTemplate.xplat().configDir().resolve(ModTemplate.MOD_ID + ".json");
 	private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
 
+	/** How far out from the player the GPU renderer draws the foliage, leaving the rest to the chunk mesh. */
+	public enum GpuDistance {
+		/** Only as far as entities can push plants: every plant that can move is drawn by the renderer. */
+		@SerializedName("performance") PERFORMANCE("performance"),
+		/** A share of the render distance that shrinks as it grows, since a sway is too small to see far off. */
+		@SerializedName("adaptive") ADAPTIVE("adaptive"),
+		/** Half of the render distance. */
+		@SerializedName("half") HALF("half"),
+		/** The whole render distance. */
+		@SerializedName("full") FULL("full");
+
+		private final String name;
+
+		GpuDistance(String name) {
+			this.name = name;
+		}
+
+		public String translationKey() {
+			return "config.mc2_interactivefoliage.gpu." + name;
+		}
+	}
+
 	/** The file's contents. Fields missing from an older file keep the defaults set here. */
 	private static final class Values {
 		boolean gpuRenderer = true;
+		GpuDistance gpuDistance = GpuDistance.ADAPTIVE;
 		boolean wavingFoliage = true;
 		float wavingIntensity = DEFAULT_WAVING_INTENSITY;
 		/** Whether the mod's default radius has been offered yet; see {@link #applyDefaultRadiusOnce}. */
@@ -58,6 +82,14 @@ public final class FoliageSettings {
 
 	public static void setGpuRenderer(boolean enabled) {
 		values.gpuRenderer = enabled;
+	}
+
+	public static GpuDistance gpuDistance() {
+		return values.gpuDistance;
+	}
+
+	public static void setGpuDistance(GpuDistance distance) {
+		values.gpuDistance = distance;
 	}
 
 	/** Whether the wind sways the foliage the GPU renderer draws. */
@@ -129,6 +161,10 @@ public final class FoliageSettings {
 				if (loaded != null) {
 					// A hand-edited file may hold anything.
 					loaded.wavingIntensity = clamp(loaded.wavingIntensity, MIN_WAVING_INTENSITY, MAX_WAVING_INTENSITY);
+					// Gson leaves a name it does not know as null.
+					if (loaded.gpuDistance == null) {
+						loaded.gpuDistance = GpuDistance.ADAPTIVE;
+					}
 					return loaded;
 				}
 			} catch (IOException | RuntimeException e) {

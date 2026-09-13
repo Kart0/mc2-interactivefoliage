@@ -21,7 +21,14 @@ public class FoliageConfigScreen extends Screen {
 	private RadiusSlider radiusSlider;
 	private Button resetIntensityBtn;
 	private Button resetRadiusBtn;
+	/** How far apart the options sit, and how close they come when the window is too short for that. */
+	private static final int ROW_SPACING = 30;
+	private static final int TIGHT_ROW_SPACING = 24;
+	/** The least room kept free above the title and below the save button together. */
+	private static final int SCREEN_MARGIN = 10;
+
 	//? >=1.20.1 {
+	private GpuDistanceSlider gpuDistanceSlider;
 	private CycleButton<Boolean> wavingFoliageBtn;
 	private WavingIntensitySlider wavingIntensitySlider;
 	private Button resetWavingIntensityBtn;
@@ -36,22 +43,33 @@ public class FoliageConfigScreen extends Screen {
 	 * Where the first option goes, so the whole screen sits centred whatever its height: the window's, the
 	 * interface scale's, or the mod's own, since some versions have fewer options than others.
 	 * <p>
-	 * The title sits 20 above this, the options follow 30 apart, and the save button comes 40 after the last
-	 * one. Options that are hidden keep their row, so the height never changes while the screen is open.
+	 * The title sits 20 above this, the options follow a row apart, and the save button comes a row and 10 more
+	 * after the last one. Options that are hidden keep their row, so the height never changes while the screen is
+	 * open.
 	 */
 	private int topOfOptions() {
+		return Math.max((this.height - heightWith(rowSpacing())) / 2 + 20, 20);
+	}
+
+	/** The rows spread out as usual, unless the window is too short to fit them that way. */
+	private int rowSpacing() {
+		return this.height >= heightWith(ROW_SPACING) + SCREEN_MARGIN ? ROW_SPACING : TIGHT_ROW_SPACING;
+	}
+
+	/** From the top of the title to the bottom of the save button. */
+	private static int heightWith(int spacing) {
 		int rows = 3;
 		//? >=1.20.1 {
-		rows += 3;
+		rows += 4;
 		//?}
-		int height = 20 + (rows - 1) * 30 + 60;
-		return Math.max((this.height - height) / 2 + 20, 20);
+		return 20 + (rows - 1) * spacing + (spacing + 10) + 20;
 	}
 
 	@Override
 	protected void init() {
 		int cx = this.width / 2;
 		int y = topOfOptions();
+		int spacing = rowSpacing();
 
 		// ── Toggle ON/OFF ──────────────────────────────────────────────────────
 		this.addRenderableWidget(
@@ -67,7 +85,7 @@ public class FoliageConfigScreen extends Screen {
 				)
 		);
 
-		y += 30;
+		y += spacing;
 
 		// ── Intensidad ─────────────────────────────────────────────────────────
 		final int intensityY = y;
@@ -85,7 +103,7 @@ public class FoliageConfigScreen extends Screen {
 				Math.abs(config.intensity - DEFAULT_INTENSITY) > 0.01f;
 		this.addRenderableWidget(resetIntensityBtn);
 
-		y += 30;
+		y += spacing;
 
 		// ── Radio de visibilidad ───────────────────────────────────────────────
 		final int radiusY = y;
@@ -100,7 +118,7 @@ public class FoliageConfigScreen extends Screen {
 		this.addRenderableWidget(resetRadiusBtn);
 
 		//? >=1.20.1 {
-		y += 30;
+		y += spacing;
 
 		// ── Renderer: the chunk mesh as always, or the mod's own on the GPU ────
 		this.addRenderableWidget(
@@ -124,7 +142,13 @@ public class FoliageConfigScreen extends Screen {
 				)
 		);
 
-		y += 30;
+		y += spacing;
+
+		// ── How far the GPU renderer reaches, shown only with it on ────────────
+		gpuDistanceSlider = new GpuDistanceSlider(cx - 100, y, 200, 20);
+		this.addRenderableWidget(gpuDistanceSlider);
+
+		y += spacing;
 
 		// ── Wind, shown only with the GPU renderer on ──────────────────────────
 		wavingFoliageBtn = CycleButton.booleanBuilder(
@@ -146,7 +170,7 @@ public class FoliageConfigScreen extends Screen {
 		);
 		this.addRenderableWidget(wavingFoliageBtn);
 
-		y += 30;
+		y += spacing;
 
 		// ── Wind strength, shown only while the wind is on ─────────────────────
 		final int wavingIntensityY = y;
@@ -163,7 +187,7 @@ public class FoliageConfigScreen extends Screen {
 		updateGpuOptions();
 		//?}
 
-		y += 40;
+		y += spacing + 10;
 
 		// ── Guardar ────────────────────────────────────────────────────────────
 		this.addRenderableWidget(Button.builder(
@@ -171,6 +195,7 @@ public class FoliageConfigScreen extends Screen {
 				btn -> {
 					SwayConfig.save();
 					//? >=1.20.1 {
+					applyGpuDistance();
 					FoliageSettings.save();
 					//?}
 					//? >=26.2{
@@ -186,6 +211,7 @@ public class FoliageConfigScreen extends Screen {
 	public void onClose() {
 		SwayConfig.save();
 		//? >=1.20.1 {
+		applyGpuDistance();
 		FoliageSettings.save();
 		//?}
 		//? >=26.2{
@@ -332,6 +358,9 @@ public class FoliageConfigScreen extends Screen {
 	 */
 	private void updateGpuOptions() {
 		boolean gpu = FoliageSettings.gpuRenderer();
+		if (gpuDistanceSlider != null) {
+			gpuDistanceSlider.visible = gpu;
+		}
 		if (wavingFoliageBtn != null) {
 			wavingFoliageBtn.visible = gpu;
 		}
@@ -341,6 +370,54 @@ public class FoliageConfigScreen extends Screen {
 		}
 		if (resetWavingIntensityBtn != null) {
 			resetWavingIntensityBtn.visible = wind && !FoliageSettings.isDefaultWavingIntensity();
+		}
+	}
+
+	/** The distance applied as soon as the handle is let go, or as soon as the arrow keys move it. */
+	@Override
+	public void tick() {
+		super.tick();
+		if (!isDragging()) {
+			applyGpuDistance();
+		}
+	}
+
+	/**
+	 * Hands the renderer the distance the slider shows. Only a settled choice is applied: dragging from one end
+	 * to the other would otherwise hand the foliage over at every level on the way.
+	 */
+	private void applyGpuDistance() {
+		if (gpuDistanceSlider != null && gpuDistanceSlider.shown != FoliageSettings.gpuDistance()) {
+			FoliageSettings.setGpuDistance(gpuDistanceSlider.shown);
+		}
+	}
+
+	private static final FoliageSettings.GpuDistance[] GPU_DISTANCES = FoliageSettings.GpuDistance.values();
+
+	private static double gpuDistanceToSlider(FoliageSettings.GpuDistance distance) {
+		return (double) distance.ordinal() / (GPU_DISTANCES.length - 1);
+	}
+
+	private class GpuDistanceSlider extends AbstractSliderButton {
+		/** The level under the handle, which the renderer gets once the handle settles. */
+		FoliageSettings.GpuDistance shown = FoliageSettings.gpuDistance();
+
+		public GpuDistanceSlider(int x, int y, int w, int h) {
+			super(x, y, w, h, Component.empty(), gpuDistanceToSlider(FoliageSettings.gpuDistance()));
+			updateMessage();
+		}
+
+		@Override
+		protected void updateMessage() {
+			// Minecraft's own "Render Distance" and its own "name: value", so both read right in every language.
+			setMessage(Component.literal("⤷ ").append(Component.translatable("options.generic_value",
+					Component.translatable("options.renderDistance"),
+					Component.translatable(shown.translationKey()))));
+		}
+
+		@Override
+		protected void applyValue() {
+			shown = GPU_DISTANCES[(int) Math.round(value * (GPU_DISTANCES.length - 1))];
 		}
 	}
 
