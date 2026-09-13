@@ -282,6 +282,15 @@ public final class GpuFoliageSplit {
 			return false;
 		}
 		generation++;
+		// A near section whose chunk mesh still holds the foliage is asked to be built again right away, but a build of
+		// it may already be under way: one that started before this, found nothing ready and keeps the foliage. Sodium
+		// folds the request into that build rather than starting another, and the decision it reports was recorded
+		// before the section was ready, so nothing would ask again. Waiting for that build to be on screen, as for any
+		// other build that kept its foliage by mistake, asks again once it is.
+		if (isNear(SectionPos.x(sectionKey), SectionPos.z(sectionKey))
+				&& !MESHED_WITHOUT_FOLIAGE.contains(sectionKey) && !TAKING_OVER.contains(sectionKey)) {
+			NEEDS_REBUILD.add(sectionKey);
+		}
 		return true;
 	}
 
