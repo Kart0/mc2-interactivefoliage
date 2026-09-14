@@ -300,14 +300,15 @@ public final class GpuFoliageRenderer {
 	*///?} else {
 	/*// Before 1.21.1 a format is a map of named elements, and a generic attribute is read from the location its place
 	// in the map gives it -- the block's padding counts as a place -- so the shader lists its attributes the same way.
-	private static final VertexFormat FOLIAGE_FORMAT = foliageFormat();
+	private static final VertexFormat FOLIAGE_FORMAT = withSwayValues(DefaultVertexFormat.BLOCK);
 
-	private static VertexFormat foliageFormat() {
-		VertexFormat block = DefaultVertexFormat.BLOCK;
+	// Another format's attributes, then the renderer's two values: the block's, for the renderer's own shader, or Iris's
+	// terrain format, for drawing through a shader pack.
+	static VertexFormat withSwayValues(VertexFormat base) {
 		ImmutableMap.Builder<String, VertexFormatElement> elements = ImmutableMap.builder();
-		// The block's names and elements come in the same order, the one they are written in.
-		for (int i = 0; i < block.getElements().size(); i++) {
-			elements.put(block.getElementAttributeNames().get(i), block.getElements().get(i));
+		// The names and elements come in the same order, the one they are written in, padding included.
+		for (int i = 0; i < base.getElements().size(); i++) {
+			elements.put(base.getElementAttributeNames().get(i), base.getElements().get(i));
 		}
 		return new VertexFormat(elements
 				.put("SwayCell", new VertexFormatElement(0, VertexFormatElement.Type.FLOAT, VertexFormatElement.Usage.GENERIC, 1))
@@ -656,7 +657,7 @@ public final class GpuFoliageRenderer {
 			/^// Before 1.21.1 a mesh only comes out of a buffer builder, and the builder has no way to take a block of
 			// vertices written elsewhere; it is opened up for this (see the access widener), and written straight into.
 			BufferBuilder staging = uploadBuilder();
-			staging.begin(VertexFormat.Mode.QUADS, FOLIAGE_FORMAT);
+			staging.begin(VertexFormat.Mode.QUADS, regionFormat());
 			staging.ensureCapacity(vertexCount * stride + stride);
 			long pointer = MemoryUtil.memAddress(staging.buffer, staging.nextElementByte);
 			for (int i = 0; i < occupiedCount; i++) {
@@ -672,7 +673,7 @@ public final class GpuFoliageRenderer {
 			/^// Before 1.21.1 a mesh only comes out of a buffer builder. Forge's takes a block of vertices whole, so each
 			// section goes in as it stands, in the order the region's layout was worked out in.
 			BufferBuilder staging = uploadBuilder();
-			staging.begin(VertexFormat.Mode.QUADS, FOLIAGE_FORMAT);
+			staging.begin(VertexFormat.Mode.QUADS, regionFormat());
 			for (int i = 0; i < occupiedCount; i++) {
 				ByteBuffer data = sections[occupied[i]].data;
 				staging.putBulkData(data);

@@ -4,7 +4,9 @@ package net.karto.mc2.mc2_interactivefoliage.mixin.iris;
 
 //? fabric {
 import net.fabricmc.loader.api.FabricLoader;
-//?} else {
+//?} elif forge {
+/*import net.minecraftforge.fml.loading.FMLLoader;
+*///?} else {
 /*import net.neoforged.fml.loading.FMLLoader;
 *///?}
 import org.objectweb.asm.tree.ClassNode;
@@ -20,7 +22,10 @@ public final class IrisMixinPlugin implements IMixinConfigPlugin {
 
 	//? fabric {
 	private static final boolean IRIS = FabricLoader.getInstance().isModLoaded("iris");
-	//?} else {
+	//?} elif forge {
+	/*// As on NeoForge, the mod list being built is asked; Oculus, Iris ported to Forge, goes by its own id.
+	private static final boolean IRIS = FMLLoader.getLoadingModList().getModFileById("oculus") != null;
+	*///?} else {
 	/*// Mixin configs are read once the mod list is built, but before ModList exists.
 	private static final boolean IRIS =
 			FMLLoader/^? if >1.21.7 {^/.getCurrent()/^?}^/.getLoadingModList().getModFileById("iris") != null;

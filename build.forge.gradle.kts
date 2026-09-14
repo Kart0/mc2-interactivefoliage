@@ -55,6 +55,7 @@ mixin {
 	add(sourceSets.main.get(), "${prop("mod.id")}.mixins.refmap.json")
 	config("${prop("mod.id")}.mixins.json")
 	config("${prop("mod.id")}.gpu.mixins.json")
+	config("${prop("mod.id")}.iris.mixins.json")
 }
 
 repositories {
@@ -65,6 +66,9 @@ repositories {
 dependencies {
 	annotationProcessor("org.spongepowered:mixin:${libs.versions.mixin.get()}:processor")
 	modImplementation("maven.modrinth:sway:${prop("deps.sway")}")
+	// Optional dependency: compiled against for the shader pack support. Oculus is Iris ported to Forge, under Iris's
+	// own packages.
+	modCompileOnly("maven.modrinth:oculus:${prop("deps.oculus")}")
 	// implementation(libs.moulberry.mixinconstraints)
 	// jarJar(libs.moulberry.mixinconstraints)
 }
@@ -86,6 +90,8 @@ dependencies {
 	// compare against vanilla's own. The name has no dot in it: PowerShell splits a bare argument at one.
 	if (!hasProperty("withoutEmbeddium")) {
 		modRuntimeOnly("maven.modrinth:embeddium:UTbfe5d1") // 0.3.31+mc1.20.1
+		// Oculus, for shader packs; it draws the chunks through Embeddium, so it goes wherever Embeddium does.
+		modRuntimeOnly("maven.modrinth:oculus:${prop("deps.oculus")}")
 	}
 }
 

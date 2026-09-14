@@ -127,9 +127,10 @@ dependencies {
 	modCompileOnly("com.terraformersmc:modmenu:${prop("deps.modmenu")}")
 	modLocalRuntime("com.terraformersmc:modmenu:${prop("deps.modmenu")}")
 	modImplementation("maven.modrinth:sway:${prop("deps.sway")}")
-	// Optional dependencies: compiled against for the shader pack support, where it has been written.
-	if (stonecutter.eval(stonecutter.current.version, ">=1.21.1")) {
-		modCompileOnly("maven.modrinth:iris:${prop("deps.iris")}")
+	// Optional dependencies: compiled against for the shader pack support. Before 1.21.1 the mod reaches Sodium only
+	// by reflection, so only Iris is needed there.
+	modCompileOnly("maven.modrinth:iris:${prop("deps.iris")}")
+	if (hasProperty("deps.sodium")) {
 		modCompileOnly("maven.modrinth:sodium:${prop("deps.sodium")}")
 	}
 

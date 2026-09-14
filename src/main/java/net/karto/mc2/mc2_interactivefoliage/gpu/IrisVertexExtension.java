@@ -27,7 +27,14 @@ final class IrisVertexExtension {
 
 	static {
 		ThreadLocal<Boolean> skipExtension = null;
-		if (ModTemplate.xplat().isModLoaded("iris")) {
+		// Before 1.21.1 Iris has no way out, and needs none: it widens buffers exactly while a shader pack is loaded, and
+		// while one is the renderer only meshes to draw through it.
+		//? >=1.21.1 {
+		boolean hasWayOut = true;
+		//?} else {
+		/*boolean hasWayOut = false;
+		*///?}
+		if (hasWayOut && ModTemplate.xplat().isModLoaded("iris")) {
 			try {
 				Field field = Class.forName(IMMEDIATE_STATE).getField("skipExtension");
 				@SuppressWarnings("unchecked")

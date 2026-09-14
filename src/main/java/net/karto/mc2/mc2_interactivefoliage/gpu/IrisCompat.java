@@ -24,7 +24,12 @@ import java.util.List;
 final class IrisCompat {
 
 	//? iris {
+	//? forge {
+	/*// Forge has Oculus, Iris ported to it, under its own id: Forge ignores the Iris id it says it provides.
+	private static final boolean IRIS = ModTemplate.xplat().isModLoaded("oculus");
+	*///?} else {
 	private static final boolean IRIS = ModTemplate.xplat().isModLoaded("iris");
+	//?}
 	//?}
 
 	private IrisCompat() {

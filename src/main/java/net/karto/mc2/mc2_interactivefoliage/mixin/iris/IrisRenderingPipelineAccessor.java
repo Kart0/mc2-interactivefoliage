@@ -59,7 +59,7 @@ public interface IrisRenderingPipelineAccessor {
 	ShaderSupplier mc2$createShadowShader(String name, ShaderKey key, ProgramSource source, ProgramId programId,
 			AlphaTest fallbackAlpha, VertexFormat vertexFormat, boolean isIntensity, boolean isFullbright,
 			boolean isText, boolean isIE) throws IOException;
-	*///?} else {
+	*///?} elif >=1.21.1 {
 	/*// Before 1.21.11 a program is a shader instance, built straight away rather than supplied, and not keyed.
 	@Invoker("createShader")
 	ShaderInstance mc2$createShader(String name, ProgramSource source, ProgramId programId, AlphaTest fallbackAlpha,
@@ -70,6 +70,17 @@ public interface IrisRenderingPipelineAccessor {
 	ShaderInstance mc2$createShadowShader(String name, ProgramSource source, ProgramId programId,
 			AlphaTest fallbackAlpha, VertexFormat vertexFormat, boolean isIntensity, boolean isFullbright,
 			boolean isText, boolean isIE) throws IOException;
+	*///?} else {
+	/*// Before 1.21.1 Iris has no Immersive Engineering programs to tell apart.
+	@Invoker("createShader")
+	ShaderInstance mc2$createShader(String name, ProgramSource source, ProgramId programId, AlphaTest fallbackAlpha,
+			VertexFormat vertexFormat, FogMode fogMode, boolean isIntensity, boolean isFullbright, boolean isGlint,
+			boolean isText) throws IOException;
+
+	@Invoker("createShadowShader")
+	ShaderInstance mc2$createShadowShader(String name, ProgramSource source, ProgramId programId,
+			AlphaTest fallbackAlpha, VertexFormat vertexFormat, boolean isIntensity, boolean isFullbright,
+			boolean isText) throws IOException;
 	*///?}
 }
 //?}

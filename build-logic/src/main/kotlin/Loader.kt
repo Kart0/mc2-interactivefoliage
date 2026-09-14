@@ -64,7 +64,7 @@ sealed class Loader(val id: String) {
 						add("${ctx.modId}.gpu.mixins.json")
 					}
 					// Shader pack support, where it has been written. Its plugin skips every mixin unless Iris is installed.
-					if (ctx.stonecutter.eval(ctx.currentMcVersion, ">=1.21.1")) {
+					if (ctx.stonecutter.eval(ctx.currentMcVersion, ">=1.20.1")) {
 						add("${ctx.modId}.iris.mixins.json")
 					}
 				},
@@ -136,7 +136,7 @@ sealed class Loader(val id: String) {
 						add(ForgeMixin("${ctx.modId}.gpu.mixins.json"))
 					}
 					// Shader pack support, as on Fabric.
-					if (ctx.stonecutter.eval(ctx.currentMcVersion, ">=1.21.1")) {
+					if (ctx.stonecutter.eval(ctx.currentMcVersion, ">=1.20.1")) {
 						add(ForgeMixin("${ctx.modId}.iris.mixins.json"))
 					}
 				}

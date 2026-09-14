@@ -235,7 +235,12 @@ public final class IrisFoliageShaders {
 	static void beginBlock(BufferBuilder builder, BlockState state, int x, int y, int z) {
 		Object2IntMap<BlockState> ids = WorldRenderingSettings.INSTANCE.getBlockStateIds();
 		if (ids != null && (Object) builder instanceof BlockSensitiveBufferBuilder blocks) {
+			//? >=1.21.1 {
 			blocks.beginBlock(ids.getOrDefault(state, -1), (byte) 0, (byte) state.getLightEmission(), x, y, z);
+			//?} else {
+			/*// Before 1.21.1 ids are shorts and no light emission is written; Iris passes -1 for the render type of a block.
+			blocks.beginBlock((short) ids.getOrDefault(state, -1), (short) -1, x, y, z);
+			*///?}
 		}
 	}
 
@@ -283,10 +288,14 @@ public final class IrisFoliageShaders {
 					, Patch.VANILLA
 					//?}
 			));
-			//?} else {
+			//?} elif >=1.21.1 {
 			/*main = finish(access.mc2$createShader("mc2_foliage", terrain.get(), ProgramId.TerrainCutout,
 					ShaderKey.TERRAIN_CUTOUT.getAlphaTest(), FORMAT, ShaderKey.TERRAIN_CUTOUT.getFogMode(),
 					false, false, false, false, false));
+			*///?} else {
+			/*main = finish(access.mc2$createShader("mc2_foliage", terrain.get(), ProgramId.TerrainCutout,
+					ShaderKey.TERRAIN_CUTOUT.getAlphaTest(), FORMAT, ShaderKey.TERRAIN_CUTOUT.getFogMode(),
+					false, false, false, false));
 			*///?}
 			if (access.mc2$shadowRenderTargets() != null) {
 				Optional<ProgramSource> shadowSource = access.mc2$resolver().resolve(ProgramId.ShadowCutout);
@@ -299,10 +308,14 @@ public final class IrisFoliageShaders {
 							, Patch.VANILLA
 							//?}
 					));
-					//?} else {
+					//?} elif >=1.21.1 {
 					/*shadow = finish(access.mc2$createShadowShader("mc2_foliage_shadow", shadowSource.get(),
 							ProgramId.ShadowCutout, ShaderKey.SHADOW_TERRAIN_CUTOUT.getAlphaTest(), FORMAT,
 							false, false, false, false));
+					*///?} else {
+					/*shadow = finish(access.mc2$createShadowShader("mc2_foliage_shadow", shadowSource.get(),
+							ProgramId.ShadowCutout, ShaderKey.SHADOW_TERRAIN_CUTOUT.getAlphaTest(), FORMAT,
+							false, false, false));
 					*///?}
 				}
 			}

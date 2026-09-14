@@ -169,7 +169,7 @@ abstract class ModPlatformPlugin @Inject constructor() : Plugin<Project> {
 			if (ctx.loader is Loader.Forge) {
 				// Forge reads a jar's mixin configs from its manifest, not from mods.toml.
 				manifest.attributes(ctx.loader.mixinConfigAttribute to
-						"${ctx.modId}.mixins.json,${ctx.modId}.gpu.mixins.json")
+						"${ctx.modId}.mixins.json,${ctx.modId}.gpu.mixins.json,${ctx.modId}.iris.mixins.json")
 			}
 		}
 	}
