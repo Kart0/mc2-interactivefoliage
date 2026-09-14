@@ -214,11 +214,20 @@ public final class GpuFoliageRenderer {
 	private static final int SECTIONS_PER_REGION = REGION_WIDTH * REGION_HEIGHT * REGION_WIDTH;
 
 	/**
-	 * How far from its anchor a vertex has to be before it sways at full strength, in blocks.
-	 * Anything beyond this saturates, so a tall strand keeps bending along its whole length instead
-	 * of whipping at the tip.
+	 * How far from its anchor a vertex has to be before it sways at full strength, in blocks, on a plant no
+	 * longer than this. A longer strand reaches full strength only at its tip, bending along its whole length
+	 * instead of whipping above the span; see SwayAnchor.weightAt.
 	 */
 	private static final float SWAY_SPAN = 3.0F;
+	/**
+	 * How strands longer than the span curve along their length, as Sway's own deformations do: a stalk by the square
+	 * of the way along it, a hanging vine by the cube. They take on the curve over this many blocks past the span.
+	 */
+	private static final float STALK_CURVE = 2.0F;
+	private static final float HANGING_CURVE = 3.0F;
+	private static final float COLUMN_CURVE_BLOCKS = 2.0F;
+	/** How much further a strand that has taken on the curve sways and leans, eased in along with the curve. */
+	private static final float LONG_STRAND_SWAY = 2.0F;
 
 	/**
 	 * How much of its sway a column loses per block of length, and how far that can go: a strand of
@@ -404,8 +413,12 @@ public final class GpuFoliageRenderer {
 	private static final float PACK_BYTE = 256.0F;
 	/** Anchors may sit a little outside their region, so a coordinate is shifted before it is packed. */
 	private static final int CELL_BIAS = 64;
-	/** Each weight keeps twelve bits, so the two together stay inside a float's exact whole numbers. */
-	private static final float WEIGHT_SCALE = 4095.0F;
+	/**
+	 * Each weight keeps ten bits and the wind's reach four, so the three together stay inside a float's exact whole
+	 * numbers.
+	 */
+	private static final float WEIGHT_SCALE = 1023.0F;
+	private static final float EXPOSURE_SCALE = 15.0F;
 
 	/**
 	 * The anchor block, relative to the region, as one float: a byte per axis. A region is 128 blocks wide
@@ -418,11 +431,15 @@ public final class GpuFoliageRenderer {
 		return (cx * 256 + cy) * 256 + cz;
 	}
 
-	/** The wind weight and the push weight, both between 0 and 1, as one float: twelve bits each. */
-	private static float packWeights(float wave, float push) {
+	/**
+	 * The wind weight, the push weight and how much of rain's wind reaches the plant, all between 0 and 1, as one float:
+	 * ten bits, ten bits and four.
+	 */
+	private static float packWeights(float wave, float push, float exposure) {
 		int w = Math.round(Mth.clamp(wave, 0.0F, 1.0F) * WEIGHT_SCALE);
 		int p = Math.round(Mth.clamp(push, 0.0F, 1.0F) * WEIGHT_SCALE);
-		return w * 4096 + p;
+		int e = Math.round(Mth.clamp(exposure, 0.0F, 1.0F) * EXPOSURE_SCALE);
+		return (w * 1024 + p) * 16 + e;
 	}
 	private static final int INITIAL_SCRATCH_QUADS = 1024;
 
@@ -735,7 +752,7 @@ public final class GpuFoliageRenderer {
 	 */
 	private static final class SwayAnchor {
 		/** Column length is shared by every block of a strand, so it is resolved once per anchor. */
-		private final Map<BlockPos, Float> dampingByAnchor = new HashMap<>();
+		private final Map<BlockPos, Integer> lengthByAnchor = new HashMap<>();
 
 		private float anchorY;
 		/** The anchor block, where Sway keeps the force for the whole plant. */
@@ -744,6 +761,10 @@ public final class GpuFoliageRenderer {
 		private int cellZ;
 		private boolean hanging;
 		private float damping = 1.0F;
+		/** How many blocks tall the plant stands, from its anchor. */
+		private int length = 1;
+		/** How much of rain's wind reaches the plant; see WindShelter. Set once the anchor is prepared. */
+		private float exposure = 1.0F;
 		/** Sway's own deformation for this plant, which decides how far a push moves each vertex. */
 		private DeformationContributor deformation;
 		private float deformationScale;
@@ -781,25 +802,26 @@ public final class GpuFoliageRenderer {
 			cellX = anchor.getX();
 			cellY = anchor.getY();
 			cellZ = anchor.getZ();
-			damping = multiblock == null ? 1.0F : dampingFor(multiblock, anchor, level);
+			length = multiblock == null ? 1 : lengthOf(multiblock, anchor, level);
+			damping = 1.0F - Math.min(MAX_LENGTH_DAMPING, (length - 1) * LENGTH_DAMPING_PER_BLOCK);
 		}
 
 		/**
-		 * Long strands sway less as a whole.
+		 * How many blocks long a strand is, from its anchor.
 		 * <p>
-		 * Past the span the weight saturates, so without this every block above it moves at full
-		 * strength and a tall cane or vine thrashes rather than drifts. Damping the column by its
-		 * length keeps short plants lively while long ones stay heavy.
+		 * Long strands sway less as a whole: past the span the weight saturates, so without damping every
+		 * block above it moves at full strength and a tall cane or vine thrashes rather than drifts. Damping
+		 * the column by its length keeps short plants lively while long ones stay heavy. Only a wall at least
+		 * as tall shelters a plant from rain's wind.
 		 */
-		private float dampingFor(MultiBlockContributor multiblock, BlockPos anchor, ClientLevel level) {
-			Float cached = dampingByAnchor.get(anchor);
+		private int lengthOf(MultiBlockContributor multiblock, BlockPos anchor, ClientLevel level) {
+			Integer cached = lengthByAnchor.get(anchor);
 			if (cached != null) {
 				return cached;
 			}
 			BlockState anchorState = level.getBlockState(anchor);
-			int length = multiblock.getLinkedBlocks(anchor, anchorState, level).size() + 1;
-			float value = 1.0F - Math.min(MAX_LENGTH_DAMPING, (length - 1) * LENGTH_DAMPING_PER_BLOCK);
-			dampingByAnchor.put(anchor.immutable(), value);
+			int value = multiblock.getLinkedBlocks(anchor, anchorState, level).size() + 1;
+			lengthByAnchor.put(anchor.immutable(), value);
 			return value;
 		}
 
@@ -814,9 +836,20 @@ public final class GpuFoliageRenderer {
 			return deformation == null ? 0.0F : deformation.getVertexWeight(localY, state, pos) * deformationScale;
 		}
 
+		/**
+		 * How freely a vertex sways, from the anchor up (or down, for a hanging plant) to the tip. Up to
+		 * SWAY_SPAN blocks the weight grows in step with the distance. A longer strand spreads it over its whole
+		 * length instead, curving along it the way Sway bends one -- the square of the way along for a stalk, the
+		 * cube for a hanging vine, so it hangs like a rope -- easing into that curve over COLUMN_CURVE_BLOCKS
+		 * past the span, so no length looks different from the next.
+		 */
 		float weightAt(float worldY) {
 			float distance = hanging ? anchorY - worldY : worldY - anchorY;
-			return Mth.clamp(distance / SWAY_SPAN, 0.0F, 1.0F) * damping;
+			float along = Mth.clamp(distance / Math.max(SWAY_SPAN, length), 0.0F, 1.0F);
+			float curving = Mth.clamp((length - SWAY_SPAN) / COLUMN_CURVE_BLOCKS, 0.0F, 1.0F);
+			float eased = curving * curving * (3.0F - 2.0F * curving);
+			float exponent = Mth.lerp(eased, 1.0F, hanging ? HANGING_CURVE : STALK_CURVE);
+			return (float) Math.pow(along, exponent) * damping * Mth.lerp(eased, 1.0F, LONG_STRAND_SWAY);
 		}
 	}
 
@@ -861,6 +894,23 @@ public final class GpuFoliageRenderer {
 		} else if (localZ == SECTION_SIZE - 1) {
 			DIRTY.add(SectionPos.asLong(sectionX, sectionY, sectionZ + 1));
 		}
+		// A wall shelters the plants downwind of it -- west, as far as WindShelter looks for walls -- and those whose
+		// height it stands over, so the sections holding them are rebuilt too.
+		int westX = SectionPos.blockToSectionCoord(pos.getX() - WindShelter.REACH);
+		int lowY = SectionPos.blockToSectionCoord(pos.getY() - WindShelter.MAX_WALL_HEIGHT);
+		for (int x = westX; x <= sectionX; x++) {
+			for (int y = lowY; y <= sectionY; y++) {
+				markIfHeld(SectionPos.asLong(x, y, sectionZ));
+			}
+		}
+	}
+
+	/** Queues a section to be meshed again, if it holds foliage the renderer draws. */
+	private static void markIfHeld(long key) {
+		Region region = REGIONS.get(regionKeyOf(key));
+		if (region != null && region.sections[slotOf(key)] != null) {
+			DIRTY.add(key);
+		}
 	}
 
 	/** Everything changed: resource packs reloaded, a video option altered, world swapped. */
@@ -887,9 +937,12 @@ public final class GpuFoliageRenderer {
 		int chunkZ = SectionPos.blockToSectionCoord(chunk.getPos().getMinBlockZ());
 		LevelChunkSection[] sections = chunk.getSections();
 		for (int index = 0; index < sections.length; index++) {
+			int sectionY = level.getSectionYFromSectionIndex(index);
 			if (mayHoldFoliage(sections[index])) {
-				DIRTY.add(SectionPos.asLong(chunkX, level.getSectionYFromSectionIndex(index), chunkZ));
+				DIRTY.add(SectionPos.asLong(chunkX, sectionY, chunkZ));
 			}
+			// The chunk west of this one looked for walls here before it was loaded, and found none.
+			markIfHeld(SectionPos.asLong(chunkX - 1, sectionY, chunkZ));
 		}
 	}
 
@@ -1972,7 +2025,7 @@ public final class GpuFoliageRenderer {
 					anchor.cellY - regionOrigin.getY(),
 					anchor.cellZ - regionOrigin.getZ()));
 			weightScratch.putFloat(packWeights(anchor.weightAt(regionOrigin.getY() + y),
-					anchor.pushWeightAt(localY)));
+					anchor.pushWeightAt(localY), anchor.exposure));
 			return this;
 		}
 
@@ -2053,7 +2106,7 @@ public final class GpuFoliageRenderer {
 					anchor.cellY - regionOrigin.getY(),
 					anchor.cellZ - regionOrigin.getZ()));
 			weightScratch.putFloat(packWeights(anchor.weightAt(regionOrigin.getY() + y),
-					anchor.pushWeightAt(localY)));
+					anchor.pushWeightAt(localY), anchor.exposure));
 		}
 
 		@Override
@@ -2236,6 +2289,7 @@ public final class GpuFoliageRenderer {
 				SectionPos.sectionToBlockCoord(SectionPos.y(key)),
 				SectionPos.sectionToBlockCoord(SectionPos.z(key)));
 		BlockPos regionOrigin = regionOrigin(regionKeyOf(key));
+		WindShelter shelter = new WindShelter(level, origin);
 		// Vertices are written relative to the region, so every section in it can share its buffers.
 		int offsetX = origin.getX() - regionOrigin.getX();
 		int offsetY = origin.getY() - regionOrigin.getY();
@@ -2263,7 +2317,8 @@ public final class GpuFoliageRenderer {
 				float localY = quad.position(vertex).y();
 				float worldY = regionOrigin.getY() + y + localY;
 				weightScratch.putFloat(cell);
-				weightScratch.putFloat(packWeights(anchor.weightAt(worldY), anchor.pushWeightAt(localY)));
+				weightScratch.putFloat(packWeights(anchor.weightAt(worldY), anchor.pushWeightAt(localY),
+						anchor.exposure));
 			}
 		};
 
@@ -2290,6 +2345,9 @@ public final class GpuFoliageRenderer {
 					}
 					pos.set(origin.getX() + dx, origin.getY() + dy, origin.getZ() + dz);
 					anchor.prepare(state, pos, level);
+					// Measured at the anchor, so every block of a tall plant bends as one piece; plants stand in a column,
+					// so the anchor shares the block's.
+					anchor.exposure = shelter.exposureAt(pos.getX(), anchor.cellY, pos.getZ(), anchor.length);
 					//? iris {
 					if (meshedForShaderPack) {
 						// The pack reads which block each vertex belongs to, and where its centre is, as it does on the

@@ -84,8 +84,10 @@ vec3 unpackCell(float bits) {
 }
 
 vec2 unpackWeights(float bits) {
-    float wave = floor(bits / 4096.0);
-    return vec2(wave, bits - wave * 4096.0) / 4095.0;
+    // Ten bits each, above the four the wind's reach under shelter takes, which this shader has no use for yet.
+    float weights = floor(bits / 16.0);
+    float wave = floor(weights / 1024.0);
+    return vec2(wave, weights - wave * 1024.0) / 1023.0;
 }
 
 out float vertexDistance;
