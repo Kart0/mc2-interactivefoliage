@@ -1,6 +1,6 @@
 package net.karto.mc2.mc2_interactivefoliage.mixin.iris;
 
-//? >=26.2 {
+//? >=26.1.2 {
 
 import com.mojang.blaze3d.vertex.VertexFormat;
 import net.irisshaders.iris.gl.blending.AlphaTest;
@@ -8,7 +8,9 @@ import net.irisshaders.iris.gl.state.FogMode;
 import net.irisshaders.iris.pipeline.IrisRenderingPipeline;
 import net.irisshaders.iris.pipeline.programs.ShaderKey;
 import net.irisshaders.iris.pipeline.programs.ShaderSupplier;
+//? >=26.2 {
 import net.irisshaders.iris.pipeline.transform.Patch;
+//?}
 import net.irisshaders.iris.shaderpack.loading.ProgramId;
 import net.irisshaders.iris.shaderpack.programs.ProgramFallbackResolver;
 import net.irisshaders.iris.shaderpack.programs.ProgramSource;
@@ -32,6 +34,7 @@ public interface IrisRenderingPipelineAccessor {
 	@Accessor("shadowRenderTargets")
 	ShadowRenderTargets mc2$shadowRenderTargets();
 
+	//? >=26.2 {
 	@Invoker("createShader")
 	ShaderSupplier mc2$createShader(String name, ShaderKey key, ProgramSource source, ProgramId programId,
 			AlphaTest fallbackAlpha, VertexFormat vertexFormat, FogMode fogMode, boolean isIntensity,
@@ -41,5 +44,17 @@ public interface IrisRenderingPipelineAccessor {
 	ShaderSupplier mc2$createShadowShader(String name, ShaderKey key, ProgramSource source, ProgramId programId,
 			AlphaTest fallbackAlpha, VertexFormat vertexFormat, boolean isIntensity, boolean isFullbright,
 			boolean isText, boolean isIE, Patch patch) throws IOException;
+	//?} else {
+	/*// Before 26.2 Iris translates every program one way, so neither method takes how to patch it.
+	@Invoker("createShader")
+	ShaderSupplier mc2$createShader(String name, ShaderKey key, ProgramSource source, ProgramId programId,
+			AlphaTest fallbackAlpha, VertexFormat vertexFormat, FogMode fogMode, boolean isIntensity,
+			boolean isFullbright, boolean isGlint, boolean isText, boolean isIE) throws IOException;
+
+	@Invoker("createShadowShader")
+	ShaderSupplier mc2$createShadowShader(String name, ShaderKey key, ProgramSource source, ProgramId programId,
+			AlphaTest fallbackAlpha, VertexFormat vertexFormat, boolean isIntensity, boolean isFullbright,
+			boolean isText, boolean isIE) throws IOException;
+	*///?}
 }
 //?}

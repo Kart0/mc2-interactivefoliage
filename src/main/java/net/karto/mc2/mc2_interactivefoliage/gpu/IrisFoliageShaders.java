@@ -1,11 +1,12 @@
 package net.karto.mc2.mc2_interactivefoliage.gpu;
 
-//? >=26.2 {
+//? >=26.1.2 {
 
+//? >=26.2 {
 import com.mojang.blaze3d.GpuFormat;
+//?}
 import com.mojang.blaze3d.opengl.GlProgram;
 import com.mojang.blaze3d.opengl.GlStateManager;
-import com.mojang.blaze3d.pipeline.BindGroupLayout;
 import com.mojang.blaze3d.pipeline.RenderPipeline;
 import com.mojang.blaze3d.vertex.BufferBuilder;
 import com.mojang.blaze3d.vertex.VertexFormat;
@@ -18,7 +19,9 @@ import net.irisshaders.iris.pipeline.WorldRenderingPipeline;
 import net.irisshaders.iris.Iris;
 import net.irisshaders.iris.pipeline.programs.ShaderKey;
 import net.irisshaders.iris.pipeline.programs.ShaderSupplier;
+//? >=26.2 {
 import net.irisshaders.iris.pipeline.transform.Patch;
+//?}
 import net.irisshaders.iris.shaderpack.loading.ProgramId;
 import net.irisshaders.iris.shaderpack.materialmap.WorldRenderingSettings;
 import net.irisshaders.iris.shaderpack.programs.ProgramSource;
@@ -68,7 +71,8 @@ public final class IrisFoliageShaders {
 
 	private static RenderPipeline pipeline;
 	private static RenderPipeline shadowPipeline;
-	private static List<BindGroupLayout> layouts = List.of();
+	/** Bind group layouts from 26.2, uniform descriptions before: whatever the version declares a program's uniforms with. */
+	private static List<?> layouts = List.of();
 
 	private static IrisRenderingPipeline owner;
 	private static GlProgram main;
@@ -81,6 +85,7 @@ public final class IrisFoliageShaders {
 	}
 
 	private static VertexFormat format() {
+		//? >=26.2 {
 		VertexFormat.Builder builder = VertexFormat.builder(0);
 		for (VertexFormatElement element : IrisVertexFormats.TERRAIN.getElements()) {
 			builder.addAttribute(element.name(), element.format());
@@ -89,6 +94,9 @@ public final class IrisFoliageShaders {
 				.addAttribute("SwayCell", GpuFormat.R32_FLOAT)
 				.addAttribute("SwayWeights", GpuFormat.R32_FLOAT)
 				.build();
+		//?} else {
+		/*return GpuFoliageRenderer.withSwayValues(IrisVertexFormats.TERRAIN);
+		*///?}
 	}
 
 	/**
@@ -96,7 +104,7 @@ public final class IrisFoliageShaders {
 	 * the uniform blocks they bind beyond Iris's own: the sway settings and the plant pushes.
 	 */
 	static void setUp(RenderPipeline foliagePipeline, RenderPipeline foliageShadowPipeline,
-			List<BindGroupLayout> foliageLayouts, IrisCompat.ShadowDraw shadowDraw) {
+			List<?> foliageLayouts, IrisCompat.ShadowDraw shadowDraw) {
 		pipeline = foliagePipeline;
 		shadowPipeline = foliageShadowPipeline;
 		layouts = List.copyOf(foliageLayouts);
@@ -208,13 +216,21 @@ public final class IrisFoliageShaders {
 			}
 			main = finish(access.mc2$createShader("mc2_foliage", ShaderKey.TERRAIN_CUTOUT, terrain.get(),
 					ProgramId.TerrainCutout, ShaderKey.TERRAIN_CUTOUT.getAlphaTest(), FORMAT,
-					ShaderKey.TERRAIN_CUTOUT.getFogMode(), false, false, false, false, false, Patch.VANILLA));
+					ShaderKey.TERRAIN_CUTOUT.getFogMode(), false, false, false, false, false
+					//? >=26.2 {
+					, Patch.VANILLA
+					//?}
+			));
 			if (access.mc2$shadowRenderTargets() != null) {
 				Optional<ProgramSource> shadowSource = access.mc2$resolver().resolve(ProgramId.ShadowCutout);
 				if (shadowSource.isPresent()) {
 					shadow = finish(access.mc2$createShadowShader("mc2_foliage_shadow", ShaderKey.SHADOW_TERRAIN_CUTOUT,
 							shadowSource.get(), ProgramId.ShadowCutout, ShaderKey.SHADOW_TERRAIN_CUTOUT.getAlphaTest(),
-							FORMAT, false, false, false, false, Patch.VANILLA));
+							FORMAT, false, false, false, false
+							//? >=26.2 {
+							, Patch.VANILLA
+							//?}
+					));
 				}
 			}
 		} catch (Throwable e) {
@@ -252,9 +268,10 @@ public final class IrisFoliageShaders {
 	}
 
 	/** The uniform blocks the mod's programs bind on top of Iris's. */
-	public static List<BindGroupLayout> withFoliageLayouts(List<BindGroupLayout> irisLayouts) {
-		List<BindGroupLayout> all = new ArrayList<>(irisLayouts);
-		all.addAll(layouts);
+	@SuppressWarnings("unchecked")
+	public static <T> List<T> withFoliageLayouts(List<T> irisLayouts) {
+		List<T> all = new ArrayList<>(irisLayouts);
+		all.addAll((List<T>) layouts);
 		return all;
 	}
 

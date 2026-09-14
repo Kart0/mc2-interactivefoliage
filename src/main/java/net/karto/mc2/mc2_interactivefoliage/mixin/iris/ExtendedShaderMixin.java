@@ -1,8 +1,12 @@
 package net.karto.mc2.mc2_interactivefoliage.mixin.iris;
 
-//? >=26.2 {
+//? >=26.1.2 {
 
+//? >=26.2 {
 import com.mojang.blaze3d.pipeline.BindGroupLayout;
+//?} else {
+/*import com.mojang.blaze3d.pipeline.RenderPipeline;
+*///?}
 import net.irisshaders.iris.pipeline.programs.ExtendedShader;
 import net.karto.mc2.mc2_interactivefoliage.gpu.IrisFoliageShaders;
 import org.spongepowered.asm.mixin.Mixin;
@@ -18,10 +22,19 @@ import java.util.List;
 @Mixin(value = ExtendedShader.class, remap = false)
 public abstract class ExtendedShaderMixin {
 
+	//? >=26.2 {
 	@ModifyArg(method = "<init>", at = @At(value = "INVOKE",
 			target = "Lcom/mojang/blaze3d/opengl/GlProgram;setupBindGroupLayouts(Ljava/util/List;)V"))
 	private List<BindGroupLayout> mc2$addFoliageLayouts(List<BindGroupLayout> layouts) {
 		return IrisFoliageShaders.isBuilding() ? IrisFoliageShaders.withFoliageLayouts(layouts) : layouts;
 	}
+	//?} else {
+	/*// Before 26.2 a program is handed its uniforms one by one, with its samplers after them.
+	@ModifyArg(method = "<init>", at = @At(value = "INVOKE",
+			target = "Lcom/mojang/blaze3d/opengl/GlProgram;setupUniforms(Ljava/util/List;Ljava/util/List;)V"), index = 0)
+	private List<RenderPipeline.UniformDescription> mc2$addFoliageLayouts(List<RenderPipeline.UniformDescription> uniforms) {
+		return IrisFoliageShaders.isBuilding() ? IrisFoliageShaders.withFoliageLayouts(uniforms) : uniforms;
+	}
+	*///?}
 }
 //?}

@@ -2,8 +2,7 @@ package net.karto.mc2.mc2_interactivefoliage.gpu;
 
 //? >=1.20.1 {
 
-//? >=26.2 {
-import com.mojang.blaze3d.pipeline.BindGroupLayout;
+//? >=26.1.2 {
 import com.mojang.blaze3d.pipeline.RenderPipeline;
 import com.mojang.blaze3d.vertex.BufferBuilder;
 import com.mojang.blaze3d.vertex.VertexFormat;
@@ -20,7 +19,7 @@ import java.util.List;
  */
 final class IrisCompat {
 
-	//? >=26.2 {
+	//? >=26.1.2 {
 	private static final boolean IRIS = ModTemplate.xplat().isModLoaded("iris");
 	//?}
 
@@ -29,7 +28,7 @@ final class IrisCompat {
 
 	/** Whether a shader pack is loaded, which the renderer then draws through. */
 	static boolean shaderPackInUse() {
-		//? >=26.2 {
+		//? >=26.1.2 {
 		return IRIS && IrisFoliageShaders.shaderPackInUse();
 		//?} else {
 		/*return false;
@@ -38,7 +37,7 @@ final class IrisCompat {
 
 	/** Whether the programs for the loaded pack are built; builds them the first time a pack is asked about. */
 	static boolean programsReady() {
-		//? >=26.2 {
+		//? >=26.1.2 {
 		return IRIS && IrisFoliageShaders.ready();
 		//?} else {
 		/*return false;
@@ -46,7 +45,7 @@ final class IrisCompat {
 	}
 
 	static boolean hasShadowProgram() {
-		//? >=26.2 {
+		//? >=26.1.2 {
 		return IRIS && IrisFoliageShaders.hasShadowProgram();
 		//?} else {
 		/*return false;
@@ -55,14 +54,14 @@ final class IrisCompat {
 
 	/** Changes each time a pack loads, so what was meshed for another pack is meshed again. */
 	static int programGeneration() {
-		//? >=26.2 {
+		//? >=26.1.2 {
 		return IRIS ? IrisFoliageShaders.generation() : 0;
 		//?} else {
 		/*return 0;
 		*///?}
 	}
 
-	//? >=26.2 {
+	//? >=26.1.2 {
 	/** The vertex format a pack's programs read, which the renderer's region buffers hold while one is loaded. */
 	static VertexFormat shaderPackFormat() {
 		return IrisFoliageShaders.FORMAT;
@@ -81,9 +80,9 @@ final class IrisCompat {
 
 	/**
 	 * Hands the renderer's shader pack pipelines -- for the pack's own pass and for its shadow map -- their extra uniform
-	 * blocks and its shadow draw to the Iris side.
+	 * blocks (bind group layouts from 26.2, uniform descriptions before) and its shadow draw to the Iris side.
 	 */
-	static void setUp(RenderPipeline pipeline, RenderPipeline shadowPipeline, List<BindGroupLayout> layouts,
+	static void setUp(RenderPipeline pipeline, RenderPipeline shadowPipeline, List<?> layouts,
 			ShadowDraw drawShadow) {
 		if (IRIS) {
 			IrisFoliageShaders.setUp(pipeline, shadowPipeline, layouts, drawShadow);

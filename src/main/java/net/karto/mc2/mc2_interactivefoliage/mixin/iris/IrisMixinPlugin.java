@@ -1,6 +1,6 @@
 package net.karto.mc2.mc2_interactivefoliage.mixin.iris;
 
-//? >=26.2 {
+//? >=26.1.2 {
 
 //? fabric {
 import net.fabricmc.loader.api.FabricLoader;

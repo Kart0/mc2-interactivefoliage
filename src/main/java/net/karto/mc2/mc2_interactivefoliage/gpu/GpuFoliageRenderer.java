@@ -250,32 +250,47 @@ public final class GpuFoliageRenderer {
 				.build();
 	}
 	//?} elif >=1.21.1 {
-	/*//? >=26.1.2 {
+	/*// Elements are registered under ids of their own, and Iris registers its five at the first free ones too, so the
+	// two are taken the same way: fixed ids would collide with Iris's whichever registered first.
+	//? >=26.1.2 {
 	/^private static final VertexFormatElement SWAY_CELL_ELEMENT =
-			VertexFormatElement.register(10, 0, VertexFormatElement.Type.FLOAT, false, 1);
+			VertexFormatElement.register(freeElementId(), 0, VertexFormatElement.Type.FLOAT, false, 1);
 	private static final VertexFormatElement SWAY_WEIGHTS_ELEMENT =
-			VertexFormatElement.register(11, 0, VertexFormatElement.Type.FLOAT, false, 1);
+			VertexFormatElement.register(freeElementId(), 0, VertexFormatElement.Type.FLOAT, false, 1);
 	^///?} else {
 	private static final VertexFormatElement SWAY_CELL_ELEMENT =
-			VertexFormatElement.register(10, 0, VertexFormatElement.Type.FLOAT, VertexFormatElement.Usage.GENERIC, 1);
+			VertexFormatElement.register(freeElementId(), 0, VertexFormatElement.Type.FLOAT, VertexFormatElement.Usage.GENERIC, 1);
 	private static final VertexFormatElement SWAY_WEIGHTS_ELEMENT =
-			VertexFormatElement.register(11, 0, VertexFormatElement.Type.FLOAT, VertexFormatElement.Usage.GENERIC, 1);
+			VertexFormatElement.register(freeElementId(), 0, VertexFormatElement.Type.FLOAT, VertexFormatElement.Usage.GENERIC, 1);
 	//?}
-	private static final VertexFormat FOLIAGE_FORMAT = foliageFormat();
+	private static final VertexFormat FOLIAGE_FORMAT = withSwayValues(DefaultVertexFormat.BLOCK);
 
-	private static VertexFormat foliageFormat() {
-		VertexFormat block = DefaultVertexFormat.BLOCK;
+	private static int freeElementId() {
+		int id = 0;
+		while (VertexFormatElement.byId(id) != null) {
+			id++;
+		}
+		return id;
+	}
+
+	// A format holding another's attributes at their own offsets, then the renderer's two values: the block's, for the
+	// renderer's own pipeline, or Iris's terrain format, for drawing through a shader pack.
+	static VertexFormat withSwayValues(VertexFormat base) {
 		VertexFormat.Builder builder = VertexFormat.builder();
 		int written = 0;
-		for (VertexFormatElement element : block.getElements()) {
-			builder.add(block.getElementName(element), element);
-			written += element.byteSize();
+		for (VertexFormatElement element : base.getElements()) {
+			// Formats may pad between attributes or after the last one -- 1.21.11's block format ends in padding, Iris's
+			// terrain format pads after the normal -- and rebuilding from the elements alone would drop it, so every
+			// vertex would be read at a stride it was never written at.
+			int offset = base.getOffset(element);
+			if (offset > written) {
+				builder.padding(offset - written);
+			}
+			builder.add(base.getElementName(element), element);
+			written = offset + element.byteSize();
 		}
-		// Some versions round a block's vertex up with a byte or two of padding past its last attribute:
-		// 1.21.11 does, 26.1.2 does not. Rebuilding from the elements alone would drop it, and then every
-		// vertex would be read at a stride it was never written at.
-		if (written < block.getVertexSize()) {
-			builder.padding(block.getVertexSize() - written);
+		if (written < base.getVertexSize()) {
+			builder.padding(base.getVertexSize() - written);
 		}
 		return builder
 				.add("SwayCell", SWAY_CELL_ELEMENT)
@@ -337,27 +352,31 @@ public final class GpuFoliageRenderer {
 	//?} elif >=1.21.11 {
 	/*// Vanilla's block snippet is private before 26.2, so the same state is spelled out here: the samplers
 	// and uniforms its shaders read, one vertex format, and the depth state every block pipeline uses.
-	private static final RenderPipeline PIPELINE = RenderPipeline.builder()
-			.withLocation(Identifier.fromNamespaceAndPath(ModTemplate.MOD_ID, "pipeline/foliage"))
-			.withVertexShader(Identifier.fromNamespaceAndPath(ModTemplate.MOD_ID, "core/foliage"))
-			.withFragmentShader(Identifier.fromNamespaceAndPath(ModTemplate.MOD_ID, "core/foliage"))
-			.withVertexFormat(FOLIAGE_FORMAT, VertexFormat.Mode.QUADS)
-			.withSampler("Sampler0")
-			.withSampler("Sampler2")
-			.withUniform("DynamicTransforms", UniformType.UNIFORM_BUFFER)
-			.withUniform("Projection", UniformType.UNIFORM_BUFFER)
-			.withUniform("Fog", UniformType.UNIFORM_BUFFER)
-			.withUniform("Globals", UniformType.UNIFORM_BUFFER)
-			.withUniform(SWAY_SETTINGS_UNIFORM, UniformType.UNIFORM_BUFFER)
-			.withUniform(GpuFoliageInteraction.UNIFORM, UniformType.UNIFORM_BUFFER)
-			//? >=26.1.2 {
-			.withDepthStencilState(DepthStencilState.DEFAULT)
-			//?} else {
-			/^.withDepthWrite(true)
-			.withDepthTestFunction(DepthTestFunction.LESS_DEPTH_TEST)
-			^///?}
-			.withShaderDefine("ALPHA_CUTOUT", 0.5F)
-			.build();
+	private static final RenderPipeline PIPELINE = blockPipeline("pipeline/foliage", FOLIAGE_FORMAT);
+
+	private static RenderPipeline blockPipeline(String location, VertexFormat format) {
+		return RenderPipeline.builder()
+				.withLocation(Identifier.fromNamespaceAndPath(ModTemplate.MOD_ID, location))
+				.withVertexShader(Identifier.fromNamespaceAndPath(ModTemplate.MOD_ID, "core/foliage"))
+				.withFragmentShader(Identifier.fromNamespaceAndPath(ModTemplate.MOD_ID, "core/foliage"))
+				.withVertexFormat(format, VertexFormat.Mode.QUADS)
+				.withSampler("Sampler0")
+				.withSampler("Sampler2")
+				.withUniform("DynamicTransforms", UniformType.UNIFORM_BUFFER)
+				.withUniform("Projection", UniformType.UNIFORM_BUFFER)
+				.withUniform("Fog", UniformType.UNIFORM_BUFFER)
+				.withUniform("Globals", UniformType.UNIFORM_BUFFER)
+				.withUniform(SWAY_SETTINGS_UNIFORM, UniformType.UNIFORM_BUFFER)
+				.withUniform(GpuFoliageInteraction.UNIFORM, UniformType.UNIFORM_BUFFER)
+				//? >=26.1.2 {
+				.withDepthStencilState(DepthStencilState.DEFAULT)
+				//?} else {
+				/^.withDepthWrite(true)
+				.withDepthTestFunction(DepthTestFunction.LESS_DEPTH_TEST)
+				^///?}
+				.withShaderDefine("ALPHA_CUTOUT", 0.5F)
+				.build();
+	}
 	*///?}
 
 	private static final int VERTEX_BYTES = DefaultVertexFormat.BLOCK.getVertexSize();
@@ -431,7 +450,7 @@ public final class GpuFoliageRenderer {
 	 */
 	private static boolean meshedForShaderPack;
 	private static int meshedPackGeneration;
-	//? >=26.2 {
+	//? >=26.1.2 {
 	/** The pipeline drawn with while a shader pack is loaded; see {@link IrisFoliageShaders}. */
 	private static RenderPipeline shaderPackPipeline;
 	/** The same, for drawing into a shader pack's shadow map. */
@@ -1017,7 +1036,7 @@ public final class GpuFoliageRenderer {
 			return;
 		}
 		boolean shaderPack = IrisCompat.shaderPackInUse();
-		//? >=26.2 {
+		//? >=26.1.2 {
 		if (shaderPack) {
 			setUpShaderPack();
 		}
@@ -1094,7 +1113,7 @@ public final class GpuFoliageRenderer {
 		*///?}
 	}
 
-	//? >=26.2 {
+	//? >=26.1.2 {
 	/**
 	 * Builds the pipeline the renderer draws with while a shader pack is loaded, once: the pack's programs take the
 	 * place of its shaders, and it holds Iris's terrain format so they find every attribute they read.
@@ -1103,6 +1122,16 @@ public final class GpuFoliageRenderer {
 		if (shaderPackPipeline != null) {
 			return;
 		}
+		//? <26.2 {
+		/*// Before 26.2 depth is not reversed, so the shadow map takes the same test as everything else. The shadow pipeline is
+		// a pipeline of its own only so the pack's shadow program is the one it draws with.
+		shaderPackPipeline = blockPipeline("pipeline/foliage_shader_pack", IrisCompat.shaderPackFormat());
+		shaderPackShadowPipeline = blockPipeline("pipeline/foliage_shader_pack_shadow", IrisCompat.shaderPackFormat());
+		IrisCompat.setUp(shaderPackPipeline, shaderPackShadowPipeline,
+				List.of(new RenderPipeline.UniformDescription(SWAY_SETTINGS_UNIFORM, UniformType.UNIFORM_BUFFER),
+						new RenderPipeline.UniformDescription(GpuFoliageInteraction.UNIFORM, UniformType.UNIFORM_BUFFER)),
+				GpuFoliageRenderer::drawShadow);
+		*///?} else {
 		shaderPackPipeline = RenderPipeline.builder(RenderPipelines.BLOCK_SNIPPET)
 				.withLocation(Identifier.fromNamespaceAndPath(ModTemplate.MOD_ID, "pipeline/foliage_shader_pack"))
 				.withVertexShader(Identifier.fromNamespaceAndPath(ModTemplate.MOD_ID, "core/foliage"))
@@ -1128,6 +1157,7 @@ public final class GpuFoliageRenderer {
 				.build();
 		IrisCompat.setUp(shaderPackPipeline, shaderPackShadowPipeline,
 				List.of(SWAY_SETTINGS, GpuFoliageInteraction.LAYOUT), GpuFoliageRenderer::drawShadow);
+		//?}
 	}
 
 	/** Holds the sun's projection for drawing into a shader pack's shadow map. */
@@ -1224,7 +1254,7 @@ public final class GpuFoliageRenderer {
 	private static void submitDraws(Minecraft minecraft, Vec3 camera, Matrix4f shadowModelView, Matrix4f shadowProjection) {
 		List<Region> drawn = DRAWN;
 		boolean shadowPass = shadowModelView != null;
-		//? >=26.2 {
+		//? >=26.1.2 {
 		RenderPipeline pipeline = shadowPass ? shaderPackShadowPipeline
 				: meshedForShaderPack ? shaderPackPipeline : PIPELINE;
 		//?} else {
@@ -1273,7 +1303,7 @@ public final class GpuFoliageRenderer {
 		// Written before the pass opens: a buffer cannot be written to while a render pass is open.
 		GpuBuffer settings = swaySettings(camera);
 		GpuBuffer interaction = GpuFoliageInteraction.upload(camera);
-		//? >=26.2 {
+		//? >=26.1.2 {
 		// The sun's projection, from Iris itself: what the game holds as the projection by the time Iris hands over its
 		// shadow pass is not reliably the shadow map's, and plants projected any other way land at the wrong depth in it.
 		GpuBufferSlice projection = shadowPass ? shadowProjectionBuffer().getBuffer(shadowProjection) : null;
@@ -1294,7 +1324,7 @@ public final class GpuFoliageRenderer {
 						OptionalDouble.empty())) {
 			pass.setPipeline(pipeline);
 			RenderSystem.bindDefaultUniforms(pass);
-			//? >=26.2 {
+			//? >=26.1.2 {
 			if (projection != null) {
 				pass.setUniform("Projection", projection);
 			}
@@ -1334,7 +1364,7 @@ public final class GpuFoliageRenderer {
 			}
 		}
 		};
-		//? >=26.2 {
+		//? >=26.1.2 {
 		if (meshedForShaderPack) {
 			IrisCompat.inTerrainPhase(draw);
 			return;
@@ -2176,7 +2206,7 @@ public final class GpuFoliageRenderer {
 					}
 					pos.set(origin.getX() + dx, origin.getY() + dy, origin.getZ() + dz);
 					anchor.prepare(state, pos, level);
-					//? >=26.2 {
+					//? >=26.1.2 {
 					if (meshedForShaderPack) {
 						// The pack reads which block each vertex belongs to, and where its centre is, as it does on the
 						// chunk mesh; Iris writes them as the vertices go in.
@@ -2215,7 +2245,7 @@ public final class GpuFoliageRenderer {
 			}
 		}
 
-		//? >=26.2 {
+		//? >=26.1.2 {
 		if (meshedForShaderPack) {
 			IrisCompat.endBlock(builder);
 		}
@@ -2239,7 +2269,7 @@ public final class GpuFoliageRenderer {
 			// the block format's stride: another mod may widen the buffer behind our back -- Iris does, for
 			// shader packs -- and the vertices would then be read at a stride they were not written at. A
 			// section that comes back in another format is left to the chunk mesh instead of drawn as noise.
-			//? >=26.2 {
+			//? >=26.1.2 {
 			VertexFormat expected = meshedForShaderPack ? IrisCompat.shaderPackMeshFormat() : DefaultVertexFormat.BLOCK;
 			//?} else {
 			/*VertexFormat expected = DefaultVertexFormat.BLOCK;

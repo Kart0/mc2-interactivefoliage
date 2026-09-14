@@ -70,7 +70,7 @@ dependencies {
 	// jarJar(libs.moulberry.mixinconstraints)
 	implementation("maven.modrinth:sway:${prop("deps.sway")}")
 	// Optional dependencies: compiled against for the shader pack support, where it has been written.
-	if (stonecutter.eval(stonecutter.current.version, ">=26.2")) {
+	if (stonecutter.eval(stonecutter.current.version, ">=26.1.2")) {
 		compileOnly("maven.modrinth:iris:${prop("deps.iris")}")
 		compileOnly("maven.modrinth:sodium:${prop("deps.sodium")}")
 	}
