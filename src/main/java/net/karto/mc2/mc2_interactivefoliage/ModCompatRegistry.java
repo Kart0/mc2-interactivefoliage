@@ -125,14 +125,11 @@ public class ModCompatRegistry {
 				"biomesoplenty:brimstone_cluster"
 		);
 
-		// Same random-variant problem as the cobwebs below: eyebulb's closed state uses
-		// eyebulb_bottom_closed / eyebulb_top_closed, whose names Sway's path parsing cannot map
-		// back to the block, so on Fabric up to 1.21.1 only the open state would animate.
-		//? !fabric || >1.21.1 {
+		// Same model-name problem as the cobwebs below, for eyebulb's closed state
+		// (eyebulb_bottom_closed / eyebulb_top_closed).
 		registerPlant(
 				"biomesoplenty:eyebulb"
 		);
-		//?}
 
 		registerStackable(
 				"biomesoplenty:lumaloop",
@@ -148,19 +145,16 @@ public class ModCompatRegistry {
 
 		// Cobwebs and tendons use blockstates that pick one of several models at random per
 		// position. Up to and including Fabric 1.21.1, Sway identifies a model's block by parsing
-		// the model file path, so every variant whose file name carries an extra suffix
-		// (_broken, _single, _alt) is never wrapped: only one model in three animates and a strand
-		// ends up with motionless blocks between bending ones. Leaving them unregistered there
-		// looks better than animating them in pieces. Every other platform and version resolves
-		// the block reliably, so they stay registered.
-		//? !fabric || >1.21.1 {
+		// the model file path, so a variant whose file name carries an extra suffix (_broken,
+		// _single, _alt) is never wrapped by Sway, and with the CPU renderer a strand animates in
+		// pieces. The GPU renderer finds the block from the block state rather than the file
+		// name, so there every variant moves; they are registered everywhere for it.
 		registerHanging(
 				"biomesoplenty:flesh_tendons",
 				"biomesoplenty:flesh_tendons_strand",
 				"biomesoplenty:hanging_cobweb",
 				"biomesoplenty:hanging_cobweb_strand"
 		);
-		//?}
 	}
 
 	// ------------------------------------------------------------------
