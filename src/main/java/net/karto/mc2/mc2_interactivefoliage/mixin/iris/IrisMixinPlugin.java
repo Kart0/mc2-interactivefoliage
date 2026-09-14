@@ -1,8 +1,12 @@
 package net.karto.mc2.mc2_interactivefoliage.mixin.iris;
 
-//? fabric && >=26.2 {
+//? >=26.2 {
 
+//? fabric {
 import net.fabricmc.loader.api.FabricLoader;
+//?} else {
+/*import net.neoforged.fml.loading.FMLLoader;
+*///?}
 import org.objectweb.asm.tree.ClassNode;
 import org.spongepowered.asm.mixin.extensibility.IMixinConfigPlugin;
 import org.spongepowered.asm.mixin.extensibility.IMixinInfo;
@@ -13,7 +17,12 @@ import java.util.Set;
 /** Applies the shader pack support only when Iris is installed: every other mixin here targets Iris or needs it. */
 public final class IrisMixinPlugin implements IMixinConfigPlugin {
 
+	//? fabric {
 	private static final boolean IRIS = FabricLoader.getInstance().isModLoaded("iris");
+	//?} else {
+	/*// Mixin configs are read once the mod list is built, but before ModList exists.
+	private static final boolean IRIS = FMLLoader.getCurrent().getLoadingModList().getModFileById("iris") != null;
+	*///?}
 
 	@Override
 	public void onLoad(String mixinPackage) {

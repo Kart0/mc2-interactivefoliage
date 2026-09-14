@@ -431,7 +431,7 @@ public final class GpuFoliageRenderer {
 	 */
 	private static boolean meshedForShaderPack;
 	private static int meshedPackGeneration;
-	//? fabric && >=26.2 {
+	//? >=26.2 {
 	/** The pipeline drawn with while a shader pack is loaded; see {@link IrisFoliageShaders}. */
 	private static RenderPipeline shaderPackPipeline;
 	/** The same, for drawing into a shader pack's shadow map. */
@@ -1017,7 +1017,7 @@ public final class GpuFoliageRenderer {
 			return;
 		}
 		boolean shaderPack = IrisCompat.shaderPackInUse();
-		//? fabric && >=26.2 {
+		//? >=26.2 {
 		if (shaderPack) {
 			setUpShaderPack();
 		}
@@ -1094,7 +1094,7 @@ public final class GpuFoliageRenderer {
 		*///?}
 	}
 
-	//? fabric && >=26.2 {
+	//? >=26.2 {
 	/**
 	 * Builds the pipeline the renderer draws with while a shader pack is loaded, once: the pack's programs take the
 	 * place of its shaders, and it holds Iris's terrain format so they find every attribute they read.
@@ -1224,7 +1224,7 @@ public final class GpuFoliageRenderer {
 	private static void submitDraws(Minecraft minecraft, Vec3 camera, Matrix4f shadowModelView, Matrix4f shadowProjection) {
 		List<Region> drawn = DRAWN;
 		boolean shadowPass = shadowModelView != null;
-		//? fabric && >=26.2 {
+		//? >=26.2 {
 		RenderPipeline pipeline = shadowPass ? shaderPackShadowPipeline
 				: meshedForShaderPack ? shaderPackPipeline : PIPELINE;
 		//?} else {
@@ -1273,7 +1273,7 @@ public final class GpuFoliageRenderer {
 		// Written before the pass opens: a buffer cannot be written to while a render pass is open.
 		GpuBuffer settings = swaySettings(camera);
 		GpuBuffer interaction = GpuFoliageInteraction.upload(camera);
-		//? fabric && >=26.2 {
+		//? >=26.2 {
 		// The sun's projection, from Iris itself: what the game holds as the projection by the time Iris hands over its
 		// shadow pass is not reliably the shadow map's, and plants projected any other way land at the wrong depth in it.
 		GpuBufferSlice projection = shadowPass ? shadowProjectionBuffer().getBuffer(shadowProjection) : null;
@@ -1294,7 +1294,7 @@ public final class GpuFoliageRenderer {
 						OptionalDouble.empty())) {
 			pass.setPipeline(pipeline);
 			RenderSystem.bindDefaultUniforms(pass);
-			//? fabric && >=26.2 {
+			//? >=26.2 {
 			if (projection != null) {
 				pass.setUniform("Projection", projection);
 			}
@@ -1334,7 +1334,7 @@ public final class GpuFoliageRenderer {
 			}
 		}
 		};
-		//? fabric && >=26.2 {
+		//? >=26.2 {
 		if (meshedForShaderPack) {
 			IrisCompat.inTerrainPhase(draw);
 			return;
@@ -2176,7 +2176,7 @@ public final class GpuFoliageRenderer {
 					}
 					pos.set(origin.getX() + dx, origin.getY() + dy, origin.getZ() + dz);
 					anchor.prepare(state, pos, level);
-					//? fabric && >=26.2 {
+					//? >=26.2 {
 					if (meshedForShaderPack) {
 						// The pack reads which block each vertex belongs to, and where its centre is, as it does on the
 						// chunk mesh; Iris writes them as the vertices go in.
@@ -2215,7 +2215,7 @@ public final class GpuFoliageRenderer {
 			}
 		}
 
-		//? fabric && >=26.2 {
+		//? >=26.2 {
 		if (meshedForShaderPack) {
 			IrisCompat.endBlock(builder);
 		}
@@ -2239,7 +2239,7 @@ public final class GpuFoliageRenderer {
 			// the block format's stride: another mod may widen the buffer behind our back -- Iris does, for
 			// shader packs -- and the vertices would then be read at a stride they were not written at. A
 			// section that comes back in another format is left to the chunk mesh instead of drawn as noise.
-			//? fabric && >=26.2 {
+			//? >=26.2 {
 			VertexFormat expected = meshedForShaderPack ? IrisCompat.shaderPackMeshFormat() : DefaultVertexFormat.BLOCK;
 			//?} else {
 			/*VertexFormat expected = DefaultVertexFormat.BLOCK;

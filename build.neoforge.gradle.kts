@@ -41,6 +41,9 @@ neoForge {
 			gameDirectory = file("run/")
 			ideName = "NeoForge Client (${stonecutter.current.version})"
 			programArgument("--username=Dev")
+			// NeoForge validates every draw in the dev environment only, and the check indexes 16 vertex bindings
+			// into the one-element arrays Iris answers for its pipelines, crashing the first frame with a shader pack.
+			systemProperty("neoforge.disableGlValidation", "true")
 		}
 		register("server") {
 			server()
@@ -66,6 +69,11 @@ dependencies {
 	// implementation(libs.moulberry.mixinconstraints)
 	// jarJar(libs.moulberry.mixinconstraints)
 	implementation("maven.modrinth:sway:${prop("deps.sway")}")
+	// Optional dependencies: compiled against for the shader pack support, where it has been written.
+	if (stonecutter.eval(stonecutter.current.version, ">=26.2")) {
+		compileOnly("maven.modrinth:iris:${prop("deps.iris")}")
+		compileOnly("maven.modrinth:sodium:${prop("deps.sodium")}")
+	}
 }
 
 tasks.named("createMinecraftArtifacts") {

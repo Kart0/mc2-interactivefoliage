@@ -1,6 +1,6 @@
 package net.karto.mc2.mc2_interactivefoliage.gpu;
 
-//? fabric && >=26.2 {
+//? >=26.2 {
 
 import com.mojang.blaze3d.GpuFormat;
 import com.mojang.blaze3d.opengl.GlProgram;

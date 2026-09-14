@@ -135,6 +135,10 @@ sealed class Loader(val id: String) {
 					if (ctx.stonecutter.eval(ctx.currentMcVersion, ">=1.20.1")) {
 						add(ForgeMixin("${ctx.modId}.gpu.mixins.json"))
 					}
+					// Shader pack support, as on Fabric.
+					if (ctx.stonecutter.eval(ctx.currentMcVersion, ">=26.2")) {
+						add(ForgeMixin("${ctx.modId}.iris.mixins.json"))
+					}
 				}
 			)
 

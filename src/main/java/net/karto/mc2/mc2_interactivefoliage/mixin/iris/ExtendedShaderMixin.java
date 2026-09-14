@@ -1,6 +1,6 @@
 package net.karto.mc2.mc2_interactivefoliage.mixin.iris;
 
-//? fabric && >=26.2 {
+//? >=26.2 {
 
 import com.mojang.blaze3d.pipeline.BindGroupLayout;
 import net.irisshaders.iris.pipeline.programs.ExtendedShader;

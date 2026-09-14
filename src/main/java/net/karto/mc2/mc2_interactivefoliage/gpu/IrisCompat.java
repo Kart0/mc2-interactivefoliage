@@ -2,7 +2,7 @@ package net.karto.mc2.mc2_interactivefoliage.gpu;
 
 //? >=1.20.1 {
 
-//? fabric && >=26.2 {
+//? >=26.2 {
 import com.mojang.blaze3d.pipeline.BindGroupLayout;
 import com.mojang.blaze3d.pipeline.RenderPipeline;
 import com.mojang.blaze3d.vertex.BufferBuilder;
@@ -20,7 +20,7 @@ import java.util.List;
  */
 final class IrisCompat {
 
-	//? fabric && >=26.2 {
+	//? >=26.2 {
 	private static final boolean IRIS = ModTemplate.xplat().isModLoaded("iris");
 	//?}
 
@@ -29,7 +29,7 @@ final class IrisCompat {
 
 	/** Whether a shader pack is loaded, which the renderer then draws through. */
 	static boolean shaderPackInUse() {
-		//? fabric && >=26.2 {
+		//? >=26.2 {
 		return IRIS && IrisFoliageShaders.shaderPackInUse();
 		//?} else {
 		/*return false;
@@ -38,7 +38,7 @@ final class IrisCompat {
 
 	/** Whether the programs for the loaded pack are built; builds them the first time a pack is asked about. */
 	static boolean programsReady() {
-		//? fabric && >=26.2 {
+		//? >=26.2 {
 		return IRIS && IrisFoliageShaders.ready();
 		//?} else {
 		/*return false;
@@ -46,7 +46,7 @@ final class IrisCompat {
 	}
 
 	static boolean hasShadowProgram() {
-		//? fabric && >=26.2 {
+		//? >=26.2 {
 		return IRIS && IrisFoliageShaders.hasShadowProgram();
 		//?} else {
 		/*return false;
@@ -55,14 +55,14 @@ final class IrisCompat {
 
 	/** Changes each time a pack loads, so what was meshed for another pack is meshed again. */
 	static int programGeneration() {
-		//? fabric && >=26.2 {
+		//? >=26.2 {
 		return IRIS ? IrisFoliageShaders.generation() : 0;
 		//?} else {
 		/*return 0;
 		*///?}
 	}
 
-	//? fabric && >=26.2 {
+	//? >=26.2 {
 	/** The vertex format a pack's programs read, which the renderer's region buffers hold while one is loaded. */
 	static VertexFormat shaderPackFormat() {
 		return IrisFoliageShaders.FORMAT;
