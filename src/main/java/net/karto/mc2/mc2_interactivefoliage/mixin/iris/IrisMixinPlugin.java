@@ -11,6 +11,7 @@ import org.objectweb.asm.tree.ClassNode;
 import org.spongepowered.asm.mixin.extensibility.IMixinConfigPlugin;
 import org.spongepowered.asm.mixin.extensibility.IMixinInfo;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 
@@ -21,7 +22,8 @@ public final class IrisMixinPlugin implements IMixinConfigPlugin {
 	private static final boolean IRIS = FabricLoader.getInstance().isModLoaded("iris");
 	//?} else {
 	/*// Mixin configs are read once the mod list is built, but before ModList exists.
-	private static final boolean IRIS = FMLLoader.getCurrent().getLoadingModList().getModFileById("iris") != null;
+	private static final boolean IRIS =
+			FMLLoader/^? if >1.21.7 {^/.getCurrent()/^?}^/.getLoadingModList().getModFileById("iris") != null;
 	*///?}
 
 	@Override
@@ -42,14 +44,23 @@ public final class IrisMixinPlugin implements IMixinConfigPlugin {
 	public void acceptTargets(Set<String> myTargets, Set<String> otherTargets) {
 	}
 
+	/**
+	 * The mixins only some versions have, each compiled only where its target exists: the configuration lists what every
+	 * version shares.
+	 */
 	@Override
 	public List<String> getMixins() {
-		//? <26.1.2 {
-		/*// Only where Iris has no shadow render callback; the class is not even compiled where it has one.
-		return List.of("ShadowRendererMixin");
-		*///?} else {
-		return null;
+		List<String> mixins = new ArrayList<>();
+		//? >=1.21.11 {
+		// Programs are built from uniform lists and drawn through pipelines.
+		mixins.add("ExtendedShaderMixin");
+		mixins.add("GlDeviceMixin");
 		//?}
+		//? <26.1.2 {
+		/*// Iris has no shadow render callback yet.
+		mixins.add("ShadowRendererMixin");
+		*///?}
+		return mixins;
 	}
 
 	@Override

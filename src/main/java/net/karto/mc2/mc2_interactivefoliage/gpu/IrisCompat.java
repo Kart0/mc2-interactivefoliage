@@ -3,13 +3,17 @@ package net.karto.mc2.mc2_interactivefoliage.gpu;
 //? >=1.20.1 {
 
 //? iris {
-import com.mojang.blaze3d.pipeline.RenderPipeline;
 import com.mojang.blaze3d.vertex.BufferBuilder;
 import com.mojang.blaze3d.vertex.VertexFormat;
 import net.karto.mc2.mc2_interactivefoliage.ModTemplate;
 import net.minecraft.world.level.block.state.BlockState;
+//? >=1.21.11 {
+import com.mojang.blaze3d.pipeline.RenderPipeline;
 
 import java.util.List;
+//?} else {
+/*import net.minecraft.client.renderer.ShaderInstance;
+*///?}
 //?}
 
 /**
@@ -82,12 +86,34 @@ final class IrisCompat {
 	 * Hands the renderer's shader pack pipelines -- for the pack's own pass and for its shadow map -- their extra uniform
 	 * blocks (bind group layouts from 26.2, uniform descriptions before) and its shadow draw to the Iris side.
 	 */
+	//? >=1.21.11 {
 	static void setUp(RenderPipeline pipeline, RenderPipeline shadowPipeline, List<?> layouts,
 			ShadowDraw drawShadow) {
 		if (IRIS) {
 			IrisFoliageShaders.setUp(pipeline, shadowPipeline, layouts, drawShadow);
 		}
 	}
+	//?} else {
+	/*static void setUp(ShadowDraw drawShadow) {
+		if (IRIS) {
+			IrisFoliageShaders.setUp(drawShadow);
+		}
+	}
+
+	/^* The pack's program the foliage is drawn with, in its own pass or its shadow pass, or null if there is none. ^/
+	static ShaderInstance program(boolean shadowPass) {
+		return IRIS ? IrisFoliageShaders.program(shadowPass) : null;
+	}
+
+	/^* Sets the sway's own uniforms on a pack's program, once it is applied. ^/
+	static void setSwayUniforms(ShaderInstance program, float intensity, org.joml.Vector4f edge, int cameraX, int cameraY,
+			int cameraZ, float offsetX, float offsetY, float offsetZ, float gameTime) {
+		if (IRIS) {
+			IrisFoliageShaders.setSwayUniforms(program, intensity, edge.x, edge.y, edge.z, edge.w, cameraX, cameraY,
+					cameraZ, offsetX, offsetY, offsetZ, gameTime);
+		}
+	}
+	*///?}
 
 	static void beginBlock(BufferBuilder builder, BlockState state, int x, int y, int z) {
 		if (IRIS) {

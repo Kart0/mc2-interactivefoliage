@@ -96,7 +96,8 @@ val devModNestedJars = if (devModJars.isEmpty()) emptyList() else {
 	devModNestedDir.deleteRecursively()
 	devModJars.forEach { jar ->
 		copy {
-			from(zipTree(jar)) { include("META-INF/jars/*.jar") }
+			// Fabric API modules a mod bundles are already here through fabric-api itself; unremapped, they would shadow it.
+			from(zipTree(jar)) { include("META-INF/jars/*.jar"); exclude("META-INF/jars/fabric-*.jar") }
 			into(devModNestedDir)
 			eachFile { path = name }
 			includeEmptyDirs = false
@@ -127,7 +128,7 @@ dependencies {
 	modLocalRuntime("com.terraformersmc:modmenu:${prop("deps.modmenu")}")
 	modImplementation("maven.modrinth:sway:${prop("deps.sway")}")
 	// Optional dependencies: compiled against for the shader pack support, where it has been written.
-	if (stonecutter.eval(stonecutter.current.version, ">=1.21.11")) {
+	if (stonecutter.eval(stonecutter.current.version, ">=1.21.1")) {
 		modCompileOnly("maven.modrinth:iris:${prop("deps.iris")}")
 		modCompileOnly("maven.modrinth:sodium:${prop("deps.sodium")}")
 	}

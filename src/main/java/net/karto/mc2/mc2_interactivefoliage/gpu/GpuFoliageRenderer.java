@@ -380,6 +380,15 @@ public final class GpuFoliageRenderer {
 	*///?}
 
 	private static final int VERTEX_BYTES = DefaultVertexFormat.BLOCK.getVertexSize();
+
+	/** The format the regions hold: the mod's own, or the one a shader pack's programs read while one is loaded. */
+	private static VertexFormat regionFormat() {
+		//? iris {
+		return meshedForShaderPack ? IrisCompat.shaderPackFormat() : FOLIAGE_FORMAT;
+		//?} else {
+		/*return FOLIAGE_FORMAT;
+		*///?}
+	}
 	/** Our own per-vertex data: the plant's anchor block and its two weights, one float each. */
 	private static final int WEIGHT_BYTES = Float.BYTES * 2;
 
@@ -451,10 +460,13 @@ public final class GpuFoliageRenderer {
 	private static boolean meshedForShaderPack;
 	private static int meshedPackGeneration;
 	//? iris {
+	private static boolean shaderPackSetUp;
+	//? >=1.21.11 {
 	/** The pipeline drawn with while a shader pack is loaded; see {@link IrisFoliageShaders}. */
 	private static RenderPipeline shaderPackPipeline;
 	/** The same, for drawing into a shader pack's shadow map. */
 	private static RenderPipeline shaderPackShadowPipeline;
+	//?}
 	//?}
 
 	//? >=1.21.11 {
@@ -638,7 +650,7 @@ public final class GpuFoliageRenderer {
 				MemoryUtil.memCopy(MemoryUtil.memAddress(section.data, 0),
 						pointer + (long) firstVertex[slot] * stride, (long) section.vertexCount * stride);
 			}
-			MeshData mesh = new MeshData(staging.build(), new MeshData.DrawState(FOLIAGE_FORMAT, vertexCount,
+			MeshData mesh = new MeshData(staging.build(), new MeshData.DrawState(regionFormat(), vertexCount,
 					indexCountFor(vertexCount), VertexFormat.Mode.QUADS, VertexFormat.IndexType.least(vertexCount)));
 			//?} elif fabric {
 			/^// Before 1.21.1 a mesh only comes out of a buffer builder, and the builder has no way to take a block of
@@ -1109,7 +1121,13 @@ public final class GpuFoliageRenderer {
 		//? >=1.21.11 {
 		submitDraws(minecraft, camera, null, null);
 		//?} else {
-		/*drawLegacy(minecraft, camera, DRAWN);
+		/*//? iris {
+		if (meshedForShaderPack) {
+			IrisCompat.inTerrainPhase(() -> drawLegacy(minecraft, camera, DRAWN, null, null));
+			return;
+		}
+		//?}
+		drawLegacy(minecraft, camera, DRAWN, null, null);
 		*///?}
 	}
 
@@ -1119,19 +1137,11 @@ public final class GpuFoliageRenderer {
 	 * place of its shaders, and it holds Iris's terrain format so they find every attribute they read.
 	 */
 	private static void setUpShaderPack() {
-		if (shaderPackPipeline != null) {
+		if (shaderPackSetUp) {
 			return;
 		}
-		//? <26.2 {
-		/*// Before 26.2 depth is not reversed, so the shadow map takes the same test as everything else. The shadow pipeline is
-		// a pipeline of its own only so the pack's shadow program is the one it draws with.
-		shaderPackPipeline = blockPipeline("pipeline/foliage_shader_pack", IrisCompat.shaderPackFormat());
-		shaderPackShadowPipeline = blockPipeline("pipeline/foliage_shader_pack_shadow", IrisCompat.shaderPackFormat());
-		IrisCompat.setUp(shaderPackPipeline, shaderPackShadowPipeline,
-				List.of(new RenderPipeline.UniformDescription(SWAY_SETTINGS_UNIFORM, UniformType.UNIFORM_BUFFER),
-						new RenderPipeline.UniformDescription(GpuFoliageInteraction.UNIFORM, UniformType.UNIFORM_BUFFER)),
-				GpuFoliageRenderer::drawShadow);
-		*///?} else {
+		shaderPackSetUp = true;
+		//? >=26.2 {
 		shaderPackPipeline = RenderPipeline.builder(RenderPipelines.BLOCK_SNIPPET)
 				.withLocation(Identifier.fromNamespaceAndPath(ModTemplate.MOD_ID, "pipeline/foliage_shader_pack"))
 				.withVertexShader(Identifier.fromNamespaceAndPath(ModTemplate.MOD_ID, "core/foliage"))
@@ -1157,7 +1167,19 @@ public final class GpuFoliageRenderer {
 				.build();
 		IrisCompat.setUp(shaderPackPipeline, shaderPackShadowPipeline,
 				List.of(SWAY_SETTINGS, GpuFoliageInteraction.LAYOUT), GpuFoliageRenderer::drawShadow);
-		//?}
+		//?} elif >=1.21.11 {
+		/*// Before 26.2 depth is not reversed, so the shadow map takes the same test as everything else. The shadow pipeline is
+		// a pipeline of its own only so the pack's shadow program is the one it draws with.
+		shaderPackPipeline = blockPipeline("pipeline/foliage_shader_pack", IrisCompat.shaderPackFormat());
+		shaderPackShadowPipeline = blockPipeline("pipeline/foliage_shader_pack_shadow", IrisCompat.shaderPackFormat());
+		IrisCompat.setUp(shaderPackPipeline, shaderPackShadowPipeline,
+				List.of(new RenderPipeline.UniformDescription(SWAY_SETTINGS_UNIFORM, UniformType.UNIFORM_BUFFER),
+						new RenderPipeline.UniformDescription(GpuFoliageInteraction.UNIFORM, UniformType.UNIFORM_BUFFER)),
+				GpuFoliageRenderer::drawShadow);
+		*///?} else {
+		/*// Before 1.21.11 the renderer draws with the pack's programs themselves, so only the shadow draw is handed over.
+		IrisCompat.setUp(GpuFoliageRenderer::drawShadow);
+		*///?}
 	}
 
 	/** Holds the sun's projection for drawing into a shader pack's shadow map. */
@@ -1170,7 +1192,7 @@ public final class GpuFoliageRenderer {
 		}
 		return shadowProjectionUniform;
 	}
-	//?} else {
+	//?} elif >=1.21.11 {
 	/*// Before 26.1.2 the buffer that takes any matrix is the one named for perspective projections.
 	private static net.minecraft.client.renderer.PerspectiveProjectionMatrixBuffer shadowProjectionUniform;
 
@@ -1193,7 +1215,12 @@ public final class GpuFoliageRenderer {
 			return;
 		}
 		if (collectDraws(null, null)) {
+			//? >=1.21.11 {
 			submitDraws(minecraft, new Vec3(cameraX, cameraY, cameraZ), modelView, projection);
+			//?} else {
+			/*IrisCompat.inTerrainPhase(() -> drawLegacy(minecraft, new Vec3(cameraX, cameraY, cameraZ), DRAWN, modelView,
+					projection));
+			*///?}
 		}
 	}
 	//?}
@@ -1388,7 +1415,7 @@ public final class GpuFoliageRenderer {
 
 	//? <1.21.11 {
 	/*/^* Where the foliage shader reads the plant pushes from. Nothing in vanilla binds uniform buffers here. ^/
-	private static final int INTERACTION_BINDING = 12;
+	static final int INTERACTION_BINDING = 12;
 
 	/^* The foliage shader, as the game last loaded it, or null before it has been. ^/
 	private static ShaderInstance legacyShader;
@@ -1419,18 +1446,30 @@ public final class GpuFoliageRenderer {
 	 * a vertex buffer can only draw the whole of itself, and a region is drawn in runs of visible sections, so each
 	 * run is drawn from where it starts in the buffer.
 	 ^/
-	private static void drawLegacy(Minecraft minecraft, Vec3 camera, List<Region> drawn) {
+	private static void drawLegacy(Minecraft minecraft, Vec3 camera, List<Region> drawn, Matrix4f shadowModelView,
+			Matrix4f shadowProjection) {
+		// In a shader pack's shadow pass the matrices are the sun's, as Iris hands them over.
+		boolean shadowPass = shadowModelView != null;
+		Matrix4f modelView = shadowPass ? shadowModelView : legacyModelView;
+		Matrix4f projection = shadowPass ? shadowProjection : legacyProjection;
 		ShaderInstance shader = legacyShader;
-		if (shader == null || legacyModelView == null || legacyProjection == null) {
+		//? iris {
+		if (meshedForShaderPack) {
+			// The pack's own program for the pass, built for the foliage; see IrisFoliageShaders.
+			shader = IrisCompat.program(shadowPass);
+		}
+		//?}
+		if (shader == null || modelView == null || projection == null) {
 			return;
 		}
 		GpuFoliageInteraction.uploadLegacy(camera, INTERACTION_BINDING);
 
 		RenderType renderType = RenderType.cutout();
 		renderType.setupRenderState();
-		RenderSystem.setShader(() -> shader);
+		ShaderInstance program = shader;
+		RenderSystem.setShader(() -> program);
 		//? >=1.21.1 {
-		shader.setDefaultUniforms(VertexFormat.Mode.QUADS, legacyModelView, legacyProjection, minecraft.getWindow());
+		shader.setDefaultUniforms(VertexFormat.Mode.QUADS, modelView, projection, minecraft.getWindow());
 		//?} else {
 		/^// Before 1.21.1 nothing sets the uniforms every shader shares in one call: they are set the way the terrain's
 		// own layers set them.
@@ -1438,10 +1477,10 @@ public final class GpuFoliageRenderer {
 			shader.setSampler("Sampler" + sampler, RenderSystem.getShaderTexture(sampler));
 		}
 		if (shader.MODEL_VIEW_MATRIX != null) {
-			shader.MODEL_VIEW_MATRIX.set(legacyModelView);
+			shader.MODEL_VIEW_MATRIX.set(modelView);
 		}
 		if (shader.PROJECTION_MATRIX != null) {
-			shader.PROJECTION_MATRIX.set(legacyProjection);
+			shader.PROJECTION_MATRIX.set(projection);
 		}
 		if (shader.COLOR_MODULATOR != null) {
 			shader.COLOR_MODULATOR.set(RenderSystem.getShaderColor());
@@ -1474,6 +1513,15 @@ public final class GpuFoliageRenderer {
 				(float) (cameraBlock.getY() - camera.y),
 				(float) (cameraBlock.getZ() - camera.z));
 		shader.apply();
+		//? iris {
+		if (meshedForShaderPack) {
+			// A pack's program knows only the uniforms Iris lists, so the sway's are set on it directly once it is in use.
+			IrisCompat.setSwayUniforms(shader, FoliageSettings.wavingFoliage() ? FoliageSettings.wavingIntensity() : 0.0F,
+					edge, cameraBlock.getX(), cameraBlock.getY(), cameraBlock.getZ(),
+					(float) (cameraBlock.getX() - camera.x), (float) (cameraBlock.getY() - camera.y),
+					(float) (cameraBlock.getZ() - camera.z), RenderSystem.getShaderGameTime());
+		}
+		//?}
 
 		Uniform regionOffset = shader.CHUNK_OFFSET;
 		int boundRegion = -1;

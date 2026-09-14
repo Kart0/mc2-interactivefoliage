@@ -18,9 +18,15 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 @Mixin(value = ShadowRenderer.class, remap = false)
 public abstract class ShadowRendererMixin {
 
+	//? >=1.21.11 {
 	@Inject(method = "renderShadows", at = @At(value = "FIELD",
 			target = "Lnet/irisshaders/iris/pipeline/WorldRenderingPhase;ENTITIES:Lnet/irisshaders/iris/pipeline/WorldRenderingPhase;",
 			ordinal = 0))
+	//?} else {
+	/^// Before 1.21.11 the pass sets no phases; the entities start where the viewport is set back to the shadow map's.
+	@Inject(method = "renderShadows", at = @At(value = "INVOKE",
+			target = "Lcom/mojang/blaze3d/systems/RenderSystem;viewport(IIII)V", ordinal = 0, remap = true))
+	^///?}
 	private void mc2$drawFoliageShadow(CallbackInfo ci) {
 		Vector3d camera = CameraUniforms.getUnshiftedCameraPosition();
 		IrisFoliageShaders.drawShadow(ShadowRenderer.MODELVIEW, ShadowRenderer.PROJECTION, camera.x(), camera.y(), camera.z());

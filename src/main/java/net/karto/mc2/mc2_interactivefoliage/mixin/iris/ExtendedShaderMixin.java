@@ -1,6 +1,6 @@
 package net.karto.mc2.mc2_interactivefoliage.mixin.iris;
 
-//? iris {
+//? >=1.21.11 {
 
 //? >=26.2 {
 import com.mojang.blaze3d.pipeline.BindGroupLayout;

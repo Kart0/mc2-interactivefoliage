@@ -26,6 +26,7 @@ import java.util.Map;
 @Mixin(value = ShaderCreator.class, remap = false)
 public abstract class ShaderCreatorMixin {
 
+	//? >=1.21.11 {
 	@Redirect(method = {"create", "createShadow"}, at = @At(value = "INVOKE",
 			target = "Lnet/irisshaders/iris/pipeline/transform/TransformPatcher;patchVanilla(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Lnet/irisshaders/iris/gl/blending/AlphaTest;ZZZLnet/irisshaders/iris/gl/state/ShaderAttributeInputs;Lit/unimi/dsi/fastutil/objects/Object2ObjectMap;)Ljava/util/Map;"))
 	private static Map<PatchShaderType, String> mc2$swayFoliage(String name, String vertex, String geometry,
@@ -34,6 +35,17 @@ public abstract class ShaderCreatorMixin {
 			Object2ObjectMap<Tri<String, TextureType, TextureStage>, String> textureMap) {
 		Map<PatchShaderType, String> translated = TransformPatcher.patchVanilla(name, vertex, geometry, tessControl,
 				tessEval, fragment, alpha, isLines, isClouds, hasChunkOffset, inputs, textureMap);
+	//?} else {
+	/*// Before 1.21.11 clouds are not told apart, and shadow programs are built by the same method as the rest.
+	@Redirect(method = "create", at = @At(value = "INVOKE",
+			target = "Lnet/irisshaders/iris/pipeline/transform/TransformPatcher;patchVanilla(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Lnet/irisshaders/iris/gl/blending/AlphaTest;ZZLnet/irisshaders/iris/gl/state/ShaderAttributeInputs;Lit/unimi/dsi/fastutil/objects/Object2ObjectMap;)Ljava/util/Map;"))
+	private static Map<PatchShaderType, String> mc2$swayFoliage(String name, String vertex, String geometry,
+			String tessControl, String tessEval, String fragment, AlphaTest alpha, boolean isLines,
+			boolean hasChunkOffset, ShaderAttributeInputs inputs,
+			Object2ObjectMap<Tri<String, TextureType, TextureStage>, String> textureMap) {
+		Map<PatchShaderType, String> translated = TransformPatcher.patchVanilla(name, vertex, geometry, tessControl,
+				tessEval, fragment, alpha, isLines, hasChunkOffset, inputs, textureMap);
+	*///?}
 		if (!IrisFoliageShaders.isBuilding()) {
 			return translated;
 		}
