@@ -25,6 +25,7 @@ in float SwayWeights;
 layout(std140) uniform FoliageSway {
     float mc2_SwayIntensity;
     vec4 mc2_SwayEdge;
+    vec4 mc2_Weather;
 };
 
 #define MC2_MAX_CELLS 128

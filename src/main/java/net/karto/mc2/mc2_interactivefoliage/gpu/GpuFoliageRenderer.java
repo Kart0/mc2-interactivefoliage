@@ -162,10 +162,12 @@ public final class GpuFoliageRenderer {
 	private static final long REBUILD_BUDGET_NANOS = 4_000_000L;
 	*///?}
 	/**
-	 * Padding on cull boxes so foliage leaning into view is not culled away: room for the sway at its strongest
-	 * plus the strongest push from an entity, on a tall plant with Sway's intensity turned up.
+	 * Padding on cull boxes so foliage leaning into view is not culled away: room for the strongest push from an entity
+	 * -- about 1.8 blocks, on a tall plant with Sway's intensity turned up -- plus the furthest the wind reaches, a storm
+	 * at the highest intensity: 0.66 blocks of calm sway, times the storm, times the lean and tug in sway.glsl, about 3
+	 * blocks. Grow it with those.
 	 */
-	private static final double SWAY_MARGIN = 2.5D;
+	private static final double SWAY_MARGIN = 5.0D;
 	private static final int SECTION_SIZE = 16;
 	/** The near area never shrinks below this many chunks, however short the render distance. */
 	private static final int MIN_NEAR_RADIUS = 2;
@@ -329,8 +331,8 @@ public final class GpuFoliageRenderer {
 			.build();
 	//?}
 	//? >=1.21.11 {
-	/** The intensity, then the edge the wind eases off at. */
-	private static final int SWAY_SETTINGS_SIZE = new Std140SizeCalculator().putFloat().putVec4().get();
+	/** The intensity, then the edge the wind eases off at, then the weather. */
+	private static final int SWAY_SETTINGS_SIZE = new Std140SizeCalculator().putFloat().putVec4().putVec4().get();
 	//?}
 
 	/**
@@ -475,6 +477,7 @@ public final class GpuFoliageRenderer {
 	private static GpuBuffer swaySettings;
 	private static float uploadedIntensity = Float.NaN;
 	private static final Vector4f UPLOADED_EDGE = new Vector4f(Float.NaN);
+	private static final Vector4f UPLOADED_WEATHER = new Vector4f(Float.NaN);
 	//?}
 
 	/** Reused by every rebuild and grown to the largest section seen, so no rebuild has a size limit. */
@@ -1572,18 +1575,38 @@ public final class GpuFoliageRenderer {
 		}
 		float intensity = FoliageSettings.wavingFoliage() ? FoliageSettings.wavingIntensity() : 0.0F;
 		Vector4f edge = windEdgeFrom(camera);
-		if (intensity != uploadedIntensity || !edge.equals(UPLOADED_EDGE)) {
+		Vector4f weather = weather();
+		if (intensity != uploadedIntensity || !edge.equals(UPLOADED_EDGE) || !weather.equals(UPLOADED_WEATHER)) {
 			try (MemoryStack stack = MemoryStack.stackPush()) {
 				ByteBuffer data = Std140Builder.onStack(stack, SWAY_SETTINGS_SIZE)
 						.putFloat(intensity)
 						.putVec4(edge)
+						.putVec4(weather)
 						.get();
 				RenderSystem.getDevice().createCommandEncoder().writeToBuffer(swaySettings.slice(), data);
 			}
 			uploadedIntensity = intensity;
 			UPLOADED_EDGE.set(edge);
+			UPLOADED_WEATHER.set(weather);
 		}
 		return swaySettings;
+	}
+	//?}
+
+	//? >=1.21.11 {
+	/**
+	 * The weather the shader turns the sway into wind by: the level's rain and thunder, each from 0 to 1 and eased in and
+	 * out by the game, taken between ticks so they change smoothly. The same everywhere in the level, as the game's own
+	 * rain level is.
+	 */
+	private static Vector4f weather() {
+		Minecraft minecraft = Minecraft.getInstance();
+		if (minecraft.level == null) {
+			return new Vector4f();
+		}
+		float partialTick = minecraft.getDeltaTracker().getGameTimeDeltaPartialTick(false);
+		return new Vector4f(minecraft.level.getRainLevel(partialTick), minecraft.level.getThunderLevel(partialTick),
+				0.0F, 0.0F);
 	}
 	//?}
 

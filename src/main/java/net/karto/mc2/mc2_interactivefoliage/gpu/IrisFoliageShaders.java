@@ -428,6 +428,7 @@ public final class IrisFoliageShaders {
 			layout(std140) uniform iris_FoliageSway {
 			    float mc2_SwayIntensity;
 			    vec4 mc2_SwayEdge;
+			    vec4 mc2_Weather;
 			};
 			#define MC2_MAX_CELLS 128
 			layout(std140) uniform iris_FoliageInteraction {
@@ -455,6 +456,8 @@ public final class IrisFoliageShaders {
 			in float SwayWeights;
 			uniform float mc2_SwayIntensity;
 			uniform vec4 mc2_SwayEdge;
+			// Not set before 1.21.11 yet, so it reads zero: no rain, and the calm sway.
+			uniform vec4 mc2_Weather;
 			uniform ivec3 mc2_CameraBlockPos;
 			uniform vec3 mc2_CameraOffset;
 			uniform float mc2_GameTime;
