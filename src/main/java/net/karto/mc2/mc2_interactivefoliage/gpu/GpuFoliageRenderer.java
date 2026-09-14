@@ -20,6 +20,8 @@ import com.mojang.blaze3d.buffers.Std140SizeCalculator;
 //?}
 //? >=26.2 {
 import com.mojang.blaze3d.pipeline.BindGroupLayout;
+import com.mojang.blaze3d.pipeline.DepthStencilState;
+import com.mojang.blaze3d.platform.CompareOp;
 //?} elif >=26.1.2 {
 /*import com.mojang.blaze3d.pipeline.DepthStencilState;
 *///?} elif >=1.21.11 {
@@ -422,6 +424,19 @@ public final class GpuFoliageRenderer {
 	*///?}
 	/** Set when every buffer was thrown away, so the chunks already loaded get queued again. */
 	private static boolean reseedPending;
+	/**
+	 * Whether what the renderer holds was meshed to be drawn through a shader pack, and for which pack. A pack's
+	 * programs read a wider vertex format, and its own block ids, so turning one on or off, or loading another,
+	 * hands the foliage back to the chunk mesh and meshes it all again.
+	 */
+	private static boolean meshedForShaderPack;
+	private static int meshedPackGeneration;
+	//? fabric && >=26.2 {
+	/** The pipeline drawn with while a shader pack is loaded; see {@link IrisFoliageShaders}. */
+	private static RenderPipeline shaderPackPipeline;
+	/** The same, for drawing into a shader pack's shadow map. */
+	private static RenderPipeline shaderPackShadowPipeline;
+	//?}
 
 	//? >=1.21.11 {
 	/** Holds the sway settings the shader reads; rewritten only when one of them changes. */
@@ -455,8 +470,11 @@ public final class GpuFoliageRenderer {
 		/** The block's attributes and ours, interleaved, ready to be copied into a region as it stands. */
 		final ByteBuffer data;
 		final int vertexCount;
+		/** Bytes per vertex in {@link #data}: wider while a shader pack is loaded, whose format carries more. */
+		final int stride;
 
-		Section(long key, BlockPos origin, ByteBuffer data, int vertexCount) {
+		Section(long key, BlockPos origin, ByteBuffer data, int vertexCount, int stride) {
+			this.stride = stride;
 			this.key = key;
 			this.origin = origin;
 			this.bounds = new AABB(
@@ -571,8 +589,9 @@ public final class GpuFoliageRenderer {
 			}
 			// Its sections are already interleaved, so each one is a single copy. A region is rebuilt
 			// whenever any of its sections changes, and there are up to sixteen of them, so doing the
-			// per-vertex work here instead would repeat it for every section that did not change.
-			int stride = VERTEX_BYTES + WEIGHT_BYTES;
+			// per-vertex work here instead would repeat it for every section that did not change. Every section
+			// in a region was meshed the same way: switching to or from a shader pack meshes everything again.
+			int stride = occupiedCount == 0 ? VERTEX_BYTES + WEIGHT_BYTES : sections[occupied[0]].stride;
 			//? >=1.21.11 {
 			// Staging memory is borrowed rather than asked for: uploads happen one after another on the
 			// render thread, and a region can be hundreds of kilobytes, so this saves an allocation and a
@@ -997,10 +1016,31 @@ public final class GpuFoliageRenderer {
 			}
 			return;
 		}
+		boolean shaderPack = IrisCompat.shaderPackInUse();
+		//? fabric && >=26.2 {
+		if (shaderPack) {
+			setUpShaderPack();
+		}
+		//?}
+		// Drawn through a shader pack only with the programs built for it. Where they could not be, the chunk mesh keeps
+		// the foliage for as long as that pack is loaded, drawn by the pack as it draws any other block.
+		if (shaderPack && !IrisCompat.programsReady()) {
+			if (active) {
+				deactivate(minecraft);
+			}
+			return;
+		}
+		int packGeneration = shaderPack ? IrisCompat.programGeneration() : 0;
+		if (active && (shaderPack != meshedForShaderPack || packGeneration != meshedPackGeneration)) {
+			// Meshed for another pack or for none: handed back to the chunk mesh, and taken up again below.
+			deactivate(minecraft);
+		}
 		if (!active) {
 			// Chunks that loaded while switched off were never queued.
 			active = true;
 			reseedPending = true;
+			meshedForShaderPack = shaderPack;
+			meshedPackGeneration = packGeneration;
 		}
 
 		if (camera == null) {
@@ -1031,22 +1071,100 @@ public final class GpuFoliageRenderer {
 			return;
 		}
 		*///?}
-		Object sodium = SodiumBridge.renderer();
-		List<Region> drawn = DRAWN;
-		drawn.clear();
-		drawsSize = 0;
+		// Regions that fell out of range are let go before anything is drawn from them.
 		var regions = REGIONS.entrySet().iterator();
 		while (regions.hasNext()) {
 			var entry = regions.next();
-			Region region = entry.getValue();
 			if (!regionWithinRange(minecraft, entry.getKey())) {
-				region.free();
+				entry.getValue().free();
 				regions.remove();
 				//? <1.21.11 {
-				/*DIRTY_REGIONS.remove(region);
+				/*DIRTY_REGIONS.remove(entry.getValue());
 				*///?}
-				continue;
 			}
+		}
+		if (!collectDraws(frustum, SodiumBridge.renderer())) {
+			return;
+		}
+
+		//? >=1.21.11 {
+		submitDraws(minecraft, camera, null, null);
+		//?} else {
+		/*drawLegacy(minecraft, camera, DRAWN);
+		*///?}
+	}
+
+	//? fabric && >=26.2 {
+	/**
+	 * Builds the pipeline the renderer draws with while a shader pack is loaded, once: the pack's programs take the
+	 * place of its shaders, and it holds Iris's terrain format so they find every attribute they read.
+	 */
+	private static void setUpShaderPack() {
+		if (shaderPackPipeline != null) {
+			return;
+		}
+		shaderPackPipeline = RenderPipeline.builder(RenderPipelines.BLOCK_SNIPPET)
+				.withLocation(Identifier.fromNamespaceAndPath(ModTemplate.MOD_ID, "pipeline/foliage_shader_pack"))
+				.withVertexShader(Identifier.fromNamespaceAndPath(ModTemplate.MOD_ID, "core/foliage"))
+				.withFragmentShader(Identifier.fromNamespaceAndPath(ModTemplate.MOD_ID, "core/foliage"))
+				.withVertexBinding(0, IrisCompat.shaderPackFormat())
+				.withBindGroupLayout(SWAY_SETTINGS)
+				.withBindGroupLayout(GpuFoliageInteraction.LAYOUT)
+				.withShaderDefine("ALPHA_CUTOUT", 0.5F)
+				.build();
+		// Minecraft tests depth reversed, and a shader pack's shadow map does not. Iris turns the test round in its shadow
+		// pass only for the pipelines it knows, so the one drawn into the shadow map has it turned round already: the
+		// block pipelines' test the way Iris turns it. With theirs, plants passed only behind what was already in the
+		// shadow map and wrote their depth over it, wiping the shadows around them.
+		shaderPackShadowPipeline = RenderPipeline.builder(RenderPipelines.BLOCK_SNIPPET)
+				.withLocation(Identifier.fromNamespaceAndPath(ModTemplate.MOD_ID, "pipeline/foliage_shader_pack_shadow"))
+				.withVertexShader(Identifier.fromNamespaceAndPath(ModTemplate.MOD_ID, "core/foliage"))
+				.withFragmentShader(Identifier.fromNamespaceAndPath(ModTemplate.MOD_ID, "core/foliage"))
+				.withVertexBinding(0, IrisCompat.shaderPackFormat())
+				.withBindGroupLayout(SWAY_SETTINGS)
+				.withBindGroupLayout(GpuFoliageInteraction.LAYOUT)
+				.withShaderDefine("ALPHA_CUTOUT", 0.5F)
+				.withDepthStencilState(new DepthStencilState(CompareOp.LESS_THAN_OR_EQUAL, true))
+				.build();
+		IrisCompat.setUp(shaderPackPipeline, shaderPackShadowPipeline,
+				List.of(SWAY_SETTINGS, GpuFoliageInteraction.LAYOUT), GpuFoliageRenderer::drawShadow);
+	}
+
+	/** Holds the sun's projection for drawing into a shader pack's shadow map. */
+	private static net.minecraft.client.renderer.ProjectionMatrixBuffer shadowProjectionUniform;
+
+	private static net.minecraft.client.renderer.ProjectionMatrixBuffer shadowProjectionBuffer() {
+		if (shadowProjectionUniform == null) {
+			shadowProjectionUniform = new net.minecraft.client.renderer.ProjectionMatrixBuffer("MC2 foliage shadow");
+		}
+		return shadowProjectionUniform;
+	}
+
+	/**
+	 * Draws the foliage into a shader pack's shadow map, called by Iris in the middle of its shadow pass, so plants cast
+	 * shadows that sway with them. Every section near the player the chunk mesh left its foliage out of is drawn: the
+	 * shadow's view is not the camera's, so neither the camera's frustum nor Sodium's view of what is visible applies.
+	 */
+	private static void drawShadow(Matrix4f modelView, Matrix4f projection, double cameraX, double cameraY, double cameraZ) {
+		Minecraft minecraft = Minecraft.getInstance();
+		if (!active || !meshedForShaderPack || !IrisCompat.hasShadowProgram() || minecraft.level == null) {
+			return;
+		}
+		if (collectDraws(null, null)) {
+			submitDraws(minecraft, new Vec3(cameraX, cameraY, cameraZ), modelView, projection);
+		}
+	}
+	//?}
+
+	/**
+	 * Works out this frame's draw calls into {@link #DRAWN} and {@link #draws}: the sections the chunk mesh left their
+	 * foliage out of, inside the frustum and, with Sodium, among what it sees. Returns whether there is anything to draw.
+	 */
+	private static boolean collectDraws(Frustum frustum, Object sodium) {
+		List<Region> drawn = DRAWN;
+		drawn.clear();
+		drawsSize = 0;
+		for (Region region : REGIONS.values()) {
 			if (frustum != null && !frustum.isVisible(region.bounds)) {
 				continue;
 			}
@@ -1094,17 +1212,31 @@ public final class GpuFoliageRenderer {
 			}
 		}
 
-		if (drawn.isEmpty()) {
-			return;
-		}
+		return !drawn.isEmpty();
+	}
 
-		//? >=1.21.11 {
-		// Every region's offset is written in one mapping of the uniform ring buffer. The singular
-		// writeTransform maps and unmaps it per call, which costs a GPU round trip for each one.
-		//? >=26.2 {
-		Matrix4f modelView = RenderSystem.getModelViewMatrixCopy();
+	//? >=1.21.11 {
+	/**
+	 * Draws what {@link #collectDraws} worked out: through the mod's own pipeline, or through a shader pack's programs
+	 * while one is loaded -- into its shadow map if this is its shadow pass. Iris binds the framebuffer a pack's program
+	 * writes to itself, so the pass is opened on the main target either way.
+	 */
+	private static void submitDraws(Minecraft minecraft, Vec3 camera, Matrix4f shadowModelView, Matrix4f shadowProjection) {
+		List<Region> drawn = DRAWN;
+		boolean shadowPass = shadowModelView != null;
+		//? fabric && >=26.2 {
+		RenderPipeline pipeline = shadowPass ? shaderPackShadowPipeline
+				: meshedForShaderPack ? shaderPackPipeline : PIPELINE;
 		//?} else {
-		/*Matrix4f modelView = RenderSystem.getModelViewMatrix();
+		/*RenderPipeline pipeline = PIPELINE;
+		*///?}
+		// Every region's offset is written in one mapping of the uniform ring buffer. The singular
+		// writeTransform maps and unmaps it per call, which costs a GPU round trip for each one. In a shadow pass the
+		// model view is the sun's, as Iris hands it over.
+		//? >=26.2 {
+		Matrix4f modelView = shadowPass ? shadowModelView : RenderSystem.getModelViewMatrixCopy();
+		//?} else {
+		/*Matrix4f modelView = shadowPass ? shadowModelView : RenderSystem.getModelViewMatrix();
 		*///?}
 		Vector4f noModulation = new Vector4f(1.0F, 1.0F, 1.0F, 1.0F);
 		Matrix4f noTextureTransform = new Matrix4f();
@@ -1141,11 +1273,17 @@ public final class GpuFoliageRenderer {
 		// Written before the pass opens: a buffer cannot be written to while a render pass is open.
 		GpuBuffer settings = swaySettings(camera);
 		GpuBuffer interaction = GpuFoliageInteraction.upload(camera);
+		//? fabric && >=26.2 {
+		// The sun's projection, from Iris itself: what the game holds as the projection by the time Iris hands over its
+		// shadow pass is not reliably the shadow map's, and plants projected any other way land at the wrong depth in it.
+		GpuBufferSlice projection = shadowPass ? shadowProjectionBuffer().getBuffer(shadowProjection) : null;
+		//?}
 
+		Runnable draw = () -> {
 		try (RenderPass pass = RenderSystem.getDevice()
 				.createCommandEncoder()
 				.createRenderPass(
-						() -> "MC2 foliage",
+						() -> shadowPass ? "MC2 foliage shadow" : "MC2 foliage",
 						target.getColorTextureView(),
 						//? >=26.2 {
 						Optional.empty(),
@@ -1154,8 +1292,13 @@ public final class GpuFoliageRenderer {
 						*///?}
 						target.getDepthTextureView(),
 						OptionalDouble.empty())) {
-			pass.setPipeline(PIPELINE);
+			pass.setPipeline(pipeline);
 			RenderSystem.bindDefaultUniforms(pass);
+			//? fabric && >=26.2 {
+			if (projection != null) {
+				pass.setUniform("Projection", projection);
+			}
+			//?}
 			pass.bindTexture("Sampler0", atlas.getTextureView(), atlas.getSampler());
 			pass.bindTexture("Sampler2",
 					//? >=26.1.2 {
@@ -1190,10 +1333,16 @@ public final class GpuFoliageRenderer {
 				*///?}
 			}
 		}
-		//?} else {
-		/*drawLegacy(minecraft, camera, drawn);
-		*///?}
+		};
+		//? fabric && >=26.2 {
+		if (meshedForShaderPack) {
+			IrisCompat.inTerrainPhase(draw);
+			return;
+		}
+		//?}
+		draw.run();
 	}
+	//?}
 
 	//? <1.21.11 {
 	/*/^* Where the foliage shader reads the plant pushes from. Nothing in vanilla binds uniform buffers here. ^/
@@ -1928,11 +2077,12 @@ public final class GpuFoliageRenderer {
 	}
 
 	/**
-	 * Meshes a section, with Iris told to leave the buffer alone: it widens any buffer asked for the block
-	 * format while a shader pack is loaded, and these vertices are written for a pipeline of the mod's own.
+	 * Meshes a section. Iris widens any buffer asked for the block format while a shader pack is loaded: that is left
+	 * to happen when the renderer draws through the pack, whose programs read that wider format, and is kept from
+	 * happening otherwise, when these vertices are written for a pipeline of the mod's own.
 	 */
 	private static void rebuild(Minecraft minecraft, ClientLevel level, long key) {
-		boolean wasSkipping = IrisVertexExtension.begin();
+		boolean wasSkipping = meshedForShaderPack ? IrisVertexExtension.allow() : IrisVertexExtension.begin();
 		try {
 			meshSection(minecraft, level, key);
 		} finally {
@@ -2026,6 +2176,13 @@ public final class GpuFoliageRenderer {
 					}
 					pos.set(origin.getX() + dx, origin.getY() + dy, origin.getZ() + dz);
 					anchor.prepare(state, pos, level);
+					//? fabric && >=26.2 {
+					if (meshedForShaderPack) {
+						// The pack reads which block each vertex belongs to, and where its centre is, as it does on the
+						// chunk mesh; Iris writes them as the vertices go in.
+						IrisCompat.beginBlock(builder, state, offsetX + dx, offsetY + dy, offsetZ + dz);
+					}
+					//?}
 					//? >=26.1.2 {
 					modelRenderer.tesselateBlock(output, offsetX + dx, offsetY + dy, offsetZ + dz,
 							level, pos, state, GpuFoliageSplit.modelFor(state, models.get(state)),
@@ -2058,6 +2215,11 @@ public final class GpuFoliageRenderer {
 			}
 		}
 
+		//? fabric && >=26.2 {
+		if (meshedForShaderPack) {
+			IrisCompat.endBlock(builder);
+		}
+		//?}
 		//? >=1.21.1 {
 		MeshData mesh = builder.build();
 		//?} else {
@@ -2077,11 +2239,17 @@ public final class GpuFoliageRenderer {
 			// the block format's stride: another mod may widen the buffer behind our back -- Iris does, for
 			// shader packs -- and the vertices would then be read at a stride they were not written at. A
 			// section that comes back in another format is left to the chunk mesh instead of drawn as noise.
-			if (!DefaultVertexFormat.BLOCK.equals(mesh.drawState().format())) {
+			//? fabric && >=26.2 {
+			VertexFormat expected = meshedForShaderPack ? IrisCompat.shaderPackMeshFormat() : DefaultVertexFormat.BLOCK;
+			//?} else {
+			/*VertexFormat expected = DefaultVertexFormat.BLOCK;
+			*///?}
+			if (!expected.equals(mesh.drawState().format())) {
 				warnForeignVertexFormat(mesh.drawState().format());
 				removeSection(key);
 				return;
 			}
+			int vertexBytes = expected.getVertexSize();
 			ByteBuffer meshVertices = mesh.vertexBuffer();
 			int vertexCount = mesh.drawState().vertexCount();
 			weightScratch.flip();
@@ -2094,14 +2262,14 @@ public final class GpuFoliageRenderer {
 				return;
 			}
 			// Interleaved here, once, rather than each time the section's region is uploaded.
-			int stride = VERTEX_BYTES + WEIGHT_BYTES;
+			int stride = vertexBytes + WEIGHT_BYTES;
 			int meshBase = meshVertices.position();
 			ByteBuffer data = MemoryUtil.memAlloc(vertexCount * stride);
 			for (int vertex = 0; vertex < vertexCount; vertex++) {
-				data.put(vertex * stride, meshVertices, meshBase + vertex * VERTEX_BYTES, VERTEX_BYTES);
-				data.put(vertex * stride + VERTEX_BYTES, weightScratch, vertex * WEIGHT_BYTES, WEIGHT_BYTES);
+				data.put(vertex * stride, meshVertices, meshBase + vertex * vertexBytes, vertexBytes);
+				data.put(vertex * stride + vertexBytes, weightScratch, vertex * WEIGHT_BYTES, WEIGHT_BYTES);
 			}
-			putSection(key, new Section(key, origin, data, vertexCount));
+			putSection(key, new Section(key, origin, data, vertexCount, stride));
 		//? >=1.21.1 {
 		}
 		//?} else {

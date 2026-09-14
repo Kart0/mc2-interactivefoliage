@@ -58,10 +58,15 @@ sealed class Loader(val id: String) {
 				),
 				// The GPU foliage mixins are only declared where the GPU renderer has been ported, so
 				// their targets are known to be there.
-				mixins = if (ctx.stonecutter.eval(ctx.currentMcVersion, ">=1.20.1")) {
-					listOf("${ctx.modId}.mixins.json", "${ctx.modId}.gpu.mixins.json")
-				} else {
-					listOf("${ctx.modId}.mixins.json")
+				mixins = buildList {
+					add("${ctx.modId}.mixins.json")
+					if (ctx.stonecutter.eval(ctx.currentMcVersion, ">=1.20.1")) {
+						add("${ctx.modId}.gpu.mixins.json")
+					}
+					// Shader pack support, where it has been written. Its plugin skips every mixin unless Iris is installed.
+					if (ctx.stonecutter.eval(ctx.currentMcVersion, ">=26.2")) {
+						add("${ctx.modId}.iris.mixins.json")
+					}
 				},
 				depends = ctx.extension.dependencies.required.associate { it.modid.get() to it.fabricLikeVersionRange.get() },
 				recommends = ctx.extension.dependencies.optional.associate { it.modid.get() to it.fabricLikeVersionRange.get() },

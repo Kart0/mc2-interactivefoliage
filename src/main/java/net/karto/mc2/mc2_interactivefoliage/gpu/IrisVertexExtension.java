@@ -56,6 +56,20 @@ final class IrisVertexExtension {
 		return previous;
 	}
 
+	/**
+	 * The opposite of {@link #begin()}: lets Iris widen buffers on this thread, which it does while a shader pack is
+	 * loaded and the level is being drawn. The renderer meshes this way when it draws through the pack, whose programs
+	 * read that wider format. Returns what to hand back to {@link #end(boolean)}.
+	 */
+	static boolean allow() {
+		if (SKIP_EXTENSION == null) {
+			return false;
+		}
+		boolean previous = Boolean.TRUE.equals(SKIP_EXTENSION.get());
+		SKIP_EXTENSION.set(Boolean.FALSE);
+		return previous;
+	}
+
 	/** Puts back what {@link #begin()} found, so nothing else that asked for the same is cut short. */
 	static void end(boolean previous) {
 		if (SKIP_EXTENSION != null) {

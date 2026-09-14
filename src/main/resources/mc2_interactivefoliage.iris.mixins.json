@@ -1,0 +1,17 @@
+{
+  "package": "net.karto.mc2.mc2_interactivefoliage.mixin.iris",
+  "plugin": "net.karto.mc2.mc2_interactivefoliage.mixin.iris.IrisMixinPlugin",
+  "required": true,
+  "minVersion": "0.8",
+  "compatibilityLevel": "${java}",
+  "injectors": {
+    "defaultRequire": 1
+  },
+  "mixins": [],
+  "client": [
+    "ExtendedShaderMixin",
+    "GlDeviceMixin",
+    "IrisRenderingPipelineAccessor",
+    "ShaderCreatorMixin"
+  ]
+}
