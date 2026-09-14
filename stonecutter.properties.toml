@@ -39,6 +39,8 @@ deps.minecraft = "1.21.11"
 deps.fabric-api = "0.141.3+1.21.11"
 deps.sway = "4qoXxKCS"
 deps.modmenu = "17.0.0"
+deps.iris = "fDpuVzVr"
+deps.sodium = "NFkjnzWE"
 publish.additionalVersions = ["1.21.10"]
 
 [fabric."26.1.2"]
@@ -76,6 +78,8 @@ deps.sway = "qABBijPL"
 [neoforge."1.21.11"]
 deps.minecraft = "1.21.11"
 deps.neoforge = "21.11.42"
+deps.iris = "v6TgIIUM"
+deps.sodium = "sC6wj32u"
 deps.sway = "SAIKTwcv"
 publish.additionalVersions = ["1.21.10"]
 

@@ -126,6 +126,11 @@ dependencies {
 	modCompileOnly("com.terraformersmc:modmenu:${prop("deps.modmenu")}")
 	modLocalRuntime("com.terraformersmc:modmenu:${prop("deps.modmenu")}")
 	modImplementation("maven.modrinth:sway:${prop("deps.sway")}")
+	// Optional dependencies: compiled against for the shader pack support, where it has been written.
+	if (stonecutter.eval(stonecutter.current.version, ">=1.21.11")) {
+		modCompileOnly("maven.modrinth:iris:${prop("deps.iris")}")
+		modCompileOnly("maven.modrinth:sodium:${prop("deps.sodium")}")
+	}
 
 	// Third-party mods dropped into devmods/<version>-<loader>/, remapped by Loom.
 	devModJars.forEach { modLocalRuntime(files(it)) }

@@ -1,6 +1,6 @@
 package net.karto.mc2.mc2_interactivefoliage.mixin.iris;
 
-//? >=26.1.2 {
+//? iris {
 
 import it.unimi.dsi.fastutil.objects.Object2ObjectMap;
 import net.irisshaders.iris.gl.blending.AlphaTest;

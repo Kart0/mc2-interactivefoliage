@@ -1,6 +1,6 @@
 package net.karto.mc2.mc2_interactivefoliage.gpu;
 
-//? >=26.1.2 {
+//? iris {
 
 //? >=26.2 {
 import com.mojang.blaze3d.GpuFormat;
@@ -79,7 +79,10 @@ public final class IrisFoliageShaders {
 	private static GlProgram shadow;
 	/** Bumped for every pack loaded, so sections meshed for the last one are meshed again with this one's block ids. */
 	private static int generation;
+	private static IrisCompat.ShadowDraw foliageShadowDraw;
+	//? >=26.1.2 {
 	private static boolean shadowCallbackRegistered;
+	//?}
 
 	private IrisFoliageShaders() {
 	}
@@ -108,16 +111,28 @@ public final class IrisFoliageShaders {
 		pipeline = foliagePipeline;
 		shadowPipeline = foliageShadowPipeline;
 		layouts = List.copyOf(foliageLayouts);
+		foliageShadowDraw = shadowDraw;
+		//? >=26.1.2 {
 		if (!shadowCallbackRegistered) {
 			shadowCallbackRegistered = true;
 			// Called by Iris in its shadow pass once the terrain is in the shadow map, with the sun's matrices and the camera
 			// it rendered from.
 			IrisApi.getInstance().registerShadowRenderCallback(
-					(modelView, projection, cameraX, cameraY, cameraZ, tickDelta) -> {
-						if (owner != null && shadow != null) {
-							shadowDraw.draw(modelView, projection, cameraX, cameraY, cameraZ);
-						}
-					});
+					(modelView, projection, cameraX, cameraY, cameraZ, tickDelta) ->
+							drawShadow(modelView, projection, cameraX, cameraY, cameraZ));
+		}
+		//?}
+	}
+
+	/**
+	 * Draws the foliage into the shadow map, in the middle of Iris's shadow pass once the terrain is in it. From 26.1.2
+	 * Iris calls this through its shadow render callback; before, it has none, and ShadowRendererMixin calls it at the same
+	 * point.
+	 */
+	public static void drawShadow(org.joml.Matrix4f modelView, org.joml.Matrix4f projection,
+			double cameraX, double cameraY, double cameraZ) {
+		if (owner != null && shadow != null && foliageShadowDraw != null) {
+			foliageShadowDraw.draw(modelView, projection, cameraX, cameraY, cameraZ);
 		}
 	}
 

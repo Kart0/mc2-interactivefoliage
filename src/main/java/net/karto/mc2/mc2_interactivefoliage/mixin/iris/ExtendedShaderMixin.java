@@ -1,6 +1,6 @@
 package net.karto.mc2.mc2_interactivefoliage.mixin.iris;
 
-//? >=26.1.2 {
+//? iris {
 
 //? >=26.2 {
 import com.mojang.blaze3d.pipeline.BindGroupLayout;
@@ -29,9 +29,11 @@ public abstract class ExtendedShaderMixin {
 		return IrisFoliageShaders.isBuilding() ? IrisFoliageShaders.withFoliageLayouts(layouts) : layouts;
 	}
 	//?} else {
-	/*// Before 26.2 a program is handed its uniforms one by one, with its samplers after them.
+	/*// Before 26.2 a program is handed its uniforms one by one, with its samplers after them. The call is Minecraft's, so
+	// its name is remapped where the game is obfuscated, unlike the Iris class it is called from.
 	@ModifyArg(method = "<init>", at = @At(value = "INVOKE",
-			target = "Lcom/mojang/blaze3d/opengl/GlProgram;setupUniforms(Ljava/util/List;Ljava/util/List;)V"), index = 0)
+			target = "Lcom/mojang/blaze3d/opengl/GlProgram;setupUniforms(Ljava/util/List;Ljava/util/List;)V", remap = true),
+			index = 0)
 	private List<RenderPipeline.UniformDescription> mc2$addFoliageLayouts(List<RenderPipeline.UniformDescription> uniforms) {
 		return IrisFoliageShaders.isBuilding() ? IrisFoliageShaders.withFoliageLayouts(uniforms) : uniforms;
 	}

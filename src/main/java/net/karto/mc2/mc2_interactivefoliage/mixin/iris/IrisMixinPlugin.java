@@ -1,6 +1,6 @@
 package net.karto.mc2.mc2_interactivefoliage.mixin.iris;
 
-//? >=26.1.2 {
+//? iris {
 
 //? fabric {
 import net.fabricmc.loader.api.FabricLoader;
@@ -44,7 +44,12 @@ public final class IrisMixinPlugin implements IMixinConfigPlugin {
 
 	@Override
 	public List<String> getMixins() {
+		//? <26.1.2 {
+		/*// Only where Iris has no shadow render callback; the class is not even compiled where it has one.
+		return List.of("ShadowRendererMixin");
+		*///?} else {
 		return null;
+		//?}
 	}
 
 	@Override
