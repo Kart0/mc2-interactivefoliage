@@ -55,6 +55,10 @@ public final class IrisMixinPlugin implements IMixinConfigPlugin {
 	 */
 	@Override
 	public List<String> getMixins() {
+		// Mixin never asks shouldApplyMixin about the mixins a plugin adds here, so without Iris none are added at all.
+		if (!IRIS) {
+			return List.of();
+		}
 		List<String> mixins = new ArrayList<>();
 		//? >=1.21.11 {
 		// Programs are built from uniform lists and drawn through pipelines.
