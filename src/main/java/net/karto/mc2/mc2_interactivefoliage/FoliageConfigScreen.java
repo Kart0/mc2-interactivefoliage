@@ -26,9 +26,21 @@ public class FoliageConfigScreen extends Screen {
 	private static final int TIGHT_ROW_SPACING = 24;
 	/** The least room kept free above the title and below the save button together. */
 	private static final int SCREEN_MARGIN = 10;
+	/** A full-width option, and the two halves options share a row in, with the gap between them. */
+	private static final int FULL_WIDTH = 200;
+	private static final int COLUMN_WIDTH = 150;
+	private static final int COLUMN_GAP = 4;
+	/** A slider that can be reset leaves room beside it for its reset button. */
+	private static final int RESET_WIDTH = 18;
+	private static final int RESET_GAP = 4;
 
+	private CycleButton<Boolean> interactionBtn;
 	//? >=1.20.1 {
+	private PresetSlider presetSlider;
+	private CycleButton<Boolean> rendererBtn;
 	private GpuDistanceSlider gpuDistanceSlider;
+	private CycleButton<Boolean> weatherWindBtn;
+	private WeatherWindDistanceSlider weatherWindDistanceSlider;
 	private CycleButton<Boolean> wavingFoliageBtn;
 	private WavingIntensitySlider wavingIntensitySlider;
 	private Button resetWavingIntensityBtn;
@@ -44,7 +56,7 @@ public class FoliageConfigScreen extends Screen {
 	 * interface scale's, or the mod's own, since some versions have fewer options than others.
 	 * <p>
 	 * The title sits 20 above this, the options follow a row apart, and the save button comes a row and 10 more
-	 * after the last one. Options that are hidden keep their row, so the height never changes while the screen is
+	 * after the last one. Options that are hidden keep their place, so the height never changes while the screen is
 	 * open.
 	 */
 	private int topOfOptions() {
@@ -58,11 +70,16 @@ public class FoliageConfigScreen extends Screen {
 
 	/** From the top of the title to the bottom of the save button. */
 	private static int heightWith(int spacing) {
-		int rows = 3;
+		// The switch, then the interaction's two sliders.
+		int rows = 2;
+		int extra = 0;
 		//? >=1.20.1 {
+		// The preset, set apart from the options below it, then the renderer, the weather wind and the wind, each
+		// beside its own setting.
 		rows += 4;
+		extra += 10;
 		//?}
-		return 20 + (rows - 1) * spacing + (spacing + 10) + 20;
+		return 20 + (rows - 1) * spacing + extra + (spacing + 10) + 20;
 	}
 
 	@Override
@@ -71,25 +88,45 @@ public class FoliageConfigScreen extends Screen {
 		int y = topOfOptions();
 		int spacing = rowSpacing();
 
-		// ── Toggle ON/OFF ──────────────────────────────────────────────────────
-		this.addRenderableWidget(
-				CycleButton.booleanBuilder(
-						Component.translatable("config.mc2_interactivefoliage.on"),
-						Component.translatable("config.mc2_interactivefoliage.off")
-						//? > 1.21.1 {
-						,config.enabled
-						 //?}
-				).create(cx - 100, y, 200, 20,
-						Component.translatable("config.mc2_interactivefoliage.enabled"),
-						(btn, val) -> config.enabled = val
-				)
+		// Options share a row in two columns; the switch and the save button span the middle.
+		int left = cx - COLUMN_WIDTH - COLUMN_GAP / 2;
+		int right = cx + COLUMN_GAP / 2;
+		int sliderWidth = COLUMN_WIDTH - RESET_WIDTH - RESET_GAP;
+
+		//? >=1.20.1 {
+		// ── Preset, across both columns and set apart: the first thing to choose, the rest follows from it ──
+		presetSlider = new PresetSlider(left, y, COLUMN_WIDTH * 2 + COLUMN_GAP, 20);
+		this.addRenderableWidget(presetSlider);
+
+		y += spacing + 10;
+		//?}
+
+		// ── Interaction ON/OFF ─────────────────────────────────────────────────
+		interactionBtn = CycleButton.booleanBuilder(
+				Component.translatable("config.mc2_interactivefoliage.on"),
+				Component.translatable("config.mc2_interactivefoliage.off")
+				//? > 1.21.1 {
+				,config.enabled
+				 //?}
+		)
+		//? <=1.21.1 {
+		/*.withInitialValue(config.enabled)
+		*///?}
+		.create(cx - FULL_WIDTH / 2, y, FULL_WIDTH, 20,
+				Component.translatable("config.mc2_interactivefoliage.enabled"),
+				(btn, val) -> {
+					config.enabled = val;
+					updateInteractionOptions();
+					updatePreset();
+				}
 		);
+		this.addRenderableWidget(interactionBtn);
 
 		y += spacing;
 
-		// ── Intensidad ─────────────────────────────────────────────────────────
-		final int intensityY = y;
-		intensitySlider = new IntensitySlider(cx - 100, y, 178, 20,
+		// ── Intensity and interaction radius, shown only with the interaction on ──
+		// The reset button on the slider's outer side, so a hidden one leaves no gap in the middle of the screen.
+		intensitySlider = new IntensitySlider(left + RESET_WIDTH + RESET_GAP, y, sliderWidth, 20,
 				toSliderPosition(config.intensity, MIN_INTENSITY, DEFAULT_INTENSITY, MAX_INTENSITY)
 		);
 		this.addRenderableWidget(intensitySlider);
@@ -98,30 +135,24 @@ public class FoliageConfigScreen extends Screen {
 		resetIntensityBtn = Button.builder(
 				Component.translatable("config.mc2_interactivefoliage.reset"),
 				btn -> intensitySlider.reset()
-		).bounds(cx + 82, intensityY, 18, 20).build();
-		resetIntensityBtn.visible =
-				Math.abs(config.intensity - DEFAULT_INTENSITY) > 0.01f;
+		).bounds(left, y, RESET_WIDTH, 20).build();
 		this.addRenderableWidget(resetIntensityBtn);
 
-		y += spacing;
-
-		// ── Radio de visibilidad ───────────────────────────────────────────────
-		final int radiusY = y;
-		radiusSlider = new RadiusSlider(cx - 100, y, 178, 20, radiusToSlider(config.maxDistance));
+		radiusSlider = new RadiusSlider(right, y, sliderWidth, 20, radiusToSlider(config.maxDistance));
 		this.addRenderableWidget(radiusSlider);
 
 		resetRadiusBtn = Button.builder(
 				Component.translatable("config.mc2_interactivefoliage.reset"),
 				btn -> radiusSlider.reset()
-		).bounds(cx + 82, radiusY, 18, 20).build();
-		resetRadiusBtn.visible = !isDefaultRadius();
+		).bounds(right + sliderWidth + RESET_GAP, y, RESET_WIDTH, 20).build();
 		this.addRenderableWidget(resetRadiusBtn);
+		updateInteractionOptions();
 
 		//? >=1.20.1 {
 		y += spacing;
 
-		// ── Renderer: the chunk mesh as always, or the mod's own on the GPU ────
-		CycleButton<Boolean> rendererBtn = CycleButton.booleanBuilder(
+		// ── Renderer: the chunk mesh as always, or the mod's own on the GPU; beside it how far the GPU one reaches ──
+		rendererBtn = CycleButton.booleanBuilder(
 						// Written out rather than translated: the two read the same in every language.
 						Component.literal("GPU"),
 						Component.literal("CPU")
@@ -132,11 +163,12 @@ public class FoliageConfigScreen extends Screen {
 				//? <=1.21.1 {
 				/*.withInitialValue(FoliageSettings.gpuRenderer())
 				*///?}
-				.create(cx - 100, y, 200, 20,
+				.create(left, y, COLUMN_WIDTH, 20,
 						Component.translatable("config.mc2_interactivefoliage.renderer"),
 						(btn, val) -> {
 							FoliageSettings.setGpuRenderer(val);
 							updateGpuOptions();
+							updatePreset();
 						}
 				);
 		// Shown but greyed out where the chunk mesh cannot move plants, so it reads GPU rather than offering a CPU
@@ -144,15 +176,38 @@ public class FoliageConfigScreen extends Screen {
 		rendererBtn.active = FoliageSettings.cpuRendererAvailable();
 		this.addRenderableWidget(rendererBtn);
 
-		y += spacing;
-
-		// ── How far the GPU renderer reaches, shown only with it on ────────────
-		gpuDistanceSlider = new GpuDistanceSlider(cx - 100, y, 200, 20);
+		gpuDistanceSlider = new GpuDistanceSlider(right, y, COLUMN_WIDTH, 20);
 		this.addRenderableWidget(gpuDistanceSlider);
 
 		y += spacing;
 
-		// ── Wind, shown only with the GPU renderer on ──────────────────────────
+		// ── Weather wind, and how far from the player it reaches; with the GPU renderer only ──
+		weatherWindBtn = CycleButton.booleanBuilder(
+				Component.translatable("config.mc2_interactivefoliage.on"),
+				Component.translatable("config.mc2_interactivefoliage.off")
+				//? >1.21.1 {
+				, FoliageSettings.weatherWind()
+				//?}
+		)
+		//? <=1.21.1 {
+		/*.withInitialValue(FoliageSettings.weatherWind())
+		*///?}
+		.create(left, y, COLUMN_WIDTH, 20,
+				Component.translatable("config.mc2_interactivefoliage.weather_wind"),
+				(btn, val) -> {
+					FoliageSettings.setWeatherWind(val);
+					updateGpuOptions();
+					updatePreset();
+				}
+		);
+		this.addRenderableWidget(weatherWindBtn);
+
+		weatherWindDistanceSlider = new WeatherWindDistanceSlider(right, y, COLUMN_WIDTH, 20);
+		this.addRenderableWidget(weatherWindDistanceSlider);
+
+		y += spacing;
+
+		// ── Wind, and its strength; with the GPU renderer only ─────────────────
 		wavingFoliageBtn = CycleButton.booleanBuilder(
 				Component.translatable("config.mc2_interactivefoliage.on"),
 				Component.translatable("config.mc2_interactivefoliage.off")
@@ -163,20 +218,17 @@ public class FoliageConfigScreen extends Screen {
 		//? <=1.21.1 {
 		/*.withInitialValue(FoliageSettings.wavingFoliage())
 		*///?}
-		.create(cx - 100, y, 200, 20,
+		.create(left, y, COLUMN_WIDTH, 20,
 				Component.translatable("config.mc2_interactivefoliage.waving_foliage"),
 				(btn, val) -> {
 					FoliageSettings.setWavingFoliage(val);
 					updateGpuOptions();
+					updatePreset();
 				}
 		);
 		this.addRenderableWidget(wavingFoliageBtn);
 
-		y += spacing;
-
-		// ── Wind strength, shown only while the wind is on ─────────────────────
-		final int wavingIntensityY = y;
-		wavingIntensitySlider = new WavingIntensitySlider(cx - 100, y, 178, 20,
+		wavingIntensitySlider = new WavingIntensitySlider(right, y, sliderWidth, 20,
 				wavingIntensityToSlider(FoliageSettings.wavingIntensity())
 		);
 		this.addRenderableWidget(wavingIntensitySlider);
@@ -184,9 +236,10 @@ public class FoliageConfigScreen extends Screen {
 		resetWavingIntensityBtn = Button.builder(
 				Component.translatable("config.mc2_interactivefoliage.reset"),
 				btn -> wavingIntensitySlider.reset()
-		).bounds(cx + 82, wavingIntensityY, 18, 20).build();
+		).bounds(right + sliderWidth + RESET_GAP, y, RESET_WIDTH, 20).build();
 		this.addRenderableWidget(resetWavingIntensityBtn);
 		updateGpuOptions();
+		updatePreset();
 		//?}
 
 		y += spacing + 10;
@@ -195,27 +248,30 @@ public class FoliageConfigScreen extends Screen {
 		this.addRenderableWidget(Button.builder(
 				Component.translatable("config.mc2_interactivefoliage.save"),
 				btn -> {
-					SwayConfig.save();
 					//? >=1.20.1 {
+					// A preset picked just before saving is applied first: it sets Sway's switch too.
+					applyPreset();
 					applyGpuDistance();
 					FoliageSettings.save();
 					//?}
+					SwayConfig.save();
 					//? >=26.2{
 					this.minecraft.setScreenAndShow(parent);
 					 //?} else{
 					/*this.minecraft.setScreen(parent);
 					*///?}
 				}
-		).bounds(cx - 100, y, 200, 20).build());
+		).bounds(cx - FULL_WIDTH / 2, y, FULL_WIDTH, 20).build());
 	}
 
 	@Override
 	public void onClose() {
-		SwayConfig.save();
 		//? >=1.20.1 {
+		applyPreset();
 		applyGpuDistance();
 		FoliageSettings.save();
 		//?}
+		SwayConfig.save();
 		//? >=26.2{
 		this.minecraft.setScreenAndShow(parent);
 		 //?} else{
@@ -229,6 +285,11 @@ public class FoliageConfigScreen extends Screen {
 			net.minecraft.client.gui.GuiGraphics graphics,
 			int mouseX, int mouseY, float delta
 	) {
+		//? <1.21.1 {
+		/^// Before 1.20.2 a screen draws no background of its own: this one dims the world behind it, or shows the dirt
+		// background from the title screen, as vanilla's option screens do.
+		this.renderBackground(graphics);
+		^///?}
 		super.render(graphics, mouseX, mouseY, delta);
 		graphics.drawCenteredString(
 				this.font, this.title,
@@ -281,10 +342,7 @@ public class FoliageConfigScreen extends Screen {
 					"config.mc2_interactivefoliage.intensity",
 					String.format("%.1f", config.intensity)
 			));
-			if (resetIntensityBtn != null) {
-				resetIntensityBtn.visible =
-						Math.abs(config.intensity - DEFAULT_INTENSITY) > 0.01f;
-			}
+			updateInteractionOptions();
 		}
 
 		@Override
@@ -311,9 +369,7 @@ public class FoliageConfigScreen extends Screen {
 					"config.mc2_interactivefoliage.radius",
 					String.format("%.0f", config.maxDistance)
 			));
-			if (resetRadiusBtn != null) {
-				resetRadiusBtn.visible = !isDefaultRadius();
-			}
+			updateInteractionOptions();
 		}
 
 		@Override
@@ -343,6 +399,26 @@ public class FoliageConfigScreen extends Screen {
 		return Math.abs(config.maxDistance - FoliageSettings.DEFAULT_INTERACTION_RADIUS) < 0.1f;
 	}
 
+	/**
+	 * The interaction's sliders show only while the interaction is on, and each one's reset button only while its value
+	 * sits off its default.
+	 */
+	private void updateInteractionOptions() {
+		boolean enabled = config.enabled;
+		if (intensitySlider != null) {
+			intensitySlider.visible = enabled;
+		}
+		if (radiusSlider != null) {
+			radiusSlider.visible = enabled;
+		}
+		if (resetIntensityBtn != null) {
+			resetIntensityBtn.visible = enabled && Math.abs(config.intensity - DEFAULT_INTENSITY) > 0.01f;
+		}
+		if (resetRadiusBtn != null) {
+			resetRadiusBtn.visible = enabled && !isDefaultRadius();
+		}
+	}
+
 	//? >=1.20.1 {
 	/**
 	 * The default sits in the middle of the slider: the left half runs down to the minimum and the right half
@@ -354,14 +430,20 @@ public class FoliageConfigScreen extends Screen {
 	}
 
 	/**
-	 * What the GPU renderer owns shows only while it is on: the wind, and under it the wind's strength while the
-	 * wind itself is on. The strength's reset button also waits until the value sits off its default. Hidden
-	 * widgets are neither drawn nor clickable, and their row is left empty.
+	 * What the GPU renderer owns shows only while it is on: its distance, weather wind and the wind, and beside
+	 * those their distance and strength while each is on. The strength's reset button also waits until the value sits
+	 * off its default. Hidden widgets are neither drawn nor clickable, and their place is left empty.
 	 */
 	private void updateGpuOptions() {
 		boolean gpu = FoliageSettings.gpuRenderer();
 		if (gpuDistanceSlider != null) {
 			gpuDistanceSlider.visible = gpu;
+		}
+		if (weatherWindBtn != null) {
+			weatherWindBtn.visible = gpu;
+		}
+		if (weatherWindDistanceSlider != null) {
+			weatherWindDistanceSlider.visible = gpu && FoliageSettings.weatherWind();
 		}
 		if (wavingFoliageBtn != null) {
 			wavingFoliageBtn.visible = gpu;
@@ -375,12 +457,52 @@ public class FoliageConfigScreen extends Screen {
 		}
 	}
 
-	/** The distance applied as soon as the handle is let go, or as soon as the arrow keys move it. */
+	/**
+	 * The preset and the distance applied as soon as the handle is let go, or as soon as the arrow keys move it:
+	 * dragging across presets would otherwise switch the renderer at every one on the way.
+	 */
 	@Override
 	public void tick() {
 		super.tick();
 		if (!isDragging()) {
+			applyPreset();
 			applyGpuDistance();
+		}
+	}
+
+	/** The preset under the preset slider's handle, once it differs from what the options stand as. */
+	private void applyPreset() {
+		if (presetSlider == null || presetSlider.chosen == null) {
+			return;
+		}
+		FoliageSettings.Preset preset = presetSlider.chosen;
+		presetSlider.chosen = null;
+		if (preset.matches(gpuDistanceSlider.shown)) {
+			return;
+		}
+		preset.applyAllButGpuDistance();
+		if (preset.gpuDistance() != null) {
+			gpuDistanceSlider.shown = preset.gpuDistance();
+			gpuDistanceSlider.setPosition(gpuDistanceToSlider(preset.gpuDistance()));
+		}
+		// Every widget shows its new value in place.
+		interactionBtn.setValue(config.enabled);
+		rendererBtn.setValue(FoliageSettings.gpuRenderer());
+		weatherWindBtn.setValue(FoliageSettings.weatherWind());
+		wavingFoliageBtn.setValue(FoliageSettings.wavingFoliage());
+		weatherWindDistanceSlider.setPosition(weatherWindDistanceToSlider(FoliageSettings.weatherWindDistance()));
+		updateInteractionOptions();
+		updateGpuOptions();
+		updatePreset();
+	}
+
+	/**
+	 * Shows the preset the options stand as, or custom, after any of them changes. The GPU renderer's distance is read
+	 * off its slider, which the renderer only gets once the handle settles.
+	 */
+	private void updatePreset() {
+		if (presetSlider != null && gpuDistanceSlider != null) {
+			presetSlider.showCurrent(FoliageSettings.Preset.current(gpuDistanceSlider.shown));
 		}
 	}
 
@@ -412,14 +534,115 @@ public class FoliageConfigScreen extends Screen {
 		@Override
 		protected void updateMessage() {
 			// Minecraft's own "Render Distance" and its own "name: value", so both read right in every language.
-			setMessage(Component.literal("⤷ ").append(Component.translatable("options.generic_value",
+			setMessage(Component.translatable("options.generic_value",
 					Component.translatable("options.renderDistance"),
-					Component.translatable(shown.translationKey()))));
+					Component.translatable(shown.translationKey())));
 		}
 
 		@Override
 		protected void applyValue() {
 			shown = GPU_DISTANCES[(int) Math.round(value * (GPU_DISTANCES.length - 1))];
+			updatePreset();
+		}
+
+		/** Moves the handle without the player, as a preset does. */
+		void setPosition(double position) {
+			value = position;
+			updateMessage();
+		}
+	}
+
+	/** The presets the slider offers: all of them, less those on the chunk mesh where it cannot move plants. */
+	private static final FoliageSettings.Preset[] PRESETS = java.util.Arrays.stream(FoliageSettings.Preset.values())
+			.filter(FoliageSettings.Preset::available)
+			.toArray(FoliageSettings.Preset[]::new);
+
+	private static double presetToSlider(FoliageSettings.Preset preset) {
+		int index = java.util.Arrays.asList(PRESETS).indexOf(preset);
+		return PRESETS.length < 2 ? 0.0 : (double) Math.max(0, index) / (PRESETS.length - 1);
+	}
+
+	private class PresetSlider extends AbstractSliderButton {
+		/** The preset the options stand as, or null for custom. */
+		private FoliageSettings.Preset shown;
+		/** A preset the player picked that is still to be applied; see {@link #applyPreset}. */
+		FoliageSettings.Preset chosen;
+
+		public PresetSlider(int x, int y, int w, int h) {
+			super(x, y, w, h, Component.empty(), 0.0);
+			updateMessage();
+		}
+
+		@Override
+		protected void updateMessage() {
+			Component name = shown != null
+					? Component.translatable(shown.translationKey())
+					//? >=1.21.11 {
+					: Component.translatable("options.graphics.custom");
+					//?} else {
+					/*: Component.translatable("item.minecraft.firework_star.custom_color");
+					*///?}
+			setMessage(Component.translatable("options.generic_value",
+					//? >=1.21.11 {
+					Component.translatable("options.graphics.preset"),
+					//?} else {
+					/*Component.translatable("createWorld.customize.presets"),
+					*///?}
+					name));
+		}
+
+		@Override
+		protected void applyValue() {
+			shown = PRESETS[(int) Math.round(value * (PRESETS.length - 1))];
+			chosen = shown;
+			updateMessage();
+		}
+
+		/** Shows what the options stand as, moving the handle onto it unless they match no preset. */
+		void showCurrent(FoliageSettings.Preset current) {
+			shown = current;
+			if (current != null) {
+				value = presetToSlider(current);
+			}
+			updateMessage();
+		}
+	}
+
+	/** The distances the weather wind reaches: the renderer's own, less its adaptive one. */
+	private static final FoliageSettings.GpuDistance[] WEATHER_WIND_DISTANCES = {
+			FoliageSettings.GpuDistance.PERFORMANCE, FoliageSettings.GpuDistance.HALF, FoliageSettings.GpuDistance.FULL
+	};
+
+	private static double weatherWindDistanceToSlider(FoliageSettings.GpuDistance distance) {
+		int index = java.util.Arrays.asList(WEATHER_WIND_DISTANCES).indexOf(distance);
+		return (double) Math.max(0, index) / (WEATHER_WIND_DISTANCES.length - 1);
+	}
+
+	private class WeatherWindDistanceSlider extends AbstractSliderButton {
+		public WeatherWindDistanceSlider(int x, int y, int w, int h) {
+			super(x, y, w, h, Component.empty(), weatherWindDistanceToSlider(FoliageSettings.weatherWindDistance()));
+			updateMessage();
+		}
+
+		@Override
+		protected void updateMessage() {
+			setMessage(Component.translatable("options.generic_value",
+					Component.translatable("config.mc2_interactivefoliage.distance"),
+					Component.translatable(FoliageSettings.weatherWindDistance().translationKey())));
+		}
+
+		@Override
+		protected void applyValue() {
+			// Cheap to change: the renderer only meshes the sections it newly reaches again, so it applies at once.
+			FoliageSettings.setWeatherWindDistance(
+					WEATHER_WIND_DISTANCES[(int) Math.round(value * (WEATHER_WIND_DISTANCES.length - 1))]);
+			updatePreset();
+		}
+
+		/** Moves the handle without the player, as a preset does. */
+		void setPosition(double position) {
+			value = position;
+			updateMessage();
 		}
 	}
 
@@ -436,11 +659,10 @@ public class FoliageConfigScreen extends Screen {
 
 		@Override
 		protected void updateMessage() {
-			// The arrow marks it as belonging to the row above it.
-			setMessage(Component.literal("⤷ ").append(Component.translatable(
+			setMessage(Component.translatable(
 					"config.mc2_interactivefoliage.intensity",
 					String.format("%.1f", FoliageSettings.wavingIntensity())
-			)));
+			));
 			updateGpuOptions();
 		}
 

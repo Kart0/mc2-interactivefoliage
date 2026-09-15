@@ -10,6 +10,9 @@ import java.io.Reader;
 import java.io.Writer;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 
 /**
  * The mod's own settings, next to Sway's.
@@ -57,14 +60,106 @@ public final class FoliageSettings {
 		}
 	}
 
+	/**
+	 * Presets for the options that decide what the mod costs: the interaction, the renderer and its distance, the weather
+	 * wind and its distance, and the calm sway. How strongly things move -- the intensities and the interaction radius --
+	 * is a matter of taste and never set by one. An option a preset leaves null it does not touch; it is hidden under
+	 * that preset anyway, so it keeps whatever it was set to for when it shows again. Default is what the mod starts
+	 * with.
+	 */
+	public enum Preset {
+		/** The mod as it was before the GPU renderer: plants pushed in the chunk mesh, and nothing else. */
+		CLASSIC("classic", true, false, null, false, null, false),
+		LOW("low", true, true, GpuDistance.PERFORMANCE, false, null, true),
+		MEDIUM("medium", true, true, GpuDistance.ADAPTIVE, true, GpuDistance.PERFORMANCE, true),
+		DEFAULT("default", true, true, GpuDistance.ADAPTIVE, true, GpuDistance.HALF, true),
+		HIGH("high", true, true, GpuDistance.HALF, true, GpuDistance.HALF, true),
+		ULTRA("ultra", true, true, GpuDistance.FULL, true, GpuDistance.FULL, true),
+		/** Everything the GPU renderer shows, with no entities pushing plants. */
+		VISUALS("visuals", false, true, GpuDistance.FULL, true, GpuDistance.FULL, true);
+
+		private final String name;
+		private final boolean interaction;
+		private final boolean gpuRenderer;
+		private final GpuDistance gpuDistance;
+		private final boolean weatherWind;
+		private final GpuDistance weatherWindDistance;
+		private final boolean wavingFoliage;
+
+		Preset(String name, boolean interaction, boolean gpuRenderer, GpuDistance gpuDistance, boolean weatherWind,
+				GpuDistance weatherWindDistance, boolean wavingFoliage) {
+			this.name = name;
+			this.interaction = interaction;
+			this.gpuRenderer = gpuRenderer;
+			this.gpuDistance = gpuDistance;
+			this.weatherWind = weatherWind;
+			this.weatherWindDistance = weatherWindDistance;
+			this.wavingFoliage = wavingFoliage;
+		}
+
+		public String translationKey() {
+			return "config.mc2_interactivefoliage.preset." + name;
+		}
+
+		/** Whether it can be chosen: a preset on the chunk mesh cannot where the chunk mesh cannot move plants. */
+		public boolean available() {
+			return gpuRenderer || cpuRendererAvailable();
+		}
+
+		/** The GPU renderer's distance a preset sets, or null where it leaves it alone. */
+		public GpuDistance gpuDistance() {
+			return gpuDistance;
+		}
+
+		/** Sets every option the preset sets, all but the GPU renderer's distance, which the screen hands over itself. */
+		public void applyAllButGpuDistance() {
+			SwayConfig.INSTANCE.enabled = interaction;
+			setGpuRenderer(gpuRenderer);
+			setWeatherWind(weatherWind);
+			if (weatherWindDistance != null) {
+				setWeatherWindDistance(weatherWindDistance);
+			}
+			setWavingFoliage(wavingFoliage);
+		}
+
+		/** Whether the options stand as this preset sets them, with the GPU renderer's distance as given. */
+		public boolean matches(GpuDistance currentGpuDistance) {
+			return SwayConfig.INSTANCE.enabled == interaction
+					&& gpuRenderer() == gpuRenderer
+					&& (gpuDistance == null || currentGpuDistance == gpuDistance)
+					&& weatherWind() == weatherWind
+					&& (weatherWindDistance == null || weatherWindDistance() == weatherWindDistance)
+					&& wavingFoliage() == wavingFoliage;
+		}
+
+		/** The preset the options stand as, or null for none of them: custom. */
+		public static Preset current(GpuDistance currentGpuDistance) {
+			for (Preset preset : values()) {
+				if (preset.available() && preset.matches(currentGpuDistance)) {
+					return preset;
+				}
+			}
+			return null;
+		}
+	}
+
 	/** The file's contents. Fields missing from an older file keep the defaults set here. */
 	private static final class Values {
 		boolean gpuRenderer = true;
 		GpuDistance gpuDistance = GpuDistance.ADAPTIVE;
 		boolean wavingFoliage = true;
+		/** Whether rain and storms turn the sway into wind, sheltered by roofs and walls. */
+		boolean weatherWind = true;
+		/** How far from the player that happens: one of performance, half and full. */
+		GpuDistance weatherWindDistance = GpuDistance.HALF;
 		float wavingIntensity = DEFAULT_WAVING_INTENSITY;
 		/** Whether the mod's default radius has been offered yet; see {@link #applyDefaultRadiusOnce}. */
 		boolean defaultRadiusApplied;
+		/**
+		 * Blocks that stop rain's wind although they are fences, fence gates or bars, by id: a mod's solid fence, say.
+		 * Only set by editing the file.
+		 */
+		List<String> windWalls = new ArrayList<>();
 	}
 
 	private static Values values = load();
@@ -104,6 +199,35 @@ public final class FoliageSettings {
 
 	public static void setGpuDistance(GpuDistance distance) {
 		values.gpuDistance = distance;
+	}
+
+	/**
+	 * The ids of the blocks that stop rain's wind although they are fences, fence gates or bars, as written in the file,
+	 * such as {@code "somemod:solid_fence"}.
+	 */
+	public static List<String> windWalls() {
+		return Collections.unmodifiableList(values.windWalls);
+	}
+
+	/** Whether rain and storms turn the sway into wind, sheltered by roofs and walls. */
+	public static boolean weatherWind() {
+		return values.weatherWind;
+	}
+
+	public static void setWeatherWind(boolean enabled) {
+		values.weatherWind = enabled;
+	}
+
+	/**
+	 * How far from the player rain's wind blows and is sheltered: as far as entities push plants, half of the GPU
+	 * renderer's area, or all of it.
+	 */
+	public static GpuDistance weatherWindDistance() {
+		return values.weatherWindDistance;
+	}
+
+	public static void setWeatherWindDistance(GpuDistance distance) {
+		values.weatherWindDistance = distance;
 	}
 
 	/** Whether the wind sways the foliage the GPU renderer draws. */
@@ -178,6 +302,13 @@ public final class FoliageSettings {
 					// Gson leaves a name it does not know as null.
 					if (loaded.gpuDistance == null) {
 						loaded.gpuDistance = GpuDistance.ADAPTIVE;
+					}
+					// Adaptive is the renderer's alone; a hand-edited file may still name it.
+					if (loaded.weatherWindDistance == null || loaded.weatherWindDistance == GpuDistance.ADAPTIVE) {
+						loaded.weatherWindDistance = GpuDistance.HALF;
+					}
+					if (loaded.windWalls == null) {
+						loaded.windWalls = new ArrayList<>();
 					}
 					return loaded;
 				}

@@ -27,11 +27,16 @@ uniform float GameTime;
 
 // Settings the player changes in game. SwayIntensity multiplies SWAY_STRENGTH, from 0.5 to 2.0.
 uniform float SwayIntensity;
+// 1 while plants sway in calm weather, 0 while they stand still until the weather wind moves them.
+uniform float CalmSway;
 // The edge of the area this renderer draws, relative to the camera: x and y its lowest x and z, z and w its highest.
 uniform vec4 SwayEdge;
 // What newer versions hand every shader: the camera's block, and that block's corner minus the camera.
 uniform ivec3 CameraBlockPos;
 uniform vec3 CameraOffset;
+// The level's rain in x and its thunder in y, how far from the camera it blows in z and over how far it eases off in w.
+// See sway.glsl.
+uniform vec4 Weather;
 
 const float SWAY_SPEED = 2513.2741;
 const int PHASE_WRAP = 4095;
@@ -51,6 +56,17 @@ const float INTERACT_STRENGTH = 1.0;
 const float PUSHED_SWAY = 0.25;
 const float PUSH_FOR_CALM = 0.2;
 const float EDGE_EASE_BLOCKS = 6.0;
+
+// Rain's wind, as in sway.glsl, where each value is explained.
+const vec2 WIND_DIRECTION = vec2(-1.0, 0.0);
+const float WIND_LEAN = 2.5;
+const float WIND_GUST = 0.4;
+const float STORM_STRENGTH = 2.0;
+const float WIND_FLUTTER = 0.2;
+const float WIND_TUG = 0.2;
+const float GUST_SPEED = 6.2831853 * 300.0;
+const float FLUTTER_SPEED = 6.2831853 * 1600.0;
+const float TUG_SPEED = 6.2831853 * 2100.0;
 
 // How much of the wind a plant keeps near the edge. See foliage.vsh.
 float edgeEase(vec3 cell) {
@@ -84,11 +100,24 @@ vec3 unpackCell(float bits) {
     return vec3(x, y, rest - y * 256.0) - 64.0;
 }
 
-vec2 unpackWeights(float bits) {
-    // Ten bits each, above the four the wind's reach under shelter takes, which this shader has no use for yet.
-    float weights = floor(bits / 16.0);
+// The wind weight and the push, ten bits each, then how much of rain's wind reaches the plant, four bits.
+vec3 unpackWeights(float bits) {
+    float exposure = bits - floor(bits / 16.0) * 16.0;
+    float weights = (bits - exposure) / 16.0;
     float wave = floor(weights / 1024.0);
-    return vec2(wave, weights - wave * 1024.0) / 1023.0;
+    return vec3(vec2(wave, weights - wave * 1024.0) / 1023.0, exposure / 15.0);
+}
+
+// How far rain's wind moves a vertex that may sway this much. See sway.glsl.
+vec2 wind(vec3 world, float phase, float reach, float shake) {
+    float strength = reach * mix(1.0, STORM_STRENGTH, Weather.y);
+    float along = -dot(world.xz, WIND_DIRECTION);
+    float gust = 0.5 + 0.5 * sin(along * SWAY_SCALE + GameTime * GUST_SPEED);
+    vec2 across = vec2(-WIND_DIRECTION.y, WIND_DIRECTION.x);
+    float flutter = sin(phase + GameTime * FLUTTER_SPEED) * WIND_FLUTTER * shake;
+    float tug = sin(phase * 1.3 + GameTime * TUG_SPEED) * WIND_TUG * shake;
+    float lean = WIND_LEAN * (1.0 - WIND_GUST + WIND_GUST * gust);
+    return (WIND_DIRECTION * (lean + tug) + across * flutter) * strength;
 }
 
 out float vertexDistance;
@@ -102,14 +131,17 @@ void main() {
     float phase = (world.x + world.z) * SWAY_SCALE + GameTime * SWAY_SPEED;
     vec3 cell = unpackCell(SwayCell) + ChunkOffset;
     vec2 force = swayCellPush(cell);
-    vec2 weights = unpackWeights(SwayWeights);
+    vec3 weights = unpackWeights(SwayWeights);
     float calm = smoothstep(0.0, PUSH_FOR_CALM, length(force));
-    float amount = weights.x * SWAY_STRENGTH * SwayIntensity * edgeEase(cell) * mix(1.0, PUSHED_SWAY, calm);
+    float reach = weights.x * SWAY_STRENGTH * SwayIntensity * edgeEase(cell);
+    float shake = mix(1.0, PUSHED_SWAY, calm);
+    float amount = reach * shake;
     vec2 push = force * weights.y * INTERACT_STRENGTH;
-    pos.x += sin(phase) * amount;
-    pos.z += cos(phase * 1.3) * amount * 0.7;
-    pos.xz += push;
-    float pushed = length(push);
+    vec2 sway = vec2(sin(phase), cos(phase * 1.3) * 0.7) * amount * CalmSway;
+    float rain = Weather.x * weights.z * (1.0 - smoothstep(Weather.z - Weather.w, Weather.z, length(cell.xz + 0.5)));
+    vec2 windOffset = rain > 0.0 ? wind(world, phase, reach, shake) * rain : vec2(0.0);
+    pos.xz += mix(sway, vec2(0.0), rain) + windOffset + push;
+    float pushed = length(push + windOffset);
     pos.y -= min(pushed * pushed, pushed) * 0.5;
 
     gl_Position = ProjMat * ModelViewMat * vec4(pos, 1.0);

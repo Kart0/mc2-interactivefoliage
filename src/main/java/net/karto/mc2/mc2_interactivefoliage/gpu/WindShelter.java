@@ -9,10 +9,22 @@ import net.minecraft.core.Direction;
 import net.minecraft.core.SectionPos;
 import net.minecraft.util.Mth;
 import net.minecraft.world.level.LightLayer;
+import net.minecraft.world.level.levelgen.Heightmap;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.shapes.VoxelShape;
+import net.karto.mc2.mc2_interactivefoliage.FoliageSettings;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.FenceBlock;
+import net.minecraft.world.level.block.FenceGateBlock;
+import net.minecraft.world.level.block.IronBarsBlock;
+import it.unimi.dsi.fastutil.objects.Reference2ByteOpenHashMap;
 
 import java.util.Arrays;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
 
 /**
  * How much of rain's wind reaches the plants of one section, worked out while the section is meshed and baked into
@@ -20,13 +32,14 @@ import java.util.Arrays;
  * <p>
  * Shelter adds up, from 0 for none to 1 for all of it, and the plant keeps what is left of the wind:
  * <ul>
- * <li>a roof: the sky light at the plant, which a torch never raises and night never lowers. Under a roof it takes
- * half the wind, and deep inside, far from any opening, all of it;</li>
+ * <li>a roof: a block covering the plant, not far above it, takes half the wind. Deep inside, far from any opening,
+ * the sky light at the plant -- which a torch never raises and night never lowers -- takes all of it;</li>
  * <li>a wall upwind: the wind blows west, as in sway.glsl, so each row of blocks is swept from east to west. A wall
  * takes half the wind from the plants behind it that are no taller than it is, as many blocks of open sky back as it
  * stands tall: the wind comes down over the top of it, so a taller plant still catches it. A wall that reaches the
  * ceiling on its downwind side seals the room behind it: the wind has no way down, so its shadow does not wear off
- * along a covered stretch, and it shelters a covered plant of any height. A wall with a gap between its top and the
+ * along a covered stretch, and it shelters a covered plant of any height. Covered means a roof over the block: sky
+ * light alone cannot say, since it comes in sideways through doors and windows that let no wind in from upwind. A wall with a gap between its top and the
  * ceiling -- a window above a sill -- lets the wind in over it, as a wall in the open does.</li>
  * </ul>
  * A row is swept once, the first time a plant on it asks, and shared by every plant along it.
@@ -35,11 +48,6 @@ final class WindShelter {
 
 	/** Sky light at which a plant counts as under a roof, and at or below which it is shut in with no wind at all. */
 	private static final int SKY_ROOF = 12;
-	/**
-	 * Sky light at or below which a block counts as covered: the wind cannot come down onto it over a wall. A little
-	 * above SKY_ROOF, so the blocks just under a roof's edge count too.
-	 */
-	private static final int SKY_COVERED = 13;
 	private static final int SKY_ENCLOSED = 6;
 	/** How much of the wind a roof takes, and how much a wall does. */
 	private static final float ROOF_SHELTER = 0.5F;
@@ -55,12 +63,28 @@ final class WindShelter {
 	 */
 	static final int REACH = SectionPos.SECTION_SIZE;
 	/** How far above a row a ceiling is looked for, to tell a wall that seals a room from one the wind blows over. */
-	private static final int MAX_CEILING_HEIGHT = 8;
+	static final int MAX_CEILING_HEIGHT = 8;
 	/** In a row's entries: the tallest wall sheltering the block in its low bits, and whether a sealing wall does. */
 	private static final int TALLEST_MASK = 0x7;
 	private static final int SEALED_FLAG = 0x8;
-	/** A collision shape at least this tall stops the wind: fences, walls, glass and leaves do; carpets and snow do not. */
-	private static final double WALL_MIN_HEIGHT = 0.5D;
+	/**
+	 * How much of a block's face its shape has to cover to stop the wind: a stone wall's side, 14/16 tall, does; a slab,
+	 * an open door seen edge on, a lone glass pane or a closed trapdoor do not.
+	 */
+	private static final float WALL_COVERAGE = 0.8F;
+	/** A block shape's face, in sixteenths of a block a side. */
+	private static final int FACE_CELLS = 16;
+	/** In {@link #COVERAGE}: the block stops wind blowing against its side, and it covers what is below it. */
+	private static final byte STOPS_WIND = 1;
+	private static final byte COVERS = 2;
+	/**
+	 * What each block state does for the wind, worked out from its shape the first time it is met: shapes do not change,
+	 * and states are few. Only read and written while meshing, on the render thread.
+	 */
+	private static final Reference2ByteOpenHashMap<BlockState> COVERAGE = new Reference2ByteOpenHashMap<>();
+	/** The ids in the settings' wind walls, as last read; see {@link #isWindWall}. */
+	private static List<String> windWallIds = List.of();
+	private static Set<Block> windWalls = Set.of();
 
 	private final ClientLevel level;
 	private final int originX;
@@ -76,6 +100,8 @@ final class WindShelter {
 		this.level = level;
 		this.originX = sectionOrigin.getX();
 		this.originZ = sectionOrigin.getZ();
+		// Once a section rather than for every block looked at: a change to the list applies to states already measured.
+		refreshWindWalls();
 	}
 
 	/**
@@ -85,14 +111,16 @@ final class WindShelter {
 	float exposureAt(int x, int y, int z, int plantHeight) {
 		cursor.set(x, y, z);
 		int sky = level.getBrightness(LightLayer.SKY, cursor);
-		// None in the open, half by the time the sky is behind a roof, all of it once the plant is shut in.
-		float roof = sky >= SKY_ROOF
+		boolean covered = isCovered(x, y, z);
+		// By the sky: none in the open, half by the time it is behind something, all of it once the plant is shut in.
+		float bySky = sky >= SKY_ROOF
 				? ROOF_SHELTER * ease((15.0F - sky) / (15 - SKY_ROOF))
 				: ROOF_SHELTER + (1.0F - ROOF_SHELTER) * ease((float) (SKY_ROOF - sky) / (SKY_ROOF - SKY_ENCLOSED));
+		// A roof takes its half whatever light comes in beside it.
+		float roof = Math.max(covered ? ROOF_SHELTER : 0.0F, bySky);
 		int wall = row(y, z - originZ)[x - originX];
 		// Under a roof a wall that seals the room leaves the wind no way down onto a taller plant.
-		boolean sheltered = (wall & TALLEST_MASK) >= plantHeight
-				|| ((wall & SEALED_FLAG) != 0 && sky <= SKY_COVERED);
+		boolean sheltered = (wall & TALLEST_MASK) >= plantHeight || ((wall & SEALED_FLAG) != 0 && covered);
 		float shelter = roof + (sheltered ? WALL_SHELTER : 0.0F);
 		return 1.0F - Math.min(1.0F, shelter);
 	}
@@ -128,12 +156,12 @@ final class WindShelter {
 			if (height > 0) {
 				behind[height] = 0;
 				// Against the ceiling on the downwind side, where the plants it shelters stand, and with the wall's full
-				// height: a gable end stands taller than any wall counts for its shadow.
-				sealed[height] = wallRun(x, y, z, MAX_CEILING_HEIGHT) >= ceilingHeight(x - 1, y, z);
+				// height up into the roof it carries: a gable end stands taller than any wall counts for its shadow, and
+				// roof stairs laid along it cover without facing the wind.
+				sealed[height] = sealedRun(x, y, z) >= ceilingHeight(x - 1, y, z);
 				continue;
 			}
-			cursor.set(x, y, z);
-			boolean open = level.getBrightness(LightLayer.SKY, cursor) > SKY_COVERED;
+			boolean open = !isCovered(x, y, z);
 			for (int h = 1; h <= MAX_WALL_HEIGHT; h++) {
 				if (open || !sealed[h]) {
 					behind[h]++;
@@ -153,13 +181,20 @@ final class WindShelter {
 	}
 
 	/**
-	 * How far above this block the ceiling is: the first block up that stops the wind, counting the block itself as
-	 * 0. A wall at least this tall reaches the ceiling. With none within MAX_CEILING_HEIGHT the sky is open above, which
-	 * no wall reaches.
+	 * How far above this block the ceiling is: the first block up that covers what is below it, counting the block
+	 * itself as 0. A wall at least this tall reaches the ceiling. With none within MAX_CEILING_HEIGHT the sky is open
+	 * above, which no wall reaches.
 	 */
+	/** Whether a roof covers this block: a block covering what is below it, within MAX_CEILING_HEIGHT above. */
+	private boolean isCovered(int x, int y, int z) {
+		return ceilingHeight(x, y + 1, z) != Integer.MAX_VALUE;
+	}
+
 	private int ceilingHeight(int x, int y, int z) {
-		for (int up = 0; up <= MAX_CEILING_HEIGHT; up++) {
-			if (stopsWind(x, y + up, z)) {
+		// Nothing stands above the column's highest block, so the search stops there: out in the open at once.
+		int surface = level.getHeight(Heightmap.Types.WORLD_SURFACE, x, z);
+		for (int up = 0; up <= MAX_CEILING_HEIGHT && y + up < surface; up++) {
+			if (covers(x, y + up, z)) {
 				return up;
 			}
 		}
@@ -179,14 +214,113 @@ final class WindShelter {
 		return height;
 	}
 
+	/** How many blocks of wall, and of roof resting on it, stand at this block and straight above it. */
+	private int sealedRun(int x, int y, int z) {
+		int height = 0;
+		while (height < MAX_CEILING_HEIGHT && (stopsWind(x, y + height, z) || covers(x, y + height, z))) {
+			height++;
+		}
+		return height;
+	}
+
+	/** Whether the block here stops wind blowing against its east face. */
 	private boolean stopsWind(int x, int y, int z) {
+		return (coverage(x, y, z) & STOPS_WIND) != 0;
+	}
+
+	/** Whether the block here covers what is below it, as a ceiling does. */
+	private boolean covers(int x, int y, int z) {
+		return (coverage(x, y, z) & COVERS) != 0;
+	}
+
+	private byte coverage(int x, int y, int z) {
 		cursor.set(x, y, z);
 		BlockState state = level.getBlockState(cursor);
 		if (state.isAir()) {
-			return false;
+			return 0;
 		}
-		VoxelShape shape = state.getCollisionShape(level, cursor);
-		return !shape.isEmpty() && shape.max(Direction.Axis.Y) >= WALL_MIN_HEIGHT;
+		if (COVERAGE.containsKey(state)) {
+			return COVERAGE.getByte(state);
+		}
+		// Nothing the wind can blow through the way an entity walks through it is a wall or a roof: plants, above all.
+		// Their outline says nothing about that -- a two block plant's is a whole block.
+		byte found = state.getCollisionShape(level, cursor).isEmpty() ? 0 : measure(state, state.getShape(level, cursor));
+		COVERAGE.put(state, found);
+		return found;
+	}
+
+	/**
+	 * What a block state does for the wind, from the outline it shows: it stops the wind if, seen from the east, it
+	 * covers WALL_COVERAGE of its face, and covers what is below if it does as much seen from above. Fences, fence gates
+	 * and bars never stop it -- the wind goes through their gaps, which their outline does not show -- unless the
+	 * settings name them. Glass panes are not bars: joined up they fill the gap they stand in.
+	 */
+	private static byte measure(BlockState state, VoxelShape shape) {
+		if (shape.isEmpty()) {
+			return 0;
+		}
+		boolean eastFace = covered(shape, Direction.Axis.X) >= WALL_COVERAGE;
+		boolean topFace = covered(shape, Direction.Axis.Y) >= WALL_COVERAGE;
+		if (eastFace && isOpenWork(state.getBlock()) && !windWalls.contains(state.getBlock())) {
+			eastFace = false;
+		}
+		return (byte) ((eastFace ? STOPS_WIND : 0) | (topFace ? COVERS : 0));
+	}
+
+	private static boolean isOpenWork(Block block) {
+		if (block instanceof FenceBlock || block instanceof FenceGateBlock) {
+			return true;
+		}
+		// Glass panes are bars as far as the game is concerned, shape and all; only the name tells them apart.
+		return block instanceof IronBarsBlock && BuiltInRegistries.BLOCK.getKey(block).getPath().endsWith("bars");
+	}
+
+	/** Reads the settings' wind walls again when they have changed, and measures every state again with them. */
+	private static void refreshWindWalls() {
+		List<String> ids = FoliageSettings.windWalls();
+		if (ids.equals(windWallIds)) {
+			return;
+		}
+		Set<Block> blocks = new HashSet<>();
+		for (Block candidate : BuiltInRegistries.BLOCK) {
+			if (ids.contains(BuiltInRegistries.BLOCK.getKey(candidate).toString())) {
+				blocks.add(candidate);
+			}
+		}
+		windWallIds = List.copyOf(ids);
+		windWalls = blocks;
+		COVERAGE.clear();
+	}
+
+	/**
+	 * How much of a block's face the shape covers seen along an axis, from 0 to 1: its boxes projected onto the face,
+	 * counted in sixteenths.
+	 */
+	private static float covered(VoxelShape shape, Direction.Axis axis) {
+		boolean[] cells = new boolean[FACE_CELLS * FACE_CELLS];
+		for (AABB box : shape.toAabbs()) {
+			// The face's two other axes.
+			double minU = axis == Direction.Axis.X ? box.minY : box.minX;
+			double maxU = axis == Direction.Axis.X ? box.maxY : box.maxX;
+			double minV = axis == Direction.Axis.Z ? box.minY : box.minZ;
+			double maxV = axis == Direction.Axis.Z ? box.maxY : box.maxZ;
+			for (int u = cell(minU); u < cell(maxU); u++) {
+				for (int v = cell(minV); v < cell(maxV); v++) {
+					cells[u * FACE_CELLS + v] = true;
+				}
+			}
+		}
+		int count = 0;
+		for (boolean cell : cells) {
+			if (cell) {
+				count++;
+			}
+		}
+		return (float) count / cells.length;
+	}
+
+	private static int cell(double coordinate) {
+		return Mth.clamp((int) Math.round(coordinate * FACE_CELLS), 0, FACE_CELLS);
 	}
 }
 //?}

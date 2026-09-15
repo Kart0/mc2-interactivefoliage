@@ -24,6 +24,7 @@ in float SwayWeights;
 // buffers so they apply on the next frame. See sway.glsl for what each holds.
 layout(std140) uniform FoliageSway {
     float mc2_SwayIntensity;
+    float mc2_CalmSway;
     vec4 mc2_SwayEdge;
     vec4 mc2_Weather;
 };

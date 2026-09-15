@@ -4,14 +4,15 @@
 // vertex shader the mod draws foliage with, so the two can never drift apart. Everything is prefixed so it cannot
 // clash with a shader pack's own names; it reads the two uniform blocks below, which each shader declares itself.
 //
-// mc2_FoliageSway:       float mc2_SwayIntensity; vec4 mc2_SwayEdge; vec4 mc2_Weather;
+// mc2_FoliageSway:       float mc2_SwayIntensity; float mc2_CalmSway; vec4 mc2_SwayEdge; vec4 mc2_Weather;
 // mc2_FoliageInteraction: int mc2_CellCount; vec4 mc2_CellBoundsMin; vec4 mc2_CellBoundsMax;
 //                         vec4 mc2_CellPosition[MC2_MAX_CELLS]; vec4 mc2_CellForce[MC2_MAX_CELLS];
 //
-// SwayIntensity multiplies MC2_SWAY_STRENGTH, from 0.5 to 2.0. SwayEdge is the edge of the area the renderer draws,
+// SwayIntensity multiplies MC2_SWAY_STRENGTH, from 0.5 to 2.0, for the calm sway and the weather wind alike; CalmSway
+// is 1 while plants sway in calm weather and 0 while they stand still until the weather wind moves them. SwayEdge is the edge of the area the renderer draws,
 // relative to the camera: x and y its lowest x and z, z and w its highest. Weather is the level's rain in x and its
-// thunder in y, each from 0 to 1 and eased in and out by the game; z and w are
-// unused. The cells are Sway's pushes on the plants near the player this frame, one per plant by its anchor block, already followed through a spring by the mod so
+// thunder in y, each from 0 to 1 and eased in and out by the game; z how far from the camera it blows, in blocks,
+// and w over how many blocks it eases off there. The cells are Sway's pushes on the plants near the player this frame, one per plant by its anchor block, already followed through a spring by the mod so
 // plants lean in smoothly and rock back when let go: xyz the anchor block's corner relative to the camera, and for
 // the force xy the push along x and z and z the most the plant may be pushed.
 
@@ -119,18 +120,19 @@ vec3 mc2_unpackWeights(float bits) {
     return vec3(vec2(wave, weights - wave * 1024.0) / 1023.0, exposure / 15.0);
 }
 
-// How far rain's wind moves a vertex that may sway this much, along x and z: the plant leans downwind, gusts rolling
+// How far rain's wind moves a vertex that may sway this far, along x and z: the plant leans downwind, gusts rolling
 // over the ground push it further, and it flutters across the wind and tugs along it. The tug never outweighs the lean,
-// so a plant shakes in place rather than swinging back upwind.
-vec2 mc2_wind(vec3 world, float phase, float gameTime, float amount) {
-    float strength = amount * mix(1.0, MC2_STORM_STRENGTH, mc2_Weather.y);
+// so a plant shakes in place rather than swinging back upwind. An entity pushing the plant adds to the lean rather than
+// taking its place, and only calms the shaking, by shake, as it calms the sway.
+vec2 mc2_wind(vec3 world, float phase, float gameTime, float reach, float shake) {
+    float strength = reach * mix(1.0, MC2_STORM_STRENGTH, mc2_Weather.y);
     // Measured against the wind's direction, so the gusts travel the way it blows.
     float along = -dot(world.xz, MC2_WIND_DIRECTION);
     float gust = 0.5 + 0.5 * sin(along * MC2_SWAY_SCALE + gameTime * MC2_GUST_SPEED);
     vec2 across = vec2(-MC2_WIND_DIRECTION.y, MC2_WIND_DIRECTION.x);
-    float flutter = sin(phase + gameTime * MC2_FLUTTER_SPEED) * MC2_WIND_FLUTTER;
+    float flutter = sin(phase + gameTime * MC2_FLUTTER_SPEED) * MC2_WIND_FLUTTER * shake;
     // The second axis's phase, so the tug keeps to whole cycles across the wrapped span too.
-    float tug = sin(phase * 1.3 + gameTime * MC2_TUG_SPEED) * MC2_WIND_TUG;
+    float tug = sin(phase * 1.3 + gameTime * MC2_TUG_SPEED) * MC2_WIND_TUG * shake;
     float lean = MC2_WIND_LEAN * (1.0 - MC2_WIND_GUST + MC2_WIND_GUST * gust);
     return (MC2_WIND_DIRECTION * (lean + tug) + across * flutter) * strength;
 }
@@ -151,14 +153,17 @@ vec3 mc2_sway(vec3 pos, vec3 modelOffset, ivec3 cameraBlockPos, vec3 cameraOffse
     vec3 weights = mc2_unpackWeights(swayWeights);
     // Every vertex of a plant reads the same force, so the whole plant calms together.
     float calm = smoothstep(0.0, MC2_PUSH_FOR_CALM, length(force));
-    float amount = weights.x * MC2_SWAY_STRENGTH * mc2_SwayIntensity * mc2_edgeEase(cell)
-            * mix(1.0, MC2_PUSHED_SWAY, calm);
+    // How far this vertex may sway at all, and how much of its shaking a push leaves it.
+    float reach = weights.x * MC2_SWAY_STRENGTH * mc2_SwayIntensity * mc2_edgeEase(cell);
+    float shake = mix(1.0, MC2_PUSHED_SWAY, calm);
+    float amount = reach * shake;
     vec2 push = force * weights.y * MC2_INTERACT_STRENGTH;
-    vec2 sway = vec2(sin(phase), cos(phase * 1.3) * 0.7) * amount;
+    vec2 sway = vec2(sin(phase), cos(phase * 1.3) * 0.7) * amount * mc2_CalmSway;
     // The game eases rain in and out over a few seconds, and the sway turns into the wind along with it -- as far as
     // the wind reaches the plant: under a roof or behind a wall it keeps its calm sway.
-    float rain = mc2_Weather.x * weights.z;
-    vec2 wind = rain > 0.0 ? mc2_wind(world, phase, gameTime, amount) * rain : vec2(0.0);
+    float rain = mc2_Weather.x * weights.z
+            * (1.0 - smoothstep(mc2_Weather.z - mc2_Weather.w, mc2_Weather.z, length(cell.xz + 0.5)));
+    vec2 wind = rain > 0.0 ? mc2_wind(world, phase, gameTime, reach, shake) * rain : vec2(0.0);
     pos.xz += mix(sway, vec2(0.0), rain) + wind + push;
     // A plant bends rather than slides: the further its tip is pushed, the lower it sits. Up to a block of push the
     // drop grows with its square, as a bending stalk would; past that it only grows in step, so a strong push leans a

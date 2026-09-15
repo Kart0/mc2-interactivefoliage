@@ -157,10 +157,12 @@ public final class GpuFoliageRenderer {
 	 ^/
 	private static final long REGION_UPLOAD_MAX_WAIT_MILLIS = 500L;
 	*///?}
-	//? <1.21.11 {
-	/*/^* And only for this long a frame, after the first one, so a frame is never held up by meshing. ^/
+	/**
+	 * And only for this long a frame, after the first one, so a frame is never held up by meshing: a heavy resource pack,
+	 * a slow processor or rain starting -- which meshes every section again -- would otherwise stall a frame for as long
+	 * as all of them take. A section not yet meshed again keeps what it showed, so this only spreads the work out.
+	 */
 	private static final long REBUILD_BUDGET_NANOS = 4_000_000L;
-	*///?}
 	/**
 	 * Padding on cull boxes so foliage leaning into view is not culled away: room for the strongest push from an entity
 	 * -- about 1.8 blocks, on a tall plant with Sway's intensity turned up -- plus the furthest the wind reaches, a storm
@@ -264,16 +266,16 @@ public final class GpuFoliageRenderer {
 	/*// Elements are registered under ids of their own, and Iris registers its five at the first free ones too, so the
 	// two are taken the same way: fixed ids would collide with Iris's whichever registered first.
 	//? >=26.1.2 {
-	/^private static final VertexFormatElement SWAY_CELL_ELEMENT =
-			VertexFormatElement.register(freeElementId(), 0, VertexFormatElement.Type.FLOAT, false, 1);
-	private static final VertexFormatElement SWAY_WEIGHTS_ELEMENT =
-			VertexFormatElement.register(freeElementId(), 0, VertexFormatElement.Type.FLOAT, false, 1);
-	^///?} else {
 	private static final VertexFormatElement SWAY_CELL_ELEMENT =
+			VertexFormatElement.register(freeElementId(), 0, VertexFormatElement.Type.FLOAT, false, 1);
+	private static final VertexFormatElement SWAY_WEIGHTS_ELEMENT =
+			VertexFormatElement.register(freeElementId(), 0, VertexFormatElement.Type.FLOAT, false, 1);
+	//?} else {
+	/^private static final VertexFormatElement SWAY_CELL_ELEMENT =
 			VertexFormatElement.register(freeElementId(), 0, VertexFormatElement.Type.FLOAT, VertexFormatElement.Usage.GENERIC, 1);
 	private static final VertexFormatElement SWAY_WEIGHTS_ELEMENT =
 			VertexFormatElement.register(freeElementId(), 0, VertexFormatElement.Type.FLOAT, VertexFormatElement.Usage.GENERIC, 1);
-	//?}
+	^///?}
 	private static final VertexFormat FOLIAGE_FORMAT = withSwayValues(DefaultVertexFormat.BLOCK);
 
 	private static int freeElementId() {
@@ -340,8 +342,8 @@ public final class GpuFoliageRenderer {
 			.build();
 	//?}
 	//? >=1.21.11 {
-	/** The intensity, then the edge the wind eases off at, then the weather. */
-	private static final int SWAY_SETTINGS_SIZE = new Std140SizeCalculator().putFloat().putVec4().putVec4().get();
+	/** The intensity, whether the calm sway is on, then the edge the wind eases off at, then the weather. */
+	private static final int SWAY_SETTINGS_SIZE = new Std140SizeCalculator().putFloat().putFloat().putVec4().putVec4().get();
 	//?}
 
 	/**
@@ -478,6 +480,21 @@ public final class GpuFoliageRenderer {
 	 * hands the foliage back to the chunk mesh and meshes it all again.
 	 */
 	private static boolean meshedForShaderPack;
+	/**
+	 * Whether sections are meshed with the wind shelter worked out. Only while it rains: the shelter is half of what
+	 * meshing a section costs, and without rain the shader has no use for it. When rain starts every section is meshed
+	 * again with it, over the seconds the game takes to ease the rain in.
+	 */
+	private static boolean shelterActive;
+	/** Over how many blocks rain's wind eases off at the edge of the distance it reaches; see sway.glsl. */
+	private static final float WEATHER_WIND_FADE_BLOCKS = 4.0F;
+	/** Rain's reach when it has no edge: further than any area the renderer draws. */
+	private static final float UNBOUNDED_REACH = 100_000.0F;
+	/** A player moving less than this since the sections were last checked leaves them as they are. */
+	private static final double SHELTER_RECHECK_BLOCKS = 2.0D;
+	private static float shelterCheckedReach = Float.NaN;
+	private static double shelterCheckedX;
+	private static double shelterCheckedZ;
 	private static int meshedPackGeneration;
 	//? iris {
 	private static boolean shaderPackSetUp;
@@ -493,6 +510,7 @@ public final class GpuFoliageRenderer {
 	/** Holds the sway settings the shader reads; rewritten only when one of them changes. */
 	private static GpuBuffer swaySettings;
 	private static float uploadedIntensity = Float.NaN;
+	private static float uploadedCalmSway = Float.NaN;
 	private static final Vector4f UPLOADED_EDGE = new Vector4f(Float.NaN);
 	private static final Vector4f UPLOADED_WEATHER = new Vector4f(Float.NaN);
 	//?}
@@ -524,6 +542,8 @@ public final class GpuFoliageRenderer {
 		final int vertexCount;
 		/** Bytes per vertex in {@link #data}: wider while a shader pack is loaded, whose format carries more. */
 		final int stride;
+		/** Whether its plants were meshed with the wind shelter worked out; see {@link #followRain}. */
+		boolean sheltered;
 
 		Section(long key, BlockPos origin, ByteBuffer data, int vertexCount, int stride) {
 			this.stride = stride;
@@ -894,15 +914,76 @@ public final class GpuFoliageRenderer {
 		} else if (localZ == SECTION_SIZE - 1) {
 			DIRTY.add(SectionPos.asLong(sectionX, sectionY, sectionZ + 1));
 		}
-		// A wall shelters the plants downwind of it -- west, as far as WindShelter looks for walls -- and those whose
-		// height it stands over, so the sections holding them are rebuilt too.
+		if (!shelterActive) {
+			return;
+		}
+		// A wall shelters the plants downwind of it -- west, as far as WindShelter looks for walls -- and a wall or a roof
+		// the plants below it, so the sections holding them are rebuilt too.
 		int westX = SectionPos.blockToSectionCoord(pos.getX() - WindShelter.REACH);
-		int lowY = SectionPos.blockToSectionCoord(pos.getY() - WindShelter.MAX_WALL_HEIGHT);
+		int lowY = SectionPos.blockToSectionCoord(pos.getY()
+				- Math.max(WindShelter.MAX_WALL_HEIGHT, WindShelter.MAX_CEILING_HEIGHT));
 		for (int x = westX; x <= sectionX; x++) {
 			for (int y = lowY; y <= sectionY; y++) {
 				markIfHeld(SectionPos.asLong(x, y, sectionZ));
 			}
 		}
+	}
+
+	/**
+	 * Meshes every section again with the wind shelter as rain starts; a section meshed without it leaves every plant
+	 * exposed. As rain stops nothing is meshed: the shader no longer reads the shelter.
+	 */
+	private static void followRain(Minecraft minecraft) {
+		boolean raining = FoliageSettings.weatherWind() && minecraft.level != null
+				&& minecraft.level.getRainLevel(1.0F) > 0.0F;
+		if (raining != shelterActive) {
+			shelterActive = raining;
+			shelterCheckedReach = Float.NaN;
+		}
+		if (!shelterActive || minecraft.player == null) {
+			return;
+		}
+		// Sections are meshed with the shelter only within rain's reach; those it has come to since are meshed again.
+		float reach = weatherWindReach();
+		double x = minecraft.player.getX();
+		double z = minecraft.player.getZ();
+		if (reach == shelterCheckedReach && (reach >= UNBOUNDED_REACH
+				|| Math.abs(x - shelterCheckedX) + Math.abs(z - shelterCheckedZ) < SHELTER_RECHECK_BLOCKS)) {
+			return;
+		}
+		shelterCheckedReach = reach;
+		shelterCheckedX = x;
+		shelterCheckedZ = z;
+		for (Region region : REGIONS.values()) {
+			for (int i = 0; i < region.occupiedCount; i++) {
+				Section section = region.sections[region.occupied[i]];
+				if (!section.sheltered && withinReach(section.origin, x, z, reach)) {
+					DIRTY.add(section.key);
+				}
+			}
+		}
+	}
+
+	/**
+	 * How far from the player rain's wind blows, as the config screen's distance asks: as far as entities push plants,
+	 * half of the renderer's area, or no edge at all.
+	 */
+	private static float weatherWindReach() {
+		return switch (FoliageSettings.weatherWindDistance()) {
+			case PERFORMANCE -> SwayConfig.INSTANCE.maxDistance;
+			case HALF -> (GpuFoliageSplit.radius() + 0.5F) * SECTION_SIZE / 2.0F;
+			default -> UNBOUNDED_REACH;
+		};
+	}
+
+	/** Whether any of a section's columns is within rain's reach of the player, easing included. */
+	private static boolean withinReach(BlockPos sectionOrigin, double x, double z, float reach) {
+		if (reach >= UNBOUNDED_REACH) {
+			return true;
+		}
+		double dx = Math.max(0.0D, Math.max(sectionOrigin.getX() - x, x - (sectionOrigin.getX() + SECTION_SIZE)));
+		double dz = Math.max(0.0D, Math.max(sectionOrigin.getZ() - z, z - (sectionOrigin.getZ() + SECTION_SIZE)));
+		return dx * dx + dz * dz <= reach * (double) reach;
 	}
 
 	/** Queues a section to be meshed again, if it holds foliage the renderer draws. */
@@ -942,7 +1023,9 @@ public final class GpuFoliageRenderer {
 				DIRTY.add(SectionPos.asLong(chunkX, sectionY, chunkZ));
 			}
 			// The chunk west of this one looked for walls here before it was loaded, and found none.
-			markIfHeld(SectionPos.asLong(chunkX - 1, sectionY, chunkZ));
+			if (shelterActive) {
+				markIfHeld(SectionPos.asLong(chunkX - 1, sectionY, chunkZ));
+			}
 		}
 	}
 
@@ -1136,6 +1219,7 @@ public final class GpuFoliageRenderer {
 		}
 		updateNearArea(minecraft);
 		followWindEdge();
+		followRain(minecraft);
 		// Near sections whose build is on screen still holding their foliage are asked for again; see
 		// GpuFoliageSplit.NEEDS_REBUILD for why only once the build is in place.
 		GpuFoliageSplit.forEachRebuildDue(key ->
@@ -1559,8 +1643,8 @@ public final class GpuFoliageRenderer {
 		}
 		RenderSystem.setupShaderLights(shader);
 		^///?}
-		shader.safeGetUniform("SwayIntensity").set(
-				FoliageSettings.wavingFoliage() ? FoliageSettings.wavingIntensity() : 0.0F);
+		shader.safeGetUniform("SwayIntensity").set(swayIntensity());
+		shader.safeGetUniform("CalmSway").set(calmSway());
 		Vector4f edge = windEdgeFrom(camera);
 		shader.safeGetUniform("SwayEdge").set(edge.x, edge.y, edge.z, edge.w);
 		BlockPos cameraBlock = BlockPos.containing(camera);
@@ -1569,14 +1653,16 @@ public final class GpuFoliageRenderer {
 				(float) (cameraBlock.getX() - camera.x),
 				(float) (cameraBlock.getY() - camera.y),
 				(float) (cameraBlock.getZ() - camera.z));
+		Vector4f weather = weather();
+		shader.safeGetUniform("Weather").set(weather.x, weather.y, weather.z, weather.w);
 		shader.apply();
 		//? iris {
 		if (meshedForShaderPack) {
 			// A pack's program knows only the uniforms Iris lists, so the sway's are set on it directly once it is in use.
-			IrisCompat.setSwayUniforms(shader, FoliageSettings.wavingFoliage() ? FoliageSettings.wavingIntensity() : 0.0F,
+			IrisCompat.setSwayUniforms(shader, swayIntensity(), calmSway(),
 					edge, cameraBlock.getX(), cameraBlock.getY(), cameraBlock.getZ(),
 					(float) (cameraBlock.getX() - camera.x), (float) (cameraBlock.getY() - camera.y),
-					(float) (cameraBlock.getZ() - camera.z), RenderSystem.getShaderGameTime());
+					(float) (cameraBlock.getZ() - camera.z), RenderSystem.getShaderGameTime(), weather);
 		}
 		//?}
 
@@ -1614,8 +1700,8 @@ public final class GpuFoliageRenderer {
 
 	//? >=1.21.11 {
 	/**
-	 * The sway settings buffer, with the current intensity in it, or zero while the wind is switched off, and the
-	 * edge the wind eases off at. It is written only when a value changed, so moving the slider is seen live and
+	 * The sway settings buffer, with the current intensity and whether the calm sway is on, the edge the wind eases off
+	 * at, and the weather. It is written only when a value changed, so moving the slider is seen live and
 	 * standing still costs nothing.
 	 */
 	private static GpuBuffer swaySettings(Vec3 camera) {
@@ -1626,19 +1712,23 @@ public final class GpuFoliageRenderer {
 					SWAY_SETTINGS_SIZE);
 			uploadedIntensity = Float.NaN;
 		}
-		float intensity = FoliageSettings.wavingFoliage() ? FoliageSettings.wavingIntensity() : 0.0F;
+		float intensity = swayIntensity();
+		float calm = calmSway();
 		Vector4f edge = windEdgeFrom(camera);
 		Vector4f weather = weather();
-		if (intensity != uploadedIntensity || !edge.equals(UPLOADED_EDGE) || !weather.equals(UPLOADED_WEATHER)) {
+		if (intensity != uploadedIntensity || calm != uploadedCalmSway || !edge.equals(UPLOADED_EDGE)
+				|| !weather.equals(UPLOADED_WEATHER)) {
 			try (MemoryStack stack = MemoryStack.stackPush()) {
 				ByteBuffer data = Std140Builder.onStack(stack, SWAY_SETTINGS_SIZE)
 						.putFloat(intensity)
+						.putFloat(calm)
 						.putVec4(edge)
 						.putVec4(weather)
 						.get();
 				RenderSystem.getDevice().createCommandEncoder().writeToBuffer(swaySettings.slice(), data);
 			}
 			uploadedIntensity = intensity;
+			uploadedCalmSway = calm;
 			UPLOADED_EDGE.set(edge);
 			UPLOADED_WEATHER.set(weather);
 		}
@@ -1646,22 +1736,43 @@ public final class GpuFoliageRenderer {
 	}
 	//?}
 
-	//? >=1.21.11 {
 	/**
 	 * The weather the shader turns the sway into wind by: the level's rain and thunder, each from 0 to 1 and eased in and
-	 * out by the game, taken between ticks so they change smoothly. The same everywhere in the level, as the game's own
-	 * rain level is.
+	 * out by the game, taken between ticks so they change smoothly, then how far from the player the wind blows and over
+	 * how many blocks it eases off there. None of it while the weather wind is switched off.
 	 */
 	private static Vector4f weather() {
 		Minecraft minecraft = Minecraft.getInstance();
 		if (minecraft.level == null) {
 			return new Vector4f();
 		}
+		//? >=1.21.11 {
 		float partialTick = minecraft.getDeltaTracker().getGameTimeDeltaPartialTick(false);
+		//?} elif >=1.21.1 {
+		/*float partialTick = minecraft.getTimer().getGameTimeDeltaPartialTick(false);
+		*///?} else {
+		/*float partialTick = minecraft.getFrameTime();
+		*///?}
+		if (!FoliageSettings.weatherWind()) {
+			return new Vector4f();
+		}
+		// Past the reach the wind eases off, so the shader is told both.
 		return new Vector4f(minecraft.level.getRainLevel(partialTick), minecraft.level.getThunderLevel(partialTick),
-				0.0F, 0.0F);
+				weatherWindReach(), WEATHER_WIND_FADE_BLOCKS);
 	}
-	//?}
+
+	/**
+	 * How strongly plants sway: the waving foliage slider while the calm sway is on, and a fixed strength otherwise, so
+	 * the weather wind blows just as well with the calm sway switched off.
+	 */
+	private static float swayIntensity() {
+		return FoliageSettings.wavingFoliage() ? FoliageSettings.wavingIntensity() : FoliageSettings.DEFAULT_WAVING_INTENSITY;
+	}
+
+	/** 1 while plants sway in calm weather, 0 while they stand still until the weather wind moves them. */
+	private static float calmSway() {
+		return FoliageSettings.wavingFoliage() ? 1.0F : 0.0F;
+	}
 
 	/**
 	 * Moves the wind's edge towards the near area's, at {@link #WIND_EDGE_SPEED}, or straight onto it when it is
@@ -1940,16 +2051,12 @@ public final class GpuFoliageRenderer {
 			}
 		}
 
-		//? <1.21.11 {
-		/*long budgetEnd = System.nanoTime() + REBUILD_BUDGET_NANOS;
-		*///?}
+		long budgetEnd = System.nanoTime() + REBUILD_BUDGET_NANOS;
 		for (int i = 0; i < found; i++) {
-			//? <1.21.11 {
-			/*// However few sections that is: a heavy resource pack makes a single one cost several milliseconds.
+			// However few sections that is: a heavy resource pack makes a single one cost several milliseconds.
 			if (i > 0 && System.nanoTime() >= budgetEnd) {
 				break;
 			}
-			*///?}
 			DIRTY.remove(nearest[i]);
 			rebuild(minecraft, minecraft.level, nearest[i]);
 		}
@@ -2066,12 +2173,12 @@ public final class GpuFoliageRenderer {
 		}
 
 		//? >=1.21.11 {
-		/^@Override
+		@Override
 		public VertexConsumer setLineWidth(float width) {
 			delegate.setLineWidth(width);
 			return this;
 		}
-		^///?}
+		//?}
 	}
 	*///?} elif <1.21.1 {
 	/*/^*
@@ -2289,7 +2396,9 @@ public final class GpuFoliageRenderer {
 				SectionPos.sectionToBlockCoord(SectionPos.y(key)),
 				SectionPos.sectionToBlockCoord(SectionPos.z(key)));
 		BlockPos regionOrigin = regionOrigin(regionKeyOf(key));
-		WindShelter shelter = new WindShelter(level, origin);
+		WindShelter shelter = shelterActive && minecraft.player != null
+				&& withinReach(origin, minecraft.player.getX(), minecraft.player.getZ(), weatherWindReach())
+				? new WindShelter(level, origin) : null;
 		// Vertices are written relative to the region, so every section in it can share its buffers.
 		int offsetX = origin.getX() - regionOrigin.getX();
 		int offsetY = origin.getY() - regionOrigin.getY();
@@ -2347,7 +2456,8 @@ public final class GpuFoliageRenderer {
 					anchor.prepare(state, pos, level);
 					// Measured at the anchor, so every block of a tall plant bends as one piece; plants stand in a column,
 					// so the anchor shares the block's.
-					anchor.exposure = shelter.exposureAt(pos.getX(), anchor.cellY, pos.getZ(), anchor.length);
+					anchor.exposure = shelter == null ? 1.0F
+							: shelter.exposureAt(pos.getX(), anchor.cellY, pos.getZ(), anchor.length);
 					//? iris {
 					if (meshedForShaderPack) {
 						// The pack reads which block each vertex belongs to, and where its centre is, as it does on the
@@ -2441,7 +2551,9 @@ public final class GpuFoliageRenderer {
 				data.put(vertex * stride, meshVertices, meshBase + vertex * vertexBytes, vertexBytes);
 				data.put(vertex * stride + vertexBytes, weightScratch, vertex * WEIGHT_BYTES, WEIGHT_BYTES);
 			}
-			putSection(key, new Section(key, origin, data, vertexCount, stride));
+			Section section = new Section(key, origin, data, vertexCount, stride);
+			section.sheltered = shelter != null;
+			putSection(key, section);
 		//? >=1.21.1 {
 		}
 		//?} else {

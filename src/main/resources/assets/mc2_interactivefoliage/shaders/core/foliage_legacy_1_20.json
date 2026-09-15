@@ -22,8 +22,10 @@
         { "name": "FogShape", "type": "int", "count": 1, "values": [ 0 ] },
         { "name": "GameTime", "type": "float", "count": 1, "values": [ 0.0 ] },
         { "name": "SwayIntensity", "type": "float", "count": 1, "values": [ 0.0 ] },
+        { "name": "CalmSway", "type": "float", "count": 1, "values": [ 0.0 ] },
         { "name": "SwayEdge", "type": "float", "count": 4, "values": [ 0.0, 0.0, 0.0, 0.0 ] },
         { "name": "CameraBlockPos", "type": "int", "count": 3, "values": [ 0, 0, 0 ] },
-        { "name": "CameraOffset", "type": "float", "count": 3, "values": [ 0.0, 0.0, 0.0 ] }
+        { "name": "CameraOffset", "type": "float", "count": 3, "values": [ 0.0, 0.0, 0.0 ] },
+        { "name": "Weather", "type": "float", "count": 4, "values": [ 0.0, 0.0, 0.0, 0.0 ] }
     ]
 }

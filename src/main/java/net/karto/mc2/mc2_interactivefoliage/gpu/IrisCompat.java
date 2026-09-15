@@ -111,11 +111,12 @@ final class IrisCompat {
 	}
 
 	/^* Sets the sway's own uniforms on a pack's program, once it is applied. ^/
-	static void setSwayUniforms(ShaderInstance program, float intensity, org.joml.Vector4f edge, int cameraX, int cameraY,
-			int cameraZ, float offsetX, float offsetY, float offsetZ, float gameTime) {
+	static void setSwayUniforms(ShaderInstance program, float intensity, float calmSway, org.joml.Vector4f edge,
+			int cameraX, int cameraY,
+			int cameraZ, float offsetX, float offsetY, float offsetZ, float gameTime, org.joml.Vector4f weather) {
 		if (IRIS) {
-			IrisFoliageShaders.setSwayUniforms(program, intensity, edge.x, edge.y, edge.z, edge.w, cameraX, cameraY,
-					cameraZ, offsetX, offsetY, offsetZ, gameTime);
+			IrisFoliageShaders.setSwayUniforms(program, intensity, calmSway, edge.x, edge.y, edge.z, edge.w, cameraX, cameraY,
+					cameraZ, offsetX, offsetY, offsetZ, gameTime, weather);
 		}
 	}
 	*///?}

@@ -212,15 +212,18 @@ public final class IrisFoliageShaders {
 	 * Sets what the mod's part of a program reads, once the program is applied: none of it is among the uniforms a shader
 	 * instance knows, which Iris lists itself, so each is set on the program directly.
 	 ^/
-	static void setSwayUniforms(ShaderInstance program, float intensity, float edgeMinX, float edgeMinZ, float edgeMaxX,
+	static void setSwayUniforms(ShaderInstance program, float intensity, float calmSway, float edgeMinX, float edgeMinZ,
+			float edgeMaxX,
 			float edgeMaxZ, int cameraX, int cameraY, int cameraZ, float offsetX, float offsetY, float offsetZ,
-			float gameTime) {
+			float gameTime, org.joml.Vector4f weather) {
 		int id = program.getId();
 		GL20.glUniform1f(GL20.glGetUniformLocation(id, "mc2_SwayIntensity"), intensity);
+		GL20.glUniform1f(GL20.glGetUniformLocation(id, "mc2_CalmSway"), calmSway);
 		GL20.glUniform4f(GL20.glGetUniformLocation(id, "mc2_SwayEdge"), edgeMinX, edgeMinZ, edgeMaxX, edgeMaxZ);
 		GL20.glUniform3i(GL20.glGetUniformLocation(id, "mc2_CameraBlockPos"), cameraX, cameraY, cameraZ);
 		GL20.glUniform3f(GL20.glGetUniformLocation(id, "mc2_CameraOffset"), offsetX, offsetY, offsetZ);
 		GL20.glUniform1f(GL20.glGetUniformLocation(id, "mc2_GameTime"), gameTime);
+		GL20.glUniform4f(GL20.glGetUniformLocation(id, "mc2_Weather"), weather.x, weather.y, weather.z, weather.w);
 	}
 	*///?}
 
@@ -427,6 +430,7 @@ public final class IrisFoliageShaders {
 			in float SwayWeights;
 			layout(std140) uniform iris_FoliageSway {
 			    float mc2_SwayIntensity;
+			    float mc2_CalmSway;
 			    vec4 mc2_SwayEdge;
 			    vec4 mc2_Weather;
 			};
@@ -455,8 +459,8 @@ public final class IrisFoliageShaders {
 			in float SwayCell;
 			in float SwayWeights;
 			uniform float mc2_SwayIntensity;
+			uniform float mc2_CalmSway;
 			uniform vec4 mc2_SwayEdge;
-			// Not set before 1.21.11 yet, so it reads zero: no rain, and the calm sway.
 			uniform vec4 mc2_Weather;
 			uniform ivec3 mc2_CameraBlockPos;
 			uniform vec3 mc2_CameraOffset;
