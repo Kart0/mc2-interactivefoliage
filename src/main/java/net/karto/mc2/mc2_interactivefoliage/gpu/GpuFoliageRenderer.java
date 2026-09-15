@@ -1732,6 +1732,10 @@ public final class GpuFoliageRenderer {
 	 ^/
 	public static void onLegacyShaderLoaded(ShaderInstance shader) {
 		legacyShader = shader;
+		//? >=1.21.1 {
+		// The resources just changed, so the cutout shaders foliage follows may have too.
+		LegacyTerrainShader.invalidate();
+		//?}
 		int index = GL31.glGetUniformBlockIndex(shader.getId(), GpuFoliageInteraction.UNIFORM);
 		if (index != GL31.GL_INVALID_INDEX) {
 			GL31.glUniformBlockBinding(shader.getId(), index, INTERACTION_BINDING);
@@ -1751,6 +1755,15 @@ public final class GpuFoliageRenderer {
 		Matrix4f modelView = shadowPass ? shadowModelView : legacyModelView;
 		Matrix4f projection = shadowPass ? shadowProjection : legacyProjection;
 		ShaderInstance shader = legacyShader;
+		//? >=1.21.1 {
+		// The cutout shaders the chunk mesh draws plants with, where they compile with the sway spliced in.
+		if (legacyShader != null) {
+			ShaderInstance cutout = LegacyTerrainShader.get(FOLIAGE_FORMAT, INTERACTION_BINDING);
+			if (cutout != null) {
+				shader = cutout;
+			}
+		}
+		//?}
 		//? iris {
 		if (meshedForShaderPack) {
 			// The pack's own program for the pass, built for the foliage; see IrisFoliageShaders.
@@ -1812,6 +1825,17 @@ public final class GpuFoliageRenderer {
 				(float) (cameraBlock.getZ() - camera.z));
 		Vector4f weather = weather();
 		shader.safeGetUniform("Weather").set(weather.x, weather.y, weather.z, weather.w);
+		// The same values under the names sway.glsl reads them by, for the shader built from the cutout shaders.
+		shader.safeGetUniform("mc2_SwayIntensity").set(swayIntensity());
+		shader.safeGetUniform("mc2_CalmSway").set(calmSway());
+		shader.safeGetUniform("mc2_SwayEdge").set(edge.x, edge.y, edge.z, edge.w);
+		shader.safeGetUniform("mc2_CameraBlockPos").set(cameraBlock.getX(), cameraBlock.getY(), cameraBlock.getZ());
+		shader.safeGetUniform("mc2_CameraOffset").set(
+				(float) (cameraBlock.getX() - camera.x),
+				(float) (cameraBlock.getY() - camera.y),
+				(float) (cameraBlock.getZ() - camera.z));
+		shader.safeGetUniform("mc2_Weather").set(weather.x, weather.y, weather.z, weather.w);
+		shader.safeGetUniform("mc2_GameTime").set(RenderSystem.getShaderGameTime());
 		shader.apply();
 		//? iris {
 		if (meshedForShaderPack) {
