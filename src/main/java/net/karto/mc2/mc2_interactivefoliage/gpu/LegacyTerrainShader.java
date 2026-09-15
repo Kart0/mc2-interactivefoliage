@@ -1,6 +1,6 @@
 package net.karto.mc2.mc2_interactivefoliage.gpu;
 
-//? >=1.21.1 && <1.21.11 {
+//? >=1.20.1 && <1.21.11 {
 /*import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
@@ -117,15 +117,18 @@ final class LegacyTerrainShader {
 
 	private static ShaderInstance build(ResourceManager resources, VertexFormat format) {
 		try {
-			Resource json = resources.getResourceOrThrow(ResourceLocation.withDefaultNamespace(CORE + CUTOUT + ".json"));
-			String vertex = splice(read(resources, CUTOUT + ".vsh"), readSway());
+			Resource json = resources.getResourceOrThrow(vanilla(CORE + CUTOUT + ".json"));
+			JsonObject cutout = JsonParser.parseString(read(json)).getAsJsonObject();
+			// Which two sources the cutout layer is drawn from is the JSON's to say: a resource pack may point it at
+			// shaders of its own under any name, as a pack that shades the world in the fragment shader does.
+			String vertex = splice(read(resources, source(cutout, "vertex", ".vsh")), readSway());
 			if (vertex == null) {
 				ModTemplate.LOGGER.warn("The cutout vertex shader in use can't be read by the GPU foliage renderer; foliage "
 						+ "near the player is drawn with the renderer's own shader, which may not match a resource pack's look");
 				return null;
 			}
-			String program = programJson(read(json));
-			String fragment = read(resources, CUTOUT + ".fsh");
+			String program = programJson(cutout);
+			String fragment = read(resources, source(cutout, "fragment", ".fsh"));
 			ResourceProvider provider = location -> {
 				if (location.getNamespace().equals(ResourceLocation.DEFAULT_NAMESPACE)) {
 					String path = location.getPath();
@@ -149,13 +152,35 @@ final class LegacyTerrainShader {
 		}
 	}
 
+	/^* A file under the game's own shaders, by path. ^/
+	private static ResourceLocation vanilla(String path) {
+		//? >=1.21.1 {
+		return ResourceLocation.withDefaultNamespace(path);
+		//?} else {
+		/^return new ResourceLocation(path);
+		^///?}
+	}
+
 	private static Resource served(Resource like, String text) {
 		byte[] bytes = text.getBytes(StandardCharsets.UTF_8);
 		return new Resource(like.source(), () -> new ByteArrayInputStream(bytes));
 	}
 
-	private static String read(ResourceManager resources, String file) throws IOException {
-		return read(resources.getResourceOrThrow(ResourceLocation.withDefaultNamespace(CORE + file)));
+	/^* Where one of a program's two sources lives: {@code namespace:name} in its JSON, or a name under the game's own. ^/
+	private static ResourceLocation source(JsonObject program, String which, String extension) {
+		String name = program.get(which).getAsString();
+		int colon = name.indexOf(':');
+		//? >=1.21.1 {
+		return colon < 0 ? ResourceLocation.withDefaultNamespace(CORE + name + extension)
+				: ResourceLocation.fromNamespaceAndPath(name.substring(0, colon), CORE + name.substring(colon + 1) + extension);
+		//?} else {
+		/^return colon < 0 ? new ResourceLocation(CORE + name + extension)
+				: new ResourceLocation(name.substring(0, colon), CORE + name.substring(colon + 1) + extension);
+		^///?}
+	}
+
+	private static String read(ResourceManager resources, ResourceLocation file) throws IOException {
+		return read(resources.getResourceOrThrow(file));
 	}
 
 	private static String read(Resource resource) throws IOException {
@@ -165,8 +190,8 @@ final class LegacyTerrainShader {
 	}
 
 	/^* The cutout layer's JSON, reading the mod's sources, with the uniforms the mod sets added where it lacks them. ^/
-	private static String programJson(String cutout) {
-		JsonObject json = JsonParser.parseString(cutout).getAsJsonObject();
+	private static String programJson(JsonObject cutout) {
+		JsonObject json = cutout.deepCopy();
 		json.addProperty("vertex", NAME);
 		json.addProperty("fragment", NAME);
 		JsonArray uniforms = json.has("uniforms") ? json.getAsJsonArray("uniforms") : new JsonArray();
@@ -191,6 +216,15 @@ final class LegacyTerrainShader {
 			uniforms.add(added);
 		}
 		json.add("uniforms", uniforms);
+		//? <1.21.1 {
+		/^// Before 1.21.1 a shader lists the attributes it is fed, in the order the vertex format holds them.
+		if (json.has("attributes")) {
+			JsonArray attributes = json.getAsJsonArray("attributes");
+			attributes.add("Padding");
+			attributes.add("SwayCell");
+			attributes.add("SwayWeights");
+		}
+		^///?}
 		return json.toString();
 	}
 

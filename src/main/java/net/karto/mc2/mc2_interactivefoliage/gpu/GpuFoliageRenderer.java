@@ -1526,8 +1526,10 @@ public final class GpuFoliageRenderer {
 	 * Sodium's while Sodium draws them, the terrain's otherwise -- where they compile, and the mod's own where they don't.
 	 */
 	private static RenderPipeline ownPipeline() {
-		if (SodiumFoliageShader.usable(SODIUM_PIPELINE)) {
-			return SODIUM_PIPELINE;
+		if (SodiumBridge.drawsChunks()) {
+			// The terrain's own shaders are not what the chunks are drawn with then, so where Sodium's cannot be read the
+			// mod keeps to its own rather than following shaders the terrain around the foliage does not.
+			return SodiumFoliageShader.usable(SODIUM_PIPELINE) ? SODIUM_PIPELINE : PIPELINE;
 		}
 		return TerrainFoliageShader.usable(TERRAIN_PIPELINE) ? TERRAIN_PIPELINE : PIPELINE;
 	}
@@ -1732,7 +1734,7 @@ public final class GpuFoliageRenderer {
 	 ^/
 	public static void onLegacyShaderLoaded(ShaderInstance shader) {
 		legacyShader = shader;
-		//? >=1.21.1 {
+		//? >=1.20.1 {
 		// The resources just changed, so the cutout shaders foliage follows may have too.
 		LegacyTerrainShader.invalidate();
 		//?}
@@ -1755,19 +1757,23 @@ public final class GpuFoliageRenderer {
 		Matrix4f modelView = shadowPass ? shadowModelView : legacyModelView;
 		Matrix4f projection = shadowPass ? shadowProjection : legacyProjection;
 		ShaderInstance shader = legacyShader;
-		//? >=1.21.1 {
-		// The cutout shaders the chunk mesh draws plants with, where they compile with the sway spliced in.
-		if (legacyShader != null) {
-			ShaderInstance cutout = LegacyTerrainShader.get(FOLIAGE_FORMAT, INTERACTION_BINDING);
-			if (cutout != null) {
-				shader = cutout;
-			}
-		}
-		//?}
+		boolean shaderPack = false;
 		//? iris {
 		if (meshedForShaderPack) {
 			// The pack's own program for the pass, built for the foliage; see IrisFoliageShaders.
 			shader = IrisCompat.program(shadowPass);
+			shaderPack = true;
+		}
+		//?}
+		//? >=1.20.1 {
+		// The cutout shaders the chunk mesh draws plants with, where they compile with the sway spliced in. Sodium draws
+		// its chunks with shaders of its own, which a resource pack's core shaders never reach, so the mod keeps to its
+		// own shader there rather than following a pack the terrain does not.
+		if (!shaderPack && legacyShader != null && !SodiumBridge.drawsChunks()) {
+			ShaderInstance cutout = LegacyTerrainShader.get(FOLIAGE_FORMAT, INTERACTION_BINDING);
+			if (cutout != null) {
+				shader = cutout;
+			}
 		}
 		//?}
 		if (shader == null || modelView == null || projection == null) {
@@ -1810,6 +1816,13 @@ public final class GpuFoliageRenderer {
 		}
 		if (shader.GAME_TIME != null) {
 			shader.GAME_TIME.set(RenderSystem.getShaderGameTime());
+		}
+		// The two the chunk layers set that nothing above covers; a resource pack's shader may read either.
+		if (shader.GLINT_ALPHA != null) {
+			shader.GLINT_ALPHA.set(RenderSystem.getShaderGlintAlpha());
+		}
+		if (shader.TEXTURE_MATRIX != null) {
+			shader.TEXTURE_MATRIX.set(RenderSystem.getTextureMatrix());
 		}
 		RenderSystem.setupShaderLights(shader);
 		^///?}

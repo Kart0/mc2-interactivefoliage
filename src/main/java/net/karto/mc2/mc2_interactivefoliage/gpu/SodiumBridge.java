@@ -103,6 +103,11 @@ public final class SodiumBridge {
 	}
 	//?}
 
+	/** Whether Sodium draws the chunks, and so decides what the terrain around the foliage is drawn with. */
+	static boolean drawsChunks() {
+		return ModTemplate.xplat().isModLoaded(MOD_ID);
+	}
+
 	/** Sodium's world renderer, or null when there is none to ask. */
 	static Object renderer() {
 		if (INSTANCE == null) {
