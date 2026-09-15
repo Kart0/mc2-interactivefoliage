@@ -61,6 +61,9 @@ import net.karto.mc2.mc2_interactivefoliage.FoliageSettings;
 import net.karto.mc2.mc2_interactivefoliage.ModTemplate;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
+//? >=26.2 {
+import net.minecraft.client.renderer.BindGroupLayouts;
+//?}
 //? >=1.21.11 {
 import net.minecraft.client.renderer.DynamicUniforms;
 import net.minecraft.client.renderer.RenderPipelines;
@@ -391,6 +394,95 @@ public final class GpuFoliageRenderer {
 				.withShaderDefine("ALPHA_CUTOUT", 0.5F)
 				.build();
 	}
+	*///?}
+
+	//? >=26.2 {
+	/**
+	 * The pipeline foliage is drawn with while the terrain's shaders compile with the sway spliced in, which is nearly
+	 * always: the chunk mesh's own shaders, so foliage is lit and coloured as the terrain around it, a resource pack's
+	 * shaders included. See {@link TerrainFoliageShader}; {@link #PIPELINE} is what is left otherwise.
+	 */
+	private static final RenderPipeline TERRAIN_PIPELINE = RenderPipeline.builder(RenderPipelines.TERRAIN_SNIPPET)
+			.withLocation(Identifier.fromNamespaceAndPath(ModTemplate.MOD_ID, "pipeline/foliage_terrain"))
+			.withVertexShader(TerrainFoliageShader.VERTEX)
+			.withFragmentShader(TerrainFoliageShader.TERRAIN)
+			.withVertexBinding(0, FOLIAGE_FORMAT)
+			.withBindGroupLayout(SWAY_SETTINGS)
+			.withBindGroupLayout(GpuFoliageInteraction.LAYOUT)
+			.withShaderDefine("ALPHA_CUTOUT", 0.5F)
+			.build();
+
+	/**
+	 * The pipeline foliage is drawn with while Sodium draws the chunks and its shaders compile with the mod's vertices
+	 * read in: the shaders the chunks are drawn with then. See {@link SodiumFoliageShader}.
+	 */
+	private static final RenderPipeline SODIUM_PIPELINE = RenderPipeline.builder(RenderPipelines.GLOBALS_SNIPPET)
+			.withLocation(Identifier.fromNamespaceAndPath(ModTemplate.MOD_ID, "pipeline/foliage_sodium"))
+			.withVertexShader(SodiumFoliageShader.SHADER)
+			.withFragmentShader(SodiumFoliageShader.SHADER)
+			.withVertexBinding(0, FOLIAGE_FORMAT)
+			.withPrimitiveTopology(PrimitiveTopology.QUADS)
+			.withDepthStencilState(DepthStencilState.DEFAULT)
+			.withBindGroupLayout(BindGroupLayouts.DYNAMIC_TRANSFORMS)
+			.withBindGroupLayout(BindGroupLayouts.PROJECTION)
+			.withBindGroupLayout(BindGroupLayouts.FOG)
+			.withBindGroupLayout(BindGroupLayout.builder()
+					.withSampler(SodiumFoliageShader.BLOCK_TEXTURE)
+					.withSampler(SodiumFoliageShader.LIGHT_TEXTURE)
+					.build())
+			.withBindGroupLayout(SWAY_SETTINGS)
+			.withBindGroupLayout(GpuFoliageInteraction.LAYOUT)
+			.build();
+	//?} elif >=1.21.11 {
+	/*// Drawn with Sodium's chunk shaders while Sodium draws the chunks and they compile with the mod's vertices read in;
+	// see the newer pipeline.
+	private static final RenderPipeline SODIUM_PIPELINE = RenderPipeline.builder()
+			.withLocation(Identifier.fromNamespaceAndPath(ModTemplate.MOD_ID, "pipeline/foliage_sodium"))
+			.withVertexShader(SodiumFoliageShader.SHADER)
+			.withFragmentShader(SodiumFoliageShader.SHADER)
+			.withVertexFormat(FOLIAGE_FORMAT, VertexFormat.Mode.QUADS)
+			.withSampler(SodiumFoliageShader.BLOCK_TEXTURE)
+			.withSampler(SodiumFoliageShader.LIGHT_TEXTURE)
+			.withUniform("DynamicTransforms", UniformType.UNIFORM_BUFFER)
+			.withUniform("Projection", UniformType.UNIFORM_BUFFER)
+			.withUniform("Fog", UniformType.UNIFORM_BUFFER)
+			.withUniform("Globals", UniformType.UNIFORM_BUFFER)
+			//? <26.1.2 {
+			/^.withUniform(SodiumFoliageShader.CHUNK_DATA, UniformType.UNIFORM_BUFFER)
+			^///?}
+			.withUniform(SWAY_SETTINGS_UNIFORM, UniformType.UNIFORM_BUFFER)
+			.withUniform(GpuFoliageInteraction.UNIFORM, UniformType.UNIFORM_BUFFER)
+			//? >=26.1.2 {
+			.withDepthStencilState(DepthStencilState.DEFAULT)
+			//?} else {
+			/^.withDepthWrite(true)
+			.withDepthTestFunction(DepthTestFunction.LESS_DEPTH_TEST)
+			^///?}
+			.build();
+
+	// Drawn with the terrain's shaders where they compile with the sway spliced in; see the newer pipeline. Vanilla's
+	// terrain snippet is private before 26.2, so the state it holds is spelled out, as for the block pipeline.
+	private static final RenderPipeline TERRAIN_PIPELINE = RenderPipeline.builder()
+			.withLocation(Identifier.fromNamespaceAndPath(ModTemplate.MOD_ID, "pipeline/foliage_terrain"))
+			.withVertexShader(TerrainFoliageShader.VERTEX)
+			.withFragmentShader(TerrainFoliageShader.TERRAIN)
+			.withVertexFormat(FOLIAGE_FORMAT, VertexFormat.Mode.QUADS)
+			.withSampler("Sampler0")
+			.withSampler("Sampler2")
+			.withUniform("Projection", UniformType.UNIFORM_BUFFER)
+			.withUniform("ChunkSection", UniformType.UNIFORM_BUFFER)
+			.withUniform("Fog", UniformType.UNIFORM_BUFFER)
+			.withUniform("Globals", UniformType.UNIFORM_BUFFER)
+			.withUniform(SWAY_SETTINGS_UNIFORM, UniformType.UNIFORM_BUFFER)
+			.withUniform(GpuFoliageInteraction.UNIFORM, UniformType.UNIFORM_BUFFER)
+			//? >=26.1.2 {
+			.withDepthStencilState(DepthStencilState.DEFAULT)
+			//?} else {
+			/^.withDepthWrite(true)
+			.withDepthTestFunction(DepthTestFunction.LESS_DEPTH_TEST)
+			^///?}
+			.withShaderDefine("ALPHA_CUTOUT", 0.5F)
+			.build();
 	*///?}
 
 	private static final int VERTEX_BYTES = DefaultVertexFormat.BLOCK.getVertexSize();
@@ -817,8 +909,11 @@ public final class GpuFoliageRenderer {
 			deformationScale = deformation == null ? 0.0F : deformation.getDeformationScale(state, pos);
 			this.state = state;
 			this.pos = pos;
-			// Hanging plants are held at the top of their anchor block, everything else at the base.
-			anchorY = hanging ? anchor.getY() + 1 : anchor.getY();
+			// Hanging plants are held at the top of their anchor block, everything else at the base -- lowered with the
+			// plant where it stands on a slab.
+			anchorY = hanging ? anchor.getY() + 1
+					: anchor.getY() + TerrainSlabsCompat.offsetY(level, anchor,
+							anchor.equals(pos) ? state : level.getBlockState(anchor));
 			cellX = anchor.getX();
 			cellY = anchor.getY();
 			cellZ = anchor.getZ();
@@ -1427,6 +1522,40 @@ public final class GpuFoliageRenderer {
 
 	//? >=1.21.11 {
 	/**
+	 * The pipeline foliage is drawn with while no shader pack is loaded: the shaders the chunks are drawn with --
+	 * Sodium's while Sodium draws them, the terrain's otherwise -- where they compile, and the mod's own where they don't.
+	 */
+	private static RenderPipeline ownPipeline() {
+		if (SodiumFoliageShader.usable(SODIUM_PIPELINE)) {
+			return SODIUM_PIPELINE;
+		}
+		return TerrainFoliageShader.usable(TERRAIN_PIPELINE) ? TERRAIN_PIPELINE : PIPELINE;
+	}
+
+	//? <26.1.2 {
+	/*/^* Sodium 0.8's per-chunk fade-in times, all -1: no chunk the mod draws is fading in. Made once. ^/
+	private static GpuBuffer sodiumChunkData;
+
+	private static GpuBuffer sodiumChunkData() {
+		if (sodiumChunkData == null) {
+			// 64 ivec4s, as Sodium's shader declares them.
+			ByteBuffer fades = MemoryUtil.memAlloc(64 * 4 * Integer.BYTES);
+			try {
+				while (fades.hasRemaining()) {
+					fades.putInt(-1);
+				}
+				fades.flip();
+				sodiumChunkData = RenderSystem.getDevice().createBuffer(() -> "MC2 foliage chunk fades",
+						GpuBuffer.USAGE_UNIFORM, fades);
+			} finally {
+				MemoryUtil.memFree(fades);
+			}
+		}
+		return sodiumChunkData;
+	}
+	*///?}
+
+	/**
 	 * Draws what {@link #collectDraws} worked out: through the mod's own pipeline, or through a shader pack's programs
 	 * while one is loaded -- into its shadow map if this is its shadow pass. Iris binds the framebuffer a pack's program
 	 * writes to itself, so the pass is opened on the main target either way.
@@ -1436,10 +1565,12 @@ public final class GpuFoliageRenderer {
 		boolean shadowPass = shadowModelView != null;
 		//? iris {
 		RenderPipeline pipeline = shadowPass ? shaderPackShadowPipeline
-				: meshedForShaderPack ? shaderPackPipeline : PIPELINE;
+				: meshedForShaderPack ? shaderPackPipeline : ownPipeline();
 		//?} else {
-		/*RenderPipeline pipeline = PIPELINE;
+		/*RenderPipeline pipeline = ownPipeline();
 		*///?}
+		// The terrain's shaders read where each region is from the chunk section block, the mod's own from the transform.
+		boolean terrainShaders = pipeline == TERRAIN_PIPELINE;
 		// Every region's offset is written in one mapping of the uniform ring buffer. The singular
 		// writeTransform maps and unmaps it per call, which costs a GPU round trip for each one. In a shadow pass the
 		// model view is the sun's, as Iris hands it over.
@@ -1448,27 +1579,43 @@ public final class GpuFoliageRenderer {
 		//?} else {
 		/*Matrix4f modelView = shadowPass ? shadowModelView : RenderSystem.getModelViewMatrix();
 		*///?}
-		Vector4f noModulation = new Vector4f(1.0F, 1.0F, 1.0F, 1.0F);
-		Matrix4f noTextureTransform = new Matrix4f();
-		DynamicUniforms.Transform[] transforms = new DynamicUniforms.Transform[drawn.size()];
-		for (int i = 0; i < transforms.length; i++) {
-			BlockPos origin = drawn.get(i).origin;
-			transforms[i] = new DynamicUniforms.Transform(
-					modelView,
-					noModulation,
-					new Vector3f(
-							(float) (origin.getX() - camera.x),
-							(float) (origin.getY() - camera.y),
-							(float) (origin.getZ() - camera.z)),
-					noTextureTransform);
+		AbstractTexture atlas = minecraft.getTextureManager().getTexture(TextureAtlas.LOCATION_BLOCKS);
+		GpuBufferSlice[] offsets;
+		if (terrainShaders) {
+			// As the chunk mesh fills it in: the region's corner in the world, fully faded in, and the atlas's size, which
+			// the terrain's fragment shader samples the atlas by.
+			int atlasWidth = atlas.getTextureView().getWidth(0);
+			int atlasHeight = atlas.getTextureView().getHeight(0);
+			DynamicUniforms.ChunkSectionInfo[] sections = new DynamicUniforms.ChunkSectionInfo[drawn.size()];
+			for (int i = 0; i < sections.length; i++) {
+				BlockPos origin = drawn.get(i).origin;
+				sections[i] = new DynamicUniforms.ChunkSectionInfo(modelView, origin.getX(), origin.getY(), origin.getZ(),
+						1.0F, atlasWidth, atlasHeight);
+			}
+			offsets = RenderSystem.getDynamicUniforms().writeChunkSections(sections);
+		} else {
+			Vector4f noModulation = new Vector4f(1.0F, 1.0F, 1.0F, 1.0F);
+			Matrix4f noTextureTransform = new Matrix4f();
+			DynamicUniforms.Transform[] transforms = new DynamicUniforms.Transform[drawn.size()];
+			for (int i = 0; i < transforms.length; i++) {
+				BlockPos origin = drawn.get(i).origin;
+				transforms[i] = new DynamicUniforms.Transform(
+						modelView,
+						noModulation,
+						new Vector3f(
+								(float) (origin.getX() - camera.x),
+								(float) (origin.getY() - camera.y),
+								(float) (origin.getZ() - camera.z)),
+						noTextureTransform);
+			}
+			offsets = RenderSystem.getDynamicUniforms().writeTransforms(transforms);
 		}
-		GpuBufferSlice[] offsets = RenderSystem.getDynamicUniforms().writeTransforms(transforms);
+		String regionUniform = terrainShaders ? "ChunkSection" : "DynamicTransforms";
 
 		int longestDraw = 0;
 		for (int i = 2; i < drawsSize; i += 3) {
 			longestDraw = Math.max(longestDraw, draws[i]);
 		}
-		AbstractTexture atlas = minecraft.getTextureManager().getTexture(TextureAtlas.LOCATION_BLOCKS);
 		//? >=26.2 {
 		RenderSystem.AutoStorageIndexBuffer indices = RenderSystem.getSequentialBuffer(PrimitiveTopology.QUADS);
 		//?} else {
@@ -1509,14 +1656,24 @@ public final class GpuFoliageRenderer {
 				pass.setUniform("Projection", projection);
 			}
 			//?}
-			pass.bindTexture("Sampler0", atlas.getTextureView(), atlas.getSampler());
-			pass.bindTexture("Sampler2",
+			// The chunk shaders pick mip levels themselves, so they sample the atlas the way the chunk mesh does: smoothly,
+			// between mip levels. The mod's own shader reads it as the atlas is set to be read.
+			boolean sodiumShaders = pipeline == SODIUM_PIPELINE;
+			pass.bindTexture(sodiumShaders ? SodiumFoliageShader.BLOCK_TEXTURE : "Sampler0", atlas.getTextureView(),
+					sodiumShaders || terrainShaders
+							? RenderSystem.getSamplerCache().getClampToEdge(FilterMode.LINEAR, true) : atlas.getSampler());
+			pass.bindTexture(sodiumShaders ? SodiumFoliageShader.LIGHT_TEXTURE : "Sampler2",
 					//? >=26.1.2 {
 					minecraft.gameRenderer.lightmap(),
 					//?} else {
 					/*minecraft.gameRenderer.lightTexture().getTextureView(),
 					*///?}
 					RenderSystem.getSamplerCache().getClampToEdge(FilterMode.LINEAR));
+			//? <26.1.2 {
+			/*if (sodiumShaders) {
+				pass.setUniform(SodiumFoliageShader.CHUNK_DATA, sodiumChunkData());
+			}
+			*///?}
 			pass.setIndexBuffer(indexBuffer, indices.type());
 			pass.setUniform(SWAY_SETTINGS_UNIFORM, settings);
 			pass.setUniform(GpuFoliageInteraction.UNIFORM, interaction);
@@ -1526,7 +1683,7 @@ public final class GpuFoliageRenderer {
 				int regionIndex = draws[i];
 				if (regionIndex != boundRegion) {
 					Region region = drawn.get(regionIndex);
-					pass.setUniform("DynamicTransforms", offsets[regionIndex]);
+					pass.setUniform(regionUniform, offsets[regionIndex]);
 					//? >=26.2 {
 					pass.setVertexBuffer(0, region.vertices.slice());
 					//?} else {
@@ -2458,6 +2615,8 @@ public final class GpuFoliageRenderer {
 					// so the anchor shares the block's.
 					anchor.exposure = shelter == null ? 1.0F
 							: shelter.exposureAt(pos.getX(), anchor.cellY, pos.getZ(), anchor.length);
+					// Another mod may draw the plant lower than its block, as the chunk mesh shows it.
+					float lift = TerrainSlabsCompat.offsetY(level, pos, state);
 					//? iris {
 					if (meshedForShaderPack) {
 						// The pack reads which block each vertex belongs to, and where its centre is, as it does on the
@@ -2466,7 +2625,7 @@ public final class GpuFoliageRenderer {
 					}
 					//?}
 					//? >=26.1.2 {
-					modelRenderer.tesselateBlock(output, offsetX + dx, offsetY + dy, offsetZ + dz,
+					modelRenderer.tesselateBlock(output, offsetX + dx, offsetY + dy + lift, offsetZ + dz,
 							level, pos, state, GpuFoliageSplit.modelFor(state, models.get(state)),
 							state.getSeed(pos));
 					//?} else {
@@ -2479,15 +2638,15 @@ public final class GpuFoliageRenderer {
 					// its region. The writer subtracts it again to recover each vertex's height in
 					// its own block, which is what a sway weight is measured against.
 					poseStack.pushPose();
-					poseStack.translate(offsetX + dx, offsetY + dy, offsetZ + dz);
-					output.beginBlock(offsetY + dy);
+					poseStack.translate(offsetX + dx, offsetY + dy + lift, offsetZ + dz);
+					output.beginBlock(offsetY + dy + lift);
 					modelRenderer.tesselateBlock(level, parts, state, pos, poseStack, output, true,
 							OverlayTexture.NO_OVERLAY);
 					poseStack.popPose();
 					//?} else {
 					/^poseStack.pushPose();
-					poseStack.translate(offsetX + dx, offsetY + dy, offsetZ + dz);
-					output.beginBlock(offsetY + dy);
+					poseStack.translate(offsetX + dx, offsetY + dy + lift, offsetZ + dz);
+					output.beginBlock(offsetY + dy + lift);
 					tesselate(level, GpuFoliageSplit.modelFor(state, models.getBlockModel(state)),
 							state, pos, poseStack, output, random);
 					poseStack.popPose();
