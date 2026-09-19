@@ -4,7 +4,7 @@
     "config.mc2_interactivefoliage.on": "AR",
     "config.mc2_interactivefoliage.off": "AS",
     "config.mc2_interactivefoliage.intensity": "Déine: %s",
-    "config.mc2_interactivefoliage.radius": "Ga idirghníomhaithe: %s bloc",
+    "config.mc2_interactivefoliage.radius": "Ga Idirghníomhaithe: %s bloc",
     "config.mc2_interactivefoliage.reset": "↺",
     "config.mc2_interactivefoliage.save": "Sábháil & Dún",
     "config.mc2_interactivefoliage.renderer": "Rindreálaí",

@@ -1,10 +1,10 @@
 {
-    "config.mc2_interactivefoliage.title": "MC2 - Интерактивті жапырақтар",
+    "config.mc2_interactivefoliage.title": "MC2 - Интерактивті Жапырақтар",
     "config.mc2_interactivefoliage.enabled": "Әрекеттесу",
     "config.mc2_interactivefoliage.on": "ҚОСУЛЫ",
     "config.mc2_interactivefoliage.off": "ӨШІРУЛІ",
     "config.mc2_interactivefoliage.intensity": "Қарқындылық: %s",
-    "config.mc2_interactivefoliage.radius": "Әрекет радиусы: %s блок",
+    "config.mc2_interactivefoliage.radius": "Әрекет Радиусы: %s блок",
     "config.mc2_interactivefoliage.reset": "↺",
     "config.mc2_interactivefoliage.save": "Сақтау & Жабу",
     "config.mc2_interactivefoliage.renderer": "Бейнелеуіш",
@@ -12,8 +12,8 @@
     "config.mc2_interactivefoliage.gpu.adaptive": "Бейімделгіш",
     "config.mc2_interactivefoliage.gpu.half": "Жарты",
     "config.mc2_interactivefoliage.gpu.full": "Толық",
-    "config.mc2_interactivefoliage.waving_foliage": "Шөп тербелісі",
-    "config.mc2_interactivefoliage.weather_wind": "Ауа райы желі",
+    "config.mc2_interactivefoliage.waving_foliage": "Шөп Тербелісі",
+    "config.mc2_interactivefoliage.weather_wind": "Ауа Райы Желі",
     "config.mc2_interactivefoliage.distance": "Қашықтық",
     "config.mc2_interactivefoliage.preset.classic": "Классикалық",
     "config.mc2_interactivefoliage.preset.low": "Төмен",
@@ -22,9 +22,9 @@
     "config.mc2_interactivefoliage.preset.high": "Жоғары",
     "config.mc2_interactivefoliage.preset.ultra": "Ультра",
     "config.mc2_interactivefoliage.preset.visuals": "Визуалды",
-    "key.category.mc2_interactivefoliage.general": "Интерактивті жапырақтар",
-    "key.mc2_interactivefoliage.open_config": "Конфигурацияны ашу",
-    "key.mc2_interactivefoliage.toggle": "Модты ауыстыру",
-    "key.mc2_interactivefoliage.toggle.on": "Интерактивті жапырақтар: ҚОСУЛЫ",
-    "key.mc2_interactivefoliage.toggle.off": "Интерактивті жапырақтар: ӨШІРУЛІ"
+    "key.category.mc2_interactivefoliage.general": "Интерактивті Жапырақтар",
+    "key.mc2_interactivefoliage.open_config": "Конфигурацияны Ашу",
+    "key.mc2_interactivefoliage.toggle": "Модты Ауыстыру",
+    "key.mc2_interactivefoliage.toggle.on": "Интерактивті Жапырақтар: ҚОСУЛЫ",
+    "key.mc2_interactivefoliage.toggle.off": "Интерактивті Жапырақтар: ӨШІРУЛІ"
 }

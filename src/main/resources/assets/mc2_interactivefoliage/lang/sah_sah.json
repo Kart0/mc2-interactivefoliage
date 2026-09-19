@@ -1,10 +1,10 @@
 {
-    "config.mc2_interactivefoliage.title": "MC2 - Интерактив сэбирдэх",
+    "config.mc2_interactivefoliage.title": "MC2 - Интерактив Сэбирдэх",
     "config.mc2_interactivefoliage.enabled": "Дьайыы",
     "config.mc2_interactivefoliage.on": "ХАРДА",
     "config.mc2_interactivefoliage.off": "АРААР",
     "config.mc2_interactivefoliage.intensity": "Күүс: %s",
-    "config.mc2_interactivefoliage.radius": "Дьайыы радиуса: %s блок",
+    "config.mc2_interactivefoliage.radius": "Дьайыы Радиуса: %s блок",
     "config.mc2_interactivefoliage.reset": "↺",
     "config.mc2_interactivefoliage.save": "Бичий & Сап",
     "config.mc2_interactivefoliage.renderer": "Көрдөрөр",
@@ -12,8 +12,8 @@
     "config.mc2_interactivefoliage.gpu.adaptive": "Адаптивнай",
     "config.mc2_interactivefoliage.gpu.half": "Аҥаар",
     "config.mc2_interactivefoliage.gpu.full": "Толору",
-    "config.mc2_interactivefoliage.waving_foliage": "Хамсыыр үүнээйилэр",
-    "config.mc2_interactivefoliage.weather_wind": "Ардах тыала",
+    "config.mc2_interactivefoliage.waving_foliage": "Хамсыыр Үүнээйилэр",
+    "config.mc2_interactivefoliage.weather_wind": "Ардах Тыала",
     "config.mc2_interactivefoliage.distance": "Ыраах",
     "config.mc2_interactivefoliage.preset.classic": "Классика",
     "config.mc2_interactivefoliage.preset.low": "Намыһах",
@@ -22,9 +22,9 @@
     "config.mc2_interactivefoliage.preset.high": "Үрдүк",
     "config.mc2_interactivefoliage.preset.ultra": "Ультра",
     "config.mc2_interactivefoliage.preset.visuals": "Көстүүлээх",
-    "key.category.mc2_interactivefoliage.general": "Интерактив сэбирдэх",
-    "key.mc2_interactivefoliage.open_config": "Конфигурацияны ас",
-    "key.mc2_interactivefoliage.toggle": "Моду уларыт",
-    "key.mc2_interactivefoliage.toggle.on": "Интерактив сэбирдэх: ХАРДА",
-    "key.mc2_interactivefoliage.toggle.off": "Интерактив сэбирдэх: АРААР"
+    "key.category.mc2_interactivefoliage.general": "Интерактив Сэбирдэх",
+    "key.mc2_interactivefoliage.open_config": "Конфигурацияны Ас",
+    "key.mc2_interactivefoliage.toggle": "Моду Уларыт",
+    "key.mc2_interactivefoliage.toggle.on": "Интерактив Сэбирдэх: ХАРДА",
+    "key.mc2_interactivefoliage.toggle.off": "Интерактив Сэбирдэх: АРААР"
 }

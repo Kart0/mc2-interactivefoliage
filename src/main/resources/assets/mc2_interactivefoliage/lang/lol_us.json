@@ -4,7 +4,7 @@
   "config.mc2_interactivefoliage.on": "ON (YUS)",
   "config.mc2_interactivefoliage.off": "OFF (NUU)",
   "config.mc2_interactivefoliage.intensity": "Intensitee: %s",
-  "config.mc2_interactivefoliage.radius": "Pokin radias: %s blockz",
+  "config.mc2_interactivefoliage.radius": "Pokin Radias: %s blockz",
   "config.mc2_interactivefoliage.reset": "↺ (RESET NAO)",
   "config.mc2_interactivefoliage.save": "SAVE AN CLOSE (KTHXBAI)",
   "config.mc2_interactivefoliage.renderer": "Doodlr",
@@ -23,8 +23,8 @@
   "config.mc2_interactivefoliage.preset.ultra": "Ultra Mega",
   "config.mc2_interactivefoliage.preset.visuals": "Pritty",
   "key.category.mc2_interactivefoliage.general": "Intur Activ Foliage",
-  "key.mc2_interactivefoliage.open_config": "Open Config (tweak tweak)",
-  "key.mc2_interactivefoliage.toggle": "Toggle Mod (on/off meow)",
+  "key.mc2_interactivefoliage.open_config": "Open Config (Tweak Tweak)",
+  "key.mc2_interactivefoliage.toggle": "Toggle Mod (On/Off Meow)",
   "key.mc2_interactivefoliage.toggle.on": "Intur Activ Foliage: ON (YUS)",
   "key.mc2_interactivefoliage.toggle.off": "Intur Activ Foliage: OFF (NUU)"
 }

@@ -12,7 +12,7 @@
     "config.mc2_interactivefoliage.gpu.adaptive": "Aðlagandi",
     "config.mc2_interactivefoliage.gpu.half": "Hálft",
     "config.mc2_interactivefoliage.gpu.full": "Fullt",
-    "config.mc2_interactivefoliage.waving_foliage": "Sveiflandi gróður",
+    "config.mc2_interactivefoliage.waving_foliage": "Sveiflandi Gróður",
     "config.mc2_interactivefoliage.weather_wind": "Veðurvindur",
     "config.mc2_interactivefoliage.distance": "Fjarlægð",
     "config.mc2_interactivefoliage.preset.classic": "Klassískt",
@@ -23,8 +23,8 @@
     "config.mc2_interactivefoliage.preset.ultra": "Ofur",
     "config.mc2_interactivefoliage.preset.visuals": "Sjónrænt",
     "key.category.mc2_interactivefoliage.general": "Gagnvirkt Lauf",
-    "key.mc2_interactivefoliage.open_config": "Opna stillingar",
-    "key.mc2_interactivefoliage.toggle": "Skipta um mod",
+    "key.mc2_interactivefoliage.open_config": "Opna Stillingar",
+    "key.mc2_interactivefoliage.toggle": "Skipta Um Mod",
     "key.mc2_interactivefoliage.toggle.on": "Gagnvirkt Lauf: Á",
     "key.mc2_interactivefoliage.toggle.off": "Gagnvirkt Lauf: AF"
 }

@@ -5,8 +5,8 @@
   "config.mc2_interactivefoliage.off": "NAY",
   "config.mc2_interactivefoliage.intensity": "Strength: %s",
   "config.mc2_interactivefoliage.radius": "Shovin' Radius: %s blocks (aye)",
-  "config.mc2_interactivefoliage.reset": "↺ (Reset, ye scallywag!)",
-  "config.mc2_interactivefoliage.save": "Save 'n Close (batten down)",
+  "config.mc2_interactivefoliage.reset": "↺ (Reset, Ye Scallywag!)",
+  "config.mc2_interactivefoliage.save": "Save 'n Close (Batten Down)",
   "config.mc2_interactivefoliage.renderer": "Paintin' Crew",
   "config.mc2_interactivefoliage.gpu.performance": "Swift Sailin'",
   "config.mc2_interactivefoliage.gpu.adaptive": "Shiftin' Tides",
@@ -23,8 +23,8 @@
   "config.mc2_interactivefoliage.preset.ultra": "Kraken",
   "config.mc2_interactivefoliage.preset.visuals": "Treasure View",
   "key.category.mc2_interactivefoliage.general": "Interactive Foliage (Arr!)",
-  "key.mc2_interactivefoliage.open_config": "Open Config (check the map)",
-  "key.mc2_interactivefoliage.toggle": "Toggle Mod (raise/lower flag)",
+  "key.mc2_interactivefoliage.open_config": "Open Config (Check the Map)",
+  "key.mc2_interactivefoliage.toggle": "Toggle Mod (Raise/Lower Flag)",
   "key.mc2_interactivefoliage.toggle.on": "Interactive Foliage: AYE",
   "key.mc2_interactivefoliage.toggle.off": "Interactive Foliage: NAY"
 }

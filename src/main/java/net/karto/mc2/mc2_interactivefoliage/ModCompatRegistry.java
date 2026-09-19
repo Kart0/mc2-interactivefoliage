@@ -140,7 +140,10 @@ public class ModCompatRegistry {
 
 		registerHanging(
 				"biomesoplenty:spanish_moss",
-				"biomesoplenty:spanish_moss_plant"
+				"biomesoplenty:spanish_moss_plant",
+				"biomesoplenty:willow_vine",
+				"biomesoplenty:glowworm_silk",
+				"biomesoplenty:glowworm_silk_strand"
 		);
 
 		// Cobwebs and tendons use blockstates that pick one of several models at random per
