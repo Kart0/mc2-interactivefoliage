@@ -189,7 +189,8 @@ abstract class ModPlatformPlugin @Inject constructor() : Plugin<Project> {
 
 	private fun Project.configureFletchingTable(ctx: Context) {
 		extensions.configure<FletchingTableExtension> {
-			mixins.create("main") { mixin("default", "${ctx.modId}.mixins.json") }
+			// No mixin list is generated: every mixin configuration names its mixins itself, and the Iris and Polytone ones
+			// are applied only through their plugins, which a generated list would go around.
 			j52j.register("main") { extension("json", "**/*.json5") }
 		}
 	}

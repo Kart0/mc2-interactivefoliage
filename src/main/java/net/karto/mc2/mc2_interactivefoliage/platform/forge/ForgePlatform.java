@@ -4,7 +4,6 @@ package net.karto.mc2.mc2_interactivefoliage.platform.forge;
 
 /*import net.karto.mc2.mc2_interactivefoliage.platform.Platform;
 import net.minecraftforge.fml.ModList;
-import net.minecraftforge.fml.loading.FMLLoader;
 
 public class ForgePlatform implements Platform {
 
@@ -21,16 +20,6 @@ public class ForgePlatform implements Platform {
 	@Override
 	public ModLoader loader() {
 		return ModLoader.FORGE;
-	}
-
-	@Override
-	public String mcVersion() {
-		return "";
-	}
-
-	@Override
-	public boolean isDevelopmentEnvironment() {
-		return !FMLLoader.isProduction();
 	}
 }
 *///?}

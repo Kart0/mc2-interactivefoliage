@@ -87,7 +87,6 @@ import net.minecraft.util.RandomSource;
 import net.minecraft.client.renderer.block.ModelBlockRenderer;
 import net.minecraft.client.renderer.culling.Frustum;
 //? >=26.1.2 {
-import net.minecraft.client.renderer.state.level.CameraRenderState;
 import net.minecraft.client.renderer.state.level.LevelRenderState;
 //?} elif >=1.21.11 {
 /*import net.minecraft.client.renderer.state.LevelRenderState;
