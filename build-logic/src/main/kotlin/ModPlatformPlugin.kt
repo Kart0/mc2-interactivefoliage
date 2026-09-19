@@ -147,6 +147,10 @@ abstract class ModPlatformPlugin @Inject constructor() : Plugin<Project> {
 				}
 			}
 			exclude(ctx.loader.excludedResources)
+			// Polytone has no shadow map before 1.21.1, so nothing there lists the Polytone mixins.
+			if (!ctx.stonecutter.eval(ctx.currentMcVersion, ">=1.21.1")) {
+				exclude("*.polytone.mixins.json")
+			}
 			// The GPU foliage renderer has one set of shaders per generation of Minecraft's renderer, each in
 			// the shading language that generation speaks; a jar only carries the set its version loads. Before
 			// 1.21.1 the legacy set has a vertex shader of its own, and shares the legacy fragment shader.

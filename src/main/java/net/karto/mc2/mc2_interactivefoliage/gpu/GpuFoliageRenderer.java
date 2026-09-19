@@ -1355,7 +1355,7 @@ public final class GpuFoliageRenderer {
 		}
 
 		//? >=1.21.11 {
-		submitDraws(minecraft, camera, null, null);
+		submitDraws(minecraft, camera, null, null, null, null);
 		//?} else {
 		/*//? iris {
 		if (meshedForShaderPack) {
@@ -1418,7 +1418,9 @@ public final class GpuFoliageRenderer {
 		*///?}
 	}
 
-	/** Holds the sun's projection for drawing into a shader pack's shadow map. */
+	//?}
+
+	/** Holds the sun's projection for drawing into a shadow map: a shader pack's, or Polytone's. */
 	//? >=26.1.2 {
 	private static net.minecraft.client.renderer.ProjectionMatrixBuffer shadowProjectionUniform;
 
@@ -1441,6 +1443,45 @@ public final class GpuFoliageRenderer {
 	*///?}
 
 	/**
+	 * Draws the foliage into Polytone's shadow map, called once Polytone has drawn the terrain into it, so plants cast
+	 * shadows that sway with them onto the post effects that read it. Polytone draws the terrain with the chunks' own
+	 * shaders, so the foliage is drawn with the shaders it is drawn with on screen, only seen from the sun: shadowMatrix
+	 * is Polytone's, its projection times its view, and the targets are its shadow map's. While a shader pack is loaded
+	 * the foliage is meshed for the pack's programs, and the pack casts its own shadows.
+	 * <p>
+	 * Every section near the player the chunk mesh left its foliage out of is drawn, as for a shader pack's shadow map:
+	 * the camera's frustum does not say what casts a shadow into view.
+	 */
+	//? >=1.21.11 {
+	public static void drawPolytoneShadow(Matrix4f shadowMatrix, com.mojang.blaze3d.textures.GpuTextureView color,
+			com.mojang.blaze3d.textures.GpuTextureView depth) {
+	//?} else {
+	/*// Before 1.21.11 Polytone leaves its shadow map bound while it draws into it, so the foliage goes wherever it is.
+	public static void drawPolytoneShadow(Matrix4f shadowMatrix) {
+	*///?}
+		Minecraft minecraft = Minecraft.getInstance();
+		if (!active || meshedForShaderPack || minecraft.level == null) {
+			return;
+		}
+		//? >=26.2 {
+		Vec3 camera = minecraft.gameRenderer.mainCamera().position();
+		//?} elif >=1.21.11 {
+		/*Vec3 camera = minecraft.gameRenderer.getMainCamera().position();
+		*///?} else {
+		/*Vec3 camera = minecraft.gameRenderer.getMainCamera().getPosition();
+		*///?}
+		if (collectDraws(null, null)) {
+			// The whole of the sun's transform is in the projection, so the view is left as none at all.
+			//? >=1.21.11 {
+			submitDraws(minecraft, camera, new Matrix4f(), shadowMatrix, color, depth);
+			//?} else {
+			/*drawLegacy(minecraft, camera, DRAWN, new Matrix4f(), shadowMatrix);
+			*///?}
+		}
+	}
+
+	//? iris {
+	/**
 	 * Draws the foliage into a shader pack's shadow map, called by Iris in the middle of its shadow pass, so plants cast
 	 * shadows that sway with them. Every section near the player the chunk mesh left its foliage out of is drawn: the
 	 * shadow's view is not the camera's, so neither the camera's frustum nor Sodium's view of what is visible applies.
@@ -1452,7 +1493,7 @@ public final class GpuFoliageRenderer {
 		}
 		if (collectDraws(null, null)) {
 			//? >=1.21.11 {
-			submitDraws(minecraft, new Vec3(cameraX, cameraY, cameraZ), modelView, projection);
+			submitDraws(minecraft, new Vec3(cameraX, cameraY, cameraZ), modelView, projection, null, null);
 			//?} else {
 			/*IrisCompat.inTerrainPhase(() -> drawLegacy(minecraft, new Vec3(cameraX, cameraY, cameraZ), DRAWN, modelView,
 					projection));
@@ -1560,14 +1601,16 @@ public final class GpuFoliageRenderer {
 	/**
 	 * Draws what {@link #collectDraws} worked out: through the mod's own pipeline, or through a shader pack's programs
 	 * while one is loaded -- into its shadow map if this is its shadow pass. Iris binds the framebuffer a pack's program
-	 * writes to itself, so the pass is opened on the main target either way.
+	 * writes to itself, so the pass is opened on the main target then. With no shader pack a shadow pass is Polytone's,
+	 * drawn with the pipeline the screen is, into the targets it hands over.
 	 */
-	private static void submitDraws(Minecraft minecraft, Vec3 camera, Matrix4f shadowModelView, Matrix4f shadowProjection) {
+	private static void submitDraws(Minecraft minecraft, Vec3 camera, Matrix4f shadowModelView, Matrix4f shadowProjection,
+			com.mojang.blaze3d.textures.GpuTextureView shadowColor, com.mojang.blaze3d.textures.GpuTextureView shadowDepth) {
 		List<Region> drawn = DRAWN;
 		boolean shadowPass = shadowModelView != null;
 		//? iris {
-		RenderPipeline pipeline = shadowPass ? shaderPackShadowPipeline
-				: meshedForShaderPack ? shaderPackPipeline : ownPipeline();
+		RenderPipeline pipeline = !meshedForShaderPack ? ownPipeline()
+				: shadowPass ? shaderPackShadowPipeline : shaderPackPipeline;
 		//?} else {
 		/*RenderPipeline pipeline = ownPipeline();
 		*///?}
@@ -1632,32 +1675,31 @@ public final class GpuFoliageRenderer {
 		// Written before the pass opens: a buffer cannot be written to while a render pass is open.
 		GpuBuffer settings = swaySettings(camera);
 		GpuBuffer interaction = GpuFoliageInteraction.upload(camera);
-		//? iris {
-		// The sun's projection, from Iris itself: what the game holds as the projection by the time Iris hands over its
-		// shadow pass is not reliably the shadow map's, and plants projected any other way land at the wrong depth in it.
+		// The sun's projection, as Iris or Polytone hands it over: what the game holds as the projection by the time Iris
+		// hands over its shadow pass is not reliably the shadow map's, and plants projected any other way land at the wrong
+		// depth in it.
 		GpuBufferSlice projection = shadowPass ? shadowProjectionBuffer().getBuffer(shadowProjection) : null;
-		//?}
+		com.mojang.blaze3d.textures.GpuTextureView color = shadowColor != null ? shadowColor : target.getColorTextureView();
+		com.mojang.blaze3d.textures.GpuTextureView depth = shadowDepth != null ? shadowDepth : target.getDepthTextureView();
 
 		Runnable draw = () -> {
 		try (RenderPass pass = RenderSystem.getDevice()
 				.createCommandEncoder()
 				.createRenderPass(
 						() -> shadowPass ? "MC2 foliage shadow" : "MC2 foliage",
-						target.getColorTextureView(),
+						color,
 						//? >=26.2 {
 						Optional.empty(),
 						//?} else {
 						/*OptionalInt.empty(),
 						*///?}
-						target.getDepthTextureView(),
+						depth,
 						OptionalDouble.empty())) {
 			pass.setPipeline(pipeline);
 			RenderSystem.bindDefaultUniforms(pass);
-			//? iris {
 			if (projection != null) {
 				pass.setUniform("Projection", projection);
 			}
-			//?}
 			// The chunk shaders pick mip levels themselves, so they sample the atlas the way the chunk mesh does: smoothly,
 			// between mip levels. The mod's own shader reads it as the atlas is set to be read.
 			boolean sodiumShaders = pipeline == SODIUM_PIPELINE;

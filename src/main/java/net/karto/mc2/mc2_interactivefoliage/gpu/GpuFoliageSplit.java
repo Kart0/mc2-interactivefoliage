@@ -41,10 +41,11 @@ import java.util.function.LongConsumer;
  * Decides who draws each piece of foliage: {@link GpuFoliageRenderer} near the player, where its sway can be
  * seen, and the chunk mesh further out, where it cannot and the chunk mesh draws it for almost nothing.
  * <p>
- * The split is made in the block model. Every foliage model is wrapped in a {@link GpuFoliageModel}, and while
- * a chunk mesher asks it for the geometry of a block near the player it hands over nothing. Meshers ask through
- * Fabric's rendering API, which carries the block's position -- vanilla does, and so does Sodium from 0.6 on --
- * so the split needs nothing from inside either of them.
+ * The split is made in the block model. Every foliage model is wrapped in a model of the loader's -- GpuFoliageModel on
+ * Fabric, NeoforgeFoliageModel and ForgeFoliageModel on the others -- and while a chunk mesher asks it for the geometry
+ * of a block near the player it hands over nothing. Meshers hand the model the block's position as they ask -- through
+ * Fabric's rendering API, NeoForge's model extensions or Forge's model data, which vanilla, Sodium from 0.6 on and
+ * Embeddium all go through -- so the split needs nothing from inside any of them.
  * <p>
  * Each time a mesher builds a section the decision is recorded, and the mesher reports the moment the mesh it
  * built replaces the one on screen. The renderer changes what it draws for a section on that frame, not before,

@@ -67,6 +67,11 @@ sealed class Loader(val id: String) {
 					if (ctx.stonecutter.eval(ctx.currentMcVersion, ">=1.20.1")) {
 						add("${ctx.modId}.iris.mixins.json")
 					}
+					// The foliage in Polytone's shadow map, which Polytone has from 1.21.1. Its plugin skips it unless Polytone is
+					// installed.
+					if (ctx.stonecutter.eval(ctx.currentMcVersion, ">=1.21.1")) {
+						add("${ctx.modId}.polytone.mixins.json")
+					}
 				},
 				depends = ctx.extension.dependencies.required.associate { it.modid.get() to it.fabricLikeVersionRange.get() },
 				recommends = ctx.extension.dependencies.optional.associate { it.modid.get() to it.fabricLikeVersionRange.get() },
@@ -138,6 +143,10 @@ sealed class Loader(val id: String) {
 					// Shader pack support, as on Fabric.
 					if (ctx.stonecutter.eval(ctx.currentMcVersion, ">=1.20.1")) {
 						add(ForgeMixin("${ctx.modId}.iris.mixins.json"))
+					}
+					// Polytone's shadow map, as on Fabric.
+					if (ctx.stonecutter.eval(ctx.currentMcVersion, ">=1.21.1")) {
+						add(ForgeMixin("${ctx.modId}.polytone.mixins.json"))
 					}
 				}
 			)
