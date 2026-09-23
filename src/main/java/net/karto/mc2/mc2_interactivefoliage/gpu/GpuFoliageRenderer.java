@@ -465,36 +465,6 @@ public final class GpuFoliageRenderer {
 	}
 	*///?}
 
-	//? >=26.3 {
-	/*/^*
-	 * The pipeline foliage is drawn with while the terrain's shaders compile with the sway spliced in, which is nearly
-	 * always: the chunk mesh's own shaders, so foliage is lit and coloured as the terrain around it, a resource pack's
-	 * shaders included. See {@link TerrainFoliageShader}; {@link #PIPELINE} is what is left otherwise.
-	 * <p>
-	 * The terrain snippet is private from 26.3, so this lists what it holds: the section it is drawing and the terrain's
-	 * own matrix on top of what a block pipeline reads, and no transform, which the terrain's shaders do not take.
-	 ^/
-	private static final RenderPipeline TERRAIN_PIPELINE = RenderPipeline.builder()
-			.withLocation(Identifier.fromNamespaceAndPath(ModTemplate.MOD_ID, "pipeline/foliage_terrain"))
-			.withVertexShader(TerrainFoliageShader.VERTEX)
-			.withFragmentShader(TerrainFoliageShader.TERRAIN)
-			.withVertexBinding(0, FOLIAGE_FORMAT)
-			.withPrimitiveTopology(PrimitiveTopology.QUADS)
-			.withDepthStencilState(DepthStencilState.DEFAULT)
-			.withBindGroupLayout(BindGroupLayouts.GLOBALS)
-			.withBindGroupLayout(BindGroupLayouts.FOG)
-			.withBindGroupLayout(BindGroupLayouts.SAMPLER0)
-			.withBindGroupLayout(BindGroupLayouts.SAMPLER2)
-			.withBindGroupLayout(BindGroupLayouts.PROJECTION)
-			.withBindGroupLayout(BindGroupLayouts.CHUNK_SECTION)
-			.withBindGroupLayout(BindGroupLayouts.TERRAIN_INFO)
-			.withBindGroupLayout(SWAY_SETTINGS)
-			.withBindGroupLayout(GpuFoliageInteraction.LAYOUT)
-			.withShaderDefine("ALPHA_CUTOUT", 0.5F)
-			.withColorTargetState(ColorTargetState.DEFAULT)
-			.build();
-	*///?}
-
 	//? >=26.2 && <26.3 {
 	/**
 	 * The pipeline foliage is drawn with while the terrain's shaders compile with the sway spliced in, which is nearly
@@ -1666,13 +1636,10 @@ public final class GpuFoliageRenderer {
 	 * Sodium's while Sodium draws them, the terrain's otherwise -- where they compile, and the mod's own where they don't.
 	 */
 	//? >=26.3 {
-	/*// Sodium's shaders are not read on 26.3 yet, so while Sodium draws the chunks the mod keeps to its own rather than
-	// following the terrain's, which is not what the chunks around the foliage are drawn with then.
+	/*// Neither the terrain's shaders nor Sodium's are read on 26.3 yet, so the renderer draws with its own, which draw
+	// foliage as vanilla does.
 	private static RenderPipeline ownPipeline() {
-		if (SodiumBridge.drawsChunks()) {
-			return PIPELINE;
-		}
-		return compiled(TERRAIN_PIPELINE) != null ? TERRAIN_PIPELINE : PIPELINE;
+		return PIPELINE;
 	}
 	*///?} else {
 	private static RenderPipeline ownPipeline() {
@@ -1725,7 +1692,11 @@ public final class GpuFoliageRenderer {
 		/*RenderPipeline pipeline = ownPipeline();
 		*///?}
 		// The terrain's shaders read where each region is from the chunk section block, the mod's own from the transform.
+		//? >=26.3 {
+		/*boolean terrainShaders = false;
+		*///?} else {
 		boolean terrainShaders = pipeline == TERRAIN_PIPELINE;
+		//?}
 		// Every region's offset is written in one mapping of the uniform ring buffer. The singular
 		// writeTransform maps and unmaps it per call, which costs a GPU round trip for each one. In a shadow pass the
 		// model view is the sun's, as Iris hands it over.
@@ -1746,23 +1717,27 @@ public final class GpuFoliageRenderer {
 				: null;
 		*///?}
 		if (terrainShaders) {
-			//? >=26.3 {
-			/*// Where each region is, fully faded in, in a buffer of the renderer's own; the matrix and the atlas's size went
-			// into the terrain uniform above.
-			offsets = chunkSectionUniforms(drawn);
-			*///?} else {
 			// As the chunk mesh fills it in: the region's corner in the world, fully faded in, and the atlas's size, which
 			// the terrain's fragment shader samples the atlas by.
 			int atlasWidth = atlas.getTextureView().getWidth(0);
 			int atlasHeight = atlas.getTextureView().getHeight(0);
+			//? >=26.3 {
+			/*// A section carries where it is and how far it has faded in; the matrix and the atlas's size are a uniform of
+			// their own from 26.3. Nothing on 26.3 draws with the terrain's shaders yet, so this is not reached there.
+			DynamicGpuData.ChunkSectionInfo[] sections = new DynamicGpuData.ChunkSectionInfo[drawn.size()];
+			for (int i = 0; i < sections.length; i++) {
+				BlockPos origin = drawn.get(i).origin;
+				sections[i] = new DynamicGpuData.ChunkSectionInfo(origin.getX(), origin.getY(), origin.getZ(), 1.0F);
+			}
+			*///?} else {
 			DynamicUniforms.ChunkSectionInfo[] sections = new DynamicUniforms.ChunkSectionInfo[drawn.size()];
 			for (int i = 0; i < sections.length; i++) {
 				BlockPos origin = drawn.get(i).origin;
 				sections[i] = new DynamicUniforms.ChunkSectionInfo(modelView, origin.getX(), origin.getY(), origin.getZ(),
 						1.0F, atlasWidth, atlasHeight);
 			}
-			offsets = RenderSystem.getDynamicUniforms().writeChunkSections(sections);
 			//?}
+			offsets = RenderSystem.getDynamicUniforms().writeChunkSections(sections);
 		} else {
 			Vector4f noModulation = new Vector4f(1.0F, 1.0F, 1.0F, 1.0F);
 			Matrix4f noTextureTransform = new Matrix4f();
@@ -2204,51 +2179,6 @@ public final class GpuFoliageRenderer {
 	}
 	//?}
 
-	//? >=26.3 {
-	/*/^* This frame's regions, one uniform block each, and how many the buffer holds. ^/
-	private static GpuBuffer chunkSections;
-	private static int chunkSectionsCapacity;
-
-	/^*
-	 * Where each region drawn this frame is, in the block the terrain's shaders read a chunk section's position from, one
-	 * slice per region.
-	 * <p>
-	 * The game writes its own the same way, but it lends one storage out for one thing at a time: the very same buffer is
-	 * the uniform the chunks are drawn with one way and the vertex buffer they are drawn with the other, and asking for it
-	 * as a uniform closes what the chunks are already holding, mid-frame. So the renderer keeps a buffer of its own, grown
-	 * to the most regions it has drawn at once.
-	 ^/
-	private static GpuBufferSlice[] chunkSectionUniforms(List<Region> drawn) {
-		int block = Mth.roundToward(DynamicGpuData.CHUNK_SECTION_UBO_SIZE,
-				RenderSystem.getDevice().getDeviceInfo().limits().minUniformOffsetAlignment());
-		if (chunkSections == null || chunkSectionsCapacity < drawn.size()) {
-			if (chunkSections != null) {
-				chunkSections.close();
-			}
-			chunkSectionsCapacity = Mth.smallestEncompassingPowerOfTwo(drawn.size());
-			chunkSections = RenderSystem.getDevice().createBuffer(() -> "MC2 foliage chunk sections",
-					GpuBuffer.USAGE_UNIFORM | GpuBuffer.USAGE_COPY_DST, (long) block * chunkSectionsCapacity);
-		}
-		GpuBufferSlice[] slices = new GpuBufferSlice[drawn.size()];
-		ByteBuffer data = MemoryUtil.memAlloc(block * drawn.size());
-		try {
-			for (int i = 0; i < slices.length; i++) {
-				BlockPos origin = drawn.get(i).origin;
-				data.position(i * block);
-				Std140Builder.intoBuffer(data)
-						.putIVec3(origin.getX(), origin.getY(), origin.getZ())
-						.putFloat(1.0F);
-				slices[i] = chunkSections.slice((long) i * block, block);
-			}
-			data.position(0);
-			RenderSystem.getDevice().createCommandEncoder()
-					.writeToBuffer(chunkSections.slice(0, (long) block * drawn.size()), data);
-		} finally {
-			MemoryUtil.memFree(data);
-		}
-		return slices;
-	}
-	*///?}
 
 	/**
 	 * The weather the shader turns the sway into wind by: the level's rain and thunder, each from 0 to 1 and eased in and

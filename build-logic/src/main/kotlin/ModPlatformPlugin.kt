@@ -167,14 +167,14 @@ abstract class ModPlatformPlugin @Inject constructor() : Plugin<Project> {
 				exclude("assets/*/shaders/core/foliage.*", "assets/*/shaders/core/foliage_terrain.vsh",
 						"assets/*/shaders/core/foliage_legacy.*", "assets/*/shaders/core/foliage_legacy_1_20.*")
 			} else if (ctx.stonecutter.eval(ctx.currentMcVersion, ">=1.21.11")) {
-				exclude("assets/*/shaders/core/foliage_26_3.*", "assets/*/shaders/core/foliage_terrain_26_3.vsh",
-						"assets/*/shaders/core/foliage_legacy.*", "assets/*/shaders/core/foliage_legacy_1_20.*")
+				exclude("assets/*/shaders/core/foliage_26_3.*", "assets/*/shaders/core/foliage_legacy.*",
+						"assets/*/shaders/core/foliage_legacy_1_20.*")
 			} else if (ctx.stonecutter.eval(ctx.currentMcVersion, ">=1.21.1")) {
 				exclude("assets/*/shaders/core/foliage.*", "assets/*/shaders/core/foliage_26_3.*",
-						"assets/*/shaders/core/foliage_terrain*.vsh", "assets/*/shaders/core/foliage_legacy_1_20.*")
+						"assets/*/shaders/core/foliage_terrain.vsh", "assets/*/shaders/core/foliage_legacy_1_20.*")
 			} else {
 				exclude("assets/*/shaders/core/foliage.*", "assets/*/shaders/core/foliage_26_3.*",
-						"assets/*/shaders/core/foliage_terrain*.vsh",
+						"assets/*/shaders/core/foliage_terrain.vsh",
 						"assets/*/shaders/core/foliage_legacy.json", "assets/*/shaders/core/foliage_legacy.vsh")
 			}
 		}
