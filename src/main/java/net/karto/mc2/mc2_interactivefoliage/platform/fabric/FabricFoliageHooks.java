@@ -48,7 +48,10 @@ public final class FabricFoliageHooks {
 				^///?}
 		*///?}
 
-		//? >=26.1.2 {
+		//? >=26.3 {
+		// From 26.3 the renderer is driven by TerrainPassMixin instead: nothing may be written to a buffer once the
+		// terrain's render pass is open, and no event hands that pass out.
+		//?} elif >=26.1.2 {
 		LevelRenderEvents.AFTER_OPAQUE_TERRAIN.register(context -> GpuFoliageRenderer.draw(context.levelState()));
 		//?} elif >=1.21.11 {
 		/*// There is no event for the moment the opaque terrain is done before 26.1.2. The one before the

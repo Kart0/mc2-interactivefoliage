@@ -1,9 +1,13 @@
 package net.karto.mc2.mc2_interactivefoliage.mixin.iris;
 
-//? >=1.21.11 {
+//? iris && >=1.21.11 {
 
 //? >=26.2 {
+//? >=26.3 {
+/*import com.mojang.renderpearl.api.pipeline.BindGroupLayout;
+*///?} else {
 import com.mojang.blaze3d.pipeline.BindGroupLayout;
+//?}
 //?} else {
 /*import com.mojang.blaze3d.pipeline.RenderPipeline;
 *///?}

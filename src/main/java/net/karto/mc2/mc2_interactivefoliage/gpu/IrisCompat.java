@@ -4,11 +4,19 @@ package net.karto.mc2.mc2_interactivefoliage.gpu;
 
 //? iris {
 import com.mojang.blaze3d.vertex.BufferBuilder;
+//? >=26.3 {
+/*import com.mojang.renderpearl.api.vertex.VertexFormat;
+*///?} else {
 import com.mojang.blaze3d.vertex.VertexFormat;
+//?}
 import net.karto.mc2.mc2_interactivefoliage.ModTemplate;
 import net.minecraft.world.level.block.state.BlockState;
 //? >=1.21.11 {
+//? >=26.3 {
+/*import com.mojang.renderpearl.api.pipeline.RenderPipeline;
+*///?} else {
 import com.mojang.blaze3d.pipeline.RenderPipeline;
+//?}
 
 import java.util.List;
 //?} else {

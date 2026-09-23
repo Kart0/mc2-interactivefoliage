@@ -3,12 +3,22 @@ package net.karto.mc2.mc2_interactivefoliage.gpu;
 //? iris {
 
 //? >=26.2 {
+//? >=26.3 {
+/*import com.mojang.renderpearl.api.GpuFormat;
+*///?} else {
 import com.mojang.blaze3d.GpuFormat;
 //?}
+//?}
 //? >=1.21.11 {
+//? >=26.3 {
+/*import com.mojang.renderpearl.backend.opengl.GlProgram;
+import com.mojang.renderpearl.backend.opengl.GlStateManager;
+import com.mojang.renderpearl.api.pipeline.RenderPipeline;
+*///?} else {
 import com.mojang.blaze3d.opengl.GlProgram;
 import com.mojang.blaze3d.opengl.GlStateManager;
 import com.mojang.blaze3d.pipeline.RenderPipeline;
+//?}
 //?} else {
 /*import com.mojang.blaze3d.platform.GlStateManager;
 import net.minecraft.client.renderer.ShaderInstance;
@@ -16,8 +26,13 @@ import org.lwjgl.opengl.GL20;
 import org.lwjgl.opengl.GL31;
 *///?}
 import com.mojang.blaze3d.vertex.BufferBuilder;
+//? >=26.3 {
+/*import com.mojang.renderpearl.api.vertex.VertexFormat;
+import com.mojang.renderpearl.api.vertex.VertexFormatElement;
+*///?} else {
 import com.mojang.blaze3d.vertex.VertexFormat;
 import com.mojang.blaze3d.vertex.VertexFormatElement;
+//?}
 import it.unimi.dsi.fastutil.objects.Object2IntMap;
 import net.irisshaders.iris.api.v0.IrisApi;
 import net.irisshaders.iris.pipeline.IrisRenderingPipeline;

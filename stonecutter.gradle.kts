@@ -37,7 +37,9 @@ stonecutter parameters {
 	swaps["minecraft"] = "\"${current.version}\";"
 	constants["release"] = properties.get<String>("mod.id") != "modtemplate"
 	// Where the shader pack support has been written; the build scripts ask the same of each version.
-	constants["iris"] = eval(current.version, ">=1.20.1")
+	// Iris has no 26.3 build for the loaders the mod ships, and its hooks changed there; the shader pack support is off
+	// on 26.3 until it is ported.
+	constants["iris"] = eval(current.version, ">=1.20.1") && !eval(current.version, ">=26.3")
 }
 
 for (version in stonecutter.versions.map { it.version }.distinct()) tasks.register("publish$version") {

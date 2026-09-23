@@ -1,6 +1,13 @@
 package net.karto.mc2.mc2_interactivefoliage.mixin.polytone;
 
 //? >=1.21.1 {
+//? >=1.21.11 {
+//? >=26.3 {
+/*import com.mojang.renderpearl.api.textures.GpuTextureView;
+*///?} else {
+import com.mojang.blaze3d.textures.GpuTextureView;
+//?}
+//?}
 import net.karto.mc2.mc2_interactivefoliage.gpu.GpuFoliageRenderer;
 import org.joml.Matrix4f;
 import org.spongepowered.asm.mixin.Final;
@@ -31,9 +38,9 @@ public abstract class ShadowMapRendererMixin {
 	private Matrix4f shadowMatrix;
 	//? >=1.21.11 {
 	@Shadow
-	private com.mojang.blaze3d.textures.GpuTextureView colorTextureView;
+	private GpuTextureView colorTextureView;
 	@Shadow
-	private com.mojang.blaze3d.textures.GpuTextureView depthTextureView;
+	private GpuTextureView depthTextureView;
 	//?}
 
 	@Inject(method = {"renderShadowMap", "render"}, at = @At(value = "INVOKE",

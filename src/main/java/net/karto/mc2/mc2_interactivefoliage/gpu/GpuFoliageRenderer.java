@@ -9,31 +9,69 @@ import com.github.razorplay01.sway.api.behavior.contributors.MultiBlockContribut
 import com.github.razorplay01.sway.client.behavior.multiblock.HangingVineMultiblockBehavior;
 import com.github.razorplay01.sway.config.SwayConfig;
 //? >=26.2 {
+//? >=26.3 {
+/*import com.mojang.renderpearl.api.GpuFormat;
+import com.mojang.renderpearl.api.pipeline.PrimitiveTopology;
+*///?} else {
 import com.mojang.blaze3d.GpuFormat;
 import com.mojang.blaze3d.PrimitiveTopology;
 //?}
+//?}
 //? >=1.21.11 {
+//? >=26.3 {
+/*import com.mojang.renderpearl.api.buffers.GpuBuffer;
+import com.mojang.renderpearl.api.buffers.GpuBufferSlice;
+*///?} else {
 import com.mojang.blaze3d.buffers.GpuBuffer;
 import com.mojang.blaze3d.buffers.GpuBufferSlice;
+//?}
 import com.mojang.blaze3d.buffers.Std140Builder;
 import com.mojang.blaze3d.buffers.Std140SizeCalculator;
 //?}
+//? >=26.3 {
+/*import com.mojang.renderpearl.api.pipeline.CompiledRenderPipeline;
+*///?}
 //? >=26.2 {
+//? >=26.3 {
+/*import com.mojang.renderpearl.api.pipeline.BindGroupLayout;
+import com.mojang.renderpearl.api.pipeline.DepthStencilState;
+import com.mojang.renderpearl.api.pipeline.CompareOp;
+*///?} else {
 import com.mojang.blaze3d.pipeline.BindGroupLayout;
 import com.mojang.blaze3d.pipeline.DepthStencilState;
 import com.mojang.blaze3d.platform.CompareOp;
+//?}
 //?} elif >=26.1.2 {
 /*import com.mojang.blaze3d.pipeline.DepthStencilState;
 *///?} elif >=1.21.11 {
 /*import com.mojang.blaze3d.platform.DepthTestFunction;
 *///?}
 //? >=1.21.11 {
+//? >=26.3 {
+/*import com.mojang.renderpearl.api.pipeline.ColorTargetState;
+import com.mojang.renderpearl.api.pipeline.RenderPipeline;
+*///?} else {
 import com.mojang.blaze3d.pipeline.RenderPipeline;
+//?}
 import com.mojang.blaze3d.pipeline.RenderTarget;
+//? >=26.3 {
+/*import com.mojang.renderpearl.api.pipeline.UniformType;
+import com.mojang.renderpearl.api.commands.RenderPass;
+*///?} else {
 import com.mojang.blaze3d.shaders.UniformType;
 import com.mojang.blaze3d.systems.RenderPass;
+//?}
 import com.mojang.blaze3d.systems.RenderSystem;
+//? >=26.3 {
+/*import com.mojang.renderpearl.api.textures.FilterMode;
+*///?} else {
 import com.mojang.blaze3d.textures.FilterMode;
+//?}
+//? >=26.3 {
+/*import com.mojang.renderpearl.api.textures.GpuTextureView;
+*///?} else {
+import com.mojang.blaze3d.textures.GpuTextureView;
+//?}
 //?} else {
 /*import com.mojang.blaze3d.shaders.Uniform;
 import com.mojang.blaze3d.systems.RenderSystem;
@@ -55,8 +93,13 @@ import com.mojang.blaze3d.vertex.MeshData;
 /*import com.google.common.collect.ImmutableMap;
 *///?}
 import com.mojang.blaze3d.vertex.DefaultVertexFormat;
+//? >=26.3 {
+/*import com.mojang.renderpearl.api.vertex.VertexFormat;
+import com.mojang.renderpearl.api.vertex.VertexFormatElement;
+*///?} else {
 import com.mojang.blaze3d.vertex.VertexFormat;
 import com.mojang.blaze3d.vertex.VertexFormatElement;
+//?}
 import net.karto.mc2.mc2_interactivefoliage.FoliageSettings;
 import net.karto.mc2.mc2_interactivefoliage.ModTemplate;
 import net.minecraft.client.Minecraft;
@@ -65,7 +108,11 @@ import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.renderer.BindGroupLayouts;
 //?}
 //? >=1.21.11 {
+//? >=26.3 {
+/*import net.minecraft.client.renderer.DynamicGpuData;
+*///?} else {
 import net.minecraft.client.renderer.DynamicUniforms;
+//?}
 import net.minecraft.client.renderer.RenderPipelines;
 //?}
 //? >=26.1.2 {
@@ -355,7 +402,30 @@ public final class GpuFoliageRenderer {
 	 * blend state -- and only swaps in our shaders and adds the sway weight binding and the sway settings.
 	 * The shader files are discovered by resource pack scanning, so no registration call is needed.
 	 */
-	//? >=26.2 {
+	//? >=26.3 {
+	/*// The block snippet is private again from 26.3, so this lists what it holds: the uniforms and samplers the mod's
+	// shaders read, in the order vanilla's own block pipelines bind them.
+	private static final RenderPipeline PIPELINE = RenderPipeline.builder()
+			.withLocation(Identifier.fromNamespaceAndPath(ModTemplate.MOD_ID, "pipeline/foliage"))
+			.withVertexShader(Identifier.fromNamespaceAndPath(ModTemplate.MOD_ID, "core/foliage_26_3"))
+			.withFragmentShader(Identifier.fromNamespaceAndPath(ModTemplate.MOD_ID, "core/foliage_26_3"))
+			.withVertexBinding(0, FOLIAGE_FORMAT)
+			.withPrimitiveTopology(PrimitiveTopology.QUADS)
+			.withDepthStencilState(DepthStencilState.DEFAULT)
+			.withBindGroupLayout(BindGroupLayouts.GLOBALS)
+			.withBindGroupLayout(BindGroupLayouts.FOG)
+			.withBindGroupLayout(BindGroupLayouts.SAMPLER0)
+			.withBindGroupLayout(BindGroupLayouts.SAMPLER2)
+			.withBindGroupLayout(BindGroupLayouts.PROJECTION)
+			.withBindGroupLayout(BindGroupLayouts.DYNAMIC_TRANSFORMS)
+			.withBindGroupLayout(SWAY_SETTINGS)
+			.withBindGroupLayout(GpuFoliageInteraction.LAYOUT)
+			.withShaderDefine("ALPHA_CUTOUT", 0.5F)
+			// The pass the foliage joins writes one colour target, as vanilla's own cutout pipelines do; a pipeline whose
+			// targets do not match the pass it is drawn in is refused.
+			.withColorTargetState(ColorTargetState.DEFAULT)
+			.build();
+	*///?} elif >=26.2 {
 	private static final RenderPipeline PIPELINE = RenderPipeline.builder(RenderPipelines.BLOCK_SNIPPET)
 			.withLocation(Identifier.fromNamespaceAndPath(ModTemplate.MOD_ID, "pipeline/foliage"))
 			.withVertexShader(Identifier.fromNamespaceAndPath(ModTemplate.MOD_ID, "core/foliage"))
@@ -395,7 +465,37 @@ public final class GpuFoliageRenderer {
 	}
 	*///?}
 
-	//? >=26.2 {
+	//? >=26.3 {
+	/*/^*
+	 * The pipeline foliage is drawn with while the terrain's shaders compile with the sway spliced in, which is nearly
+	 * always: the chunk mesh's own shaders, so foliage is lit and coloured as the terrain around it, a resource pack's
+	 * shaders included. See {@link TerrainFoliageShader}; {@link #PIPELINE} is what is left otherwise.
+	 * <p>
+	 * The terrain snippet is private from 26.3, so this lists what it holds: the section it is drawing and the terrain's
+	 * own matrix on top of what a block pipeline reads, and no transform, which the terrain's shaders do not take.
+	 ^/
+	private static final RenderPipeline TERRAIN_PIPELINE = RenderPipeline.builder()
+			.withLocation(Identifier.fromNamespaceAndPath(ModTemplate.MOD_ID, "pipeline/foliage_terrain"))
+			.withVertexShader(TerrainFoliageShader.VERTEX)
+			.withFragmentShader(TerrainFoliageShader.TERRAIN)
+			.withVertexBinding(0, FOLIAGE_FORMAT)
+			.withPrimitiveTopology(PrimitiveTopology.QUADS)
+			.withDepthStencilState(DepthStencilState.DEFAULT)
+			.withBindGroupLayout(BindGroupLayouts.GLOBALS)
+			.withBindGroupLayout(BindGroupLayouts.FOG)
+			.withBindGroupLayout(BindGroupLayouts.SAMPLER0)
+			.withBindGroupLayout(BindGroupLayouts.SAMPLER2)
+			.withBindGroupLayout(BindGroupLayouts.PROJECTION)
+			.withBindGroupLayout(BindGroupLayouts.CHUNK_SECTION)
+			.withBindGroupLayout(BindGroupLayouts.TERRAIN_INFO)
+			.withBindGroupLayout(SWAY_SETTINGS)
+			.withBindGroupLayout(GpuFoliageInteraction.LAYOUT)
+			.withShaderDefine("ALPHA_CUTOUT", 0.5F)
+			.withColorTargetState(ColorTargetState.DEFAULT)
+			.build();
+	*///?}
+
+	//? >=26.2 && <26.3 {
 	/**
 	 * The pipeline foliage is drawn with while the terrain's shaders compile with the sway spliced in, which is nearly
 	 * always: the chunk mesh's own shaders, so foliage is lit and coloured as the terrain around it, a resource pack's
@@ -432,7 +532,7 @@ public final class GpuFoliageRenderer {
 			.withBindGroupLayout(SWAY_SETTINGS)
 			.withBindGroupLayout(GpuFoliageInteraction.LAYOUT)
 			.build();
-	//?} elif >=1.21.11 {
+	//?} elif >=1.21.11 && <26.2 {
 	/*// Drawn with Sodium's chunk shaders while Sodium draws the chunks and they compile with the mod's vertices read in;
 	// see the newer pipeline.
 	private static final RenderPipeline SODIUM_PIPELINE = RenderPipeline.builder()
@@ -1452,8 +1552,8 @@ public final class GpuFoliageRenderer {
 	 * the camera's frustum does not say what casts a shadow into view.
 	 */
 	//? >=1.21.11 {
-	public static void drawPolytoneShadow(Matrix4f shadowMatrix, com.mojang.blaze3d.textures.GpuTextureView color,
-			com.mojang.blaze3d.textures.GpuTextureView depth) {
+	public static void drawPolytoneShadow(Matrix4f shadowMatrix, GpuTextureView color,
+			GpuTextureView depth) {
 	//?} else {
 	/*// Before 1.21.11 Polytone leaves its shadow map bound while it draws into it, so the foliage goes wherever it is.
 	public static void drawPolytoneShadow(Matrix4f shadowMatrix) {
@@ -1565,6 +1665,16 @@ public final class GpuFoliageRenderer {
 	 * The pipeline foliage is drawn with while no shader pack is loaded: the shaders the chunks are drawn with --
 	 * Sodium's while Sodium draws them, the terrain's otherwise -- where they compile, and the mod's own where they don't.
 	 */
+	//? >=26.3 {
+	/*// Sodium's shaders are not read on 26.3 yet, so while Sodium draws the chunks the mod keeps to its own rather than
+	// following the terrain's, which is not what the chunks around the foliage are drawn with then.
+	private static RenderPipeline ownPipeline() {
+		if (SodiumBridge.drawsChunks()) {
+			return PIPELINE;
+		}
+		return compiled(TERRAIN_PIPELINE) != null ? TERRAIN_PIPELINE : PIPELINE;
+	}
+	*///?} else {
 	private static RenderPipeline ownPipeline() {
 		if (SodiumBridge.drawsChunks()) {
 			// The terrain's own shaders are not what the chunks are drawn with then, so where Sodium's cannot be read the
@@ -1573,6 +1683,7 @@ public final class GpuFoliageRenderer {
 		}
 		return TerrainFoliageShader.usable(TERRAIN_PIPELINE) ? TERRAIN_PIPELINE : PIPELINE;
 	}
+	//?}
 
 	//? <26.1.2 {
 	/*/^* Sodium 0.8's per-chunk fade-in times, all -1: no chunk the mod draws is fading in. Made once. ^/
@@ -1604,7 +1715,7 @@ public final class GpuFoliageRenderer {
 	 * drawn with the pipeline the screen is, into the targets it hands over.
 	 */
 	private static void submitDraws(Minecraft minecraft, Vec3 camera, Matrix4f shadowModelView, Matrix4f shadowProjection,
-			com.mojang.blaze3d.textures.GpuTextureView shadowColor, com.mojang.blaze3d.textures.GpuTextureView shadowDepth) {
+			GpuTextureView shadowColor, GpuTextureView shadowDepth) {
 		List<Region> drawn = DRAWN;
 		boolean shadowPass = shadowModelView != null;
 		//? iris {
@@ -1618,14 +1729,28 @@ public final class GpuFoliageRenderer {
 		// Every region's offset is written in one mapping of the uniform ring buffer. The singular
 		// writeTransform maps and unmaps it per call, which costs a GPU round trip for each one. In a shadow pass the
 		// model view is the sun's, as Iris hands it over.
-		//? >=26.2 {
+		//? >=26.3 {
+		/*Matrix4f modelView = shadowPass ? shadowModelView : TERRAIN_MODEL_VIEW;
+		*///?} elif >=26.2 {
 		Matrix4f modelView = shadowPass ? shadowModelView : RenderSystem.getModelViewMatrixCopy();
 		//?} else {
 		/*Matrix4f modelView = shadowPass ? shadowModelView : RenderSystem.getModelViewMatrix();
 		*///?}
 		AbstractTexture atlas = minecraft.getTextureManager().getTexture(TextureAtlas.LOCATION_BLOCKS);
 		GpuBufferSlice[] offsets;
+		//? >=26.3 {
+		/*// From 26.3 the terrain's matrix and atlas size are a uniform of their own, shared by every region drawn.
+		GpuBufferSlice terrainUniform = terrainShaders
+				? RenderSystem.getDynamicUniforms().writeTerrainTransform(modelView,
+						atlas.getTextureView().getWidth(0), atlas.getTextureView().getHeight(0))
+				: null;
+		*///?}
 		if (terrainShaders) {
+			//? >=26.3 {
+			/*// Where each region is, fully faded in, in a buffer of the renderer's own; the matrix and the atlas's size went
+			// into the terrain uniform above.
+			offsets = chunkSectionUniforms(drawn);
+			*///?} else {
 			// As the chunk mesh fills it in: the region's corner in the world, fully faded in, and the atlas's size, which
 			// the terrain's fragment shader samples the atlas by.
 			int atlasWidth = atlas.getTextureView().getWidth(0);
@@ -1637,13 +1762,22 @@ public final class GpuFoliageRenderer {
 						1.0F, atlasWidth, atlasHeight);
 			}
 			offsets = RenderSystem.getDynamicUniforms().writeChunkSections(sections);
+			//?}
 		} else {
 			Vector4f noModulation = new Vector4f(1.0F, 1.0F, 1.0F, 1.0F);
 			Matrix4f noTextureTransform = new Matrix4f();
+			//? >=26.3 {
+			/*DynamicGpuData.Transform[] transforms = new DynamicGpuData.Transform[drawn.size()];
+			*///?} else {
 			DynamicUniforms.Transform[] transforms = new DynamicUniforms.Transform[drawn.size()];
+			//?}
 			for (int i = 0; i < transforms.length; i++) {
 				BlockPos origin = drawn.get(i).origin;
+				//? >=26.3 {
+				/*transforms[i] = new DynamicGpuData.Transform(
+				*///?} else {
 				transforms[i] = new DynamicUniforms.Transform(
+				//?}
 						modelView,
 						noModulation,
 						new Vector3f(
@@ -1678,9 +1812,19 @@ public final class GpuFoliageRenderer {
 		// hands over its shadow pass is not reliably the shadow map's, and plants projected any other way land at the wrong
 		// depth in it.
 		GpuBufferSlice projection = shadowPass ? shadowProjectionBuffer().getBuffer(shadowProjection) : null;
-		com.mojang.blaze3d.textures.GpuTextureView color = shadowColor != null ? shadowColor : target.getColorTextureView();
-		com.mojang.blaze3d.textures.GpuTextureView depth = shadowDepth != null ? shadowDepth : target.getDepthTextureView();
+		GpuTextureView color = shadowColor != null ? shadowColor : target.getColorTextureView();
+		GpuTextureView depth = shadowDepth != null ? shadowDepth : target.getDepthTextureView();
 
+		//? >=26.3 {
+		/*// From 26.3 the terrain is drawn inside one render pass vanilla opens and hands down, and while it is open no
+		// buffer may be written to and no pipeline compiled. Everything above is the preparing, this is the last of it,
+		// and the drawing waits for the pass, which TerrainPassMixin brings once the opaque terrain is in.
+		CompiledRenderPipeline compiled = compiled(pipeline);
+		if (compiled == null) {
+			return;
+		}
+		java.util.function.Consumer<RenderPass> draw = pass -> {
+		*///?} else {
 		Runnable draw = () -> {
 		try (RenderPass pass = RenderSystem.getDevice()
 				.createCommandEncoder()
@@ -1694,18 +1838,36 @@ public final class GpuFoliageRenderer {
 						*///?}
 						depth,
 						OptionalDouble.empty())) {
+		//?}
+			//? >=26.3 {
+			/*pass.setPipeline(compiled);
+			*///?} else {
 			pass.setPipeline(pipeline);
+			//?}
 			RenderSystem.bindDefaultUniforms(pass);
 			if (projection != null) {
 				pass.setUniform("Projection", projection);
 			}
 			// The chunk shaders pick mip levels themselves, so they sample the atlas the way the chunk mesh does: smoothly,
 			// between mip levels. The mod's own shader reads it as the atlas is set to be read.
+			//? >=26.3 {
+			/*boolean sodiumShaders = false;
+			*///?} else {
 			boolean sodiumShaders = pipeline == SODIUM_PIPELINE;
+			//?}
+			//? >=26.3 {
+			/*if (terrainUniform != null) {
+				pass.setUniform("TerrainUniform", terrainUniform);
+			}
+			pass.setUniform("Sampler0", atlas.getTextureView(),
+					terrainShaders ? RenderSystem.getSamplerCache().getClampToEdge(FilterMode.LINEAR, true) : atlas.getSampler());
+			pass.setUniform("Sampler2",
+			*///?} else {
 			pass.bindTexture(sodiumShaders ? SodiumFoliageShader.BLOCK_TEXTURE : "Sampler0", atlas.getTextureView(),
 					sodiumShaders || terrainShaders
 							? RenderSystem.getSamplerCache().getClampToEdge(FilterMode.LINEAR, true) : atlas.getSampler());
 			pass.bindTexture(sodiumShaders ? SodiumFoliageShader.LIGHT_TEXTURE : "Sampler2",
+			//?}
 					//? >=26.1.2 {
 					minecraft.gameRenderer.lightmap(),
 					//?} else {
@@ -1742,8 +1904,13 @@ public final class GpuFoliageRenderer {
 				/*pass.drawIndexed(draws[i + 1], 0, indexCountFor(draws[i + 2]), 1);
 				*///?}
 			}
+		//? <26.3 {
 		}
+		//?}
 		};
+		//? >=26.3 {
+		/*pendingDraw = draw;
+		*///?} else {
 		//? iris {
 		if (meshedForShaderPack) {
 			IrisCompat.inTerrainPhase(draw);
@@ -1751,7 +1918,73 @@ public final class GpuFoliageRenderer {
 		}
 		//?}
 		draw.run();
+		//?}
 	}
+
+	//? >=26.3 {
+	/*/^* This frame's foliage, prepared and waiting for the terrain's render pass, or null once it is drawn. ^/
+	private static java.util.function.Consumer<RenderPass> pendingDraw;
+	/^* Whether a missing pipeline was reported, so it is said once rather than every frame. ^/
+	private static boolean missingPipelineLogged;
+	/^* The matrix the terrain is drawn with this frame, as vanilla prepares its own chunk renders with it. ^/
+	private static final Matrix4f TERRAIN_MODEL_VIEW = new Matrix4f();
+
+	/^* The renderer's pipelines as the game compiled them, and the compiled pipeline of its own they were asked for with. ^/
+	private static final java.util.Map<RenderPipeline, CompiledRenderPipeline> COMPILED = new java.util.HashMap<>();
+	private static CompiledRenderPipeline compiledFor;
+
+	/^*
+	 * The pipeline as the game has compiled it, or null where it could not be.
+	 * <p>
+	 * Asking the game for a pipeline it has not compiled yet compiles it there and then. That is a long piece of work in
+	 * the graphics driver, and it has to happen where the game does its own: on the render thread, with no render pass
+	 * open. So the renderer asks once and keeps the answer -- including that there was none, which would otherwise be
+	 * asked again every frame -- until the game reloads its shaders and compiles them all afresh, which shows in its own
+	 * terrain pipeline coming back as a different compiled one.
+	 ^/
+	private static CompiledRenderPipeline compiled(RenderPipeline pipeline) {
+		CompiledRenderPipeline terrain = RenderSystem.getCompiledPipelineNullable(RenderPipelines.SOLID_TERRAIN);
+		if (terrain != compiledFor) {
+			compiledFor = terrain;
+			COMPILED.clear();
+			missingPipelineLogged = false;
+		}
+		// Kept even when nothing came back, so a pipeline that cannot be compiled is not attempted again every frame.
+		if (!COMPILED.containsKey(pipeline)) {
+			COMPILED.put(pipeline, RenderSystem.getCompiledPipelineNullable(pipeline));
+		}
+		CompiledRenderPipeline compiled = COMPILED.get(pipeline);
+		if (compiled == null && !missingPipelineLogged) {
+			missingPipelineLogged = true;
+			ModTemplate.LOGGER.warn("The GPU foliage pipeline {} did not compile; foliage near the player is drawn with "
+					+ "whichever of the renderer's pipelines did", pipeline.getLocation());
+		}
+		return compiled;
+	}
+
+	/^*
+	 * Prepares this frame's foliage, called by TerrainPassMixin where vanilla prepares the chunks it draws: the last
+	 * moment a buffer may be written to, and where the terrain's own matrix is known. The drawing itself waits for the
+	 * render pass; see {@link #drawIntoTerrainPass}.
+	 ^/
+	public static void prepareTerrainFrame(org.joml.Matrix4fc modelView, LevelRenderState levelState) {
+		TERRAIN_MODEL_VIEW.set(modelView);
+		draw(levelState);
+	}
+
+	/^*
+	 * Draws the foliage prepared this frame into the terrain's own render pass, called by TerrainPassMixin once the
+	 * opaque terrain is in it. Nothing is prepared while the renderer is off or has nothing in range, and a frame is
+	 * drawn once.
+	 ^/
+	public static void drawIntoTerrainPass(RenderPass pass) {
+		java.util.function.Consumer<RenderPass> draw = pendingDraw;
+		pendingDraw = null;
+		if (draw != null) {
+			draw.accept(pass);
+		}
+	}
+	*///?}
 	//?}
 
 	//? <1.21.11 {
@@ -1970,6 +2203,52 @@ public final class GpuFoliageRenderer {
 		return swaySettings;
 	}
 	//?}
+
+	//? >=26.3 {
+	/*/^* This frame's regions, one uniform block each, and how many the buffer holds. ^/
+	private static GpuBuffer chunkSections;
+	private static int chunkSectionsCapacity;
+
+	/^*
+	 * Where each region drawn this frame is, in the block the terrain's shaders read a chunk section's position from, one
+	 * slice per region.
+	 * <p>
+	 * The game writes its own the same way, but it lends one storage out for one thing at a time: the very same buffer is
+	 * the uniform the chunks are drawn with one way and the vertex buffer they are drawn with the other, and asking for it
+	 * as a uniform closes what the chunks are already holding, mid-frame. So the renderer keeps a buffer of its own, grown
+	 * to the most regions it has drawn at once.
+	 ^/
+	private static GpuBufferSlice[] chunkSectionUniforms(List<Region> drawn) {
+		int block = Mth.roundToward(DynamicGpuData.CHUNK_SECTION_UBO_SIZE,
+				RenderSystem.getDevice().getDeviceInfo().limits().minUniformOffsetAlignment());
+		if (chunkSections == null || chunkSectionsCapacity < drawn.size()) {
+			if (chunkSections != null) {
+				chunkSections.close();
+			}
+			chunkSectionsCapacity = Mth.smallestEncompassingPowerOfTwo(drawn.size());
+			chunkSections = RenderSystem.getDevice().createBuffer(() -> "MC2 foliage chunk sections",
+					GpuBuffer.USAGE_UNIFORM | GpuBuffer.USAGE_COPY_DST, (long) block * chunkSectionsCapacity);
+		}
+		GpuBufferSlice[] slices = new GpuBufferSlice[drawn.size()];
+		ByteBuffer data = MemoryUtil.memAlloc(block * drawn.size());
+		try {
+			for (int i = 0; i < slices.length; i++) {
+				BlockPos origin = drawn.get(i).origin;
+				data.position(i * block);
+				Std140Builder.intoBuffer(data)
+						.putIVec3(origin.getX(), origin.getY(), origin.getZ())
+						.putFloat(1.0F);
+				slices[i] = chunkSections.slice((long) i * block, block);
+			}
+			data.position(0);
+			RenderSystem.getDevice().createCommandEncoder()
+					.writeToBuffer(chunkSections.slice(0, (long) block * drawn.size()), data);
+		} finally {
+			MemoryUtil.memFree(data);
+		}
+		return slices;
+	}
+	*///?}
 
 	/**
 	 * The weather the shader turns the sway into wind by: the level's rain and thunder, each from 0 to 1 and eased in and

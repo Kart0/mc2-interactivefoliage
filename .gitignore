@@ -56,3 +56,5 @@ bin/
 
 # Third-party mod jars used only for local dev runs
 devmods/
+versions/*/mods/
+versions/* mods/

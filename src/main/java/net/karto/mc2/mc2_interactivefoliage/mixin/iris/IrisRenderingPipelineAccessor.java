@@ -2,7 +2,11 @@ package net.karto.mc2.mc2_interactivefoliage.mixin.iris;
 
 //? iris {
 
+//? >=26.3 {
+/*import com.mojang.renderpearl.api.vertex.VertexFormat;
+*///?} else {
 import com.mojang.blaze3d.vertex.VertexFormat;
+//?}
 import net.irisshaders.iris.gl.blending.AlphaTest;
 import net.irisshaders.iris.gl.state.FogMode;
 import net.irisshaders.iris.pipeline.IrisRenderingPipeline;
