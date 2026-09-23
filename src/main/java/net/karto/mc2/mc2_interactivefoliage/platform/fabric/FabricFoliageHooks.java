@@ -48,9 +48,9 @@ public final class FabricFoliageHooks {
 				^///?}
 		*///?}
 
+		// From 26.3 the renderer is driven by TerrainPassMixin instead, and nothing is registered here: nothing may be
+		// written to a buffer once the terrain's render pass is open, and no event hands that pass out.
 		//? >=26.3 {
-		// From 26.3 the renderer is driven by TerrainPassMixin instead: nothing may be written to a buffer once the
-		// terrain's render pass is open, and no event hands that pass out.
 		//?} elif >=26.1.2 {
 		LevelRenderEvents.AFTER_OPAQUE_TERRAIN.register(context -> GpuFoliageRenderer.draw(context.levelState()));
 		//?} elif >=1.21.11 {

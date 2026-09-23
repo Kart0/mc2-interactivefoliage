@@ -1,14 +1,16 @@
 package net.karto.mc2.mc2_interactivefoliage.mixin.terrain;
 
 //? >=26.3 {
-/*import com.mojang.blaze3d.framegraph.FrameGraphBuilder;
+/*import com.mojang.blaze3d.resource.GraphicsResourceAllocator;
 import com.mojang.renderpearl.api.buffers.GpuBufferSlice;
 import com.mojang.renderpearl.api.commands.RenderPass;
 import net.karto.mc2.mc2_interactivefoliage.gpu.GpuFoliageRenderer;
 import net.minecraft.client.renderer.LevelRenderer;
 import net.minecraft.client.renderer.chunk.ChunkSectionsToRender;
 import net.minecraft.client.renderer.feature.FeatureRenderDispatcher;
+import net.minecraft.client.renderer.state.level.CameraRenderState;
 import net.minecraft.client.renderer.state.level.LevelRenderState;
+import org.joml.Vector4f;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
@@ -32,14 +34,16 @@ public abstract class TerrainPassMixin {
 	@Final
 	private LevelRenderState levelRenderState;
 
-	// Just before the pass that draws the world is put together: the last moment a buffer may be written to. Sodium
-	// replaces the game's own chunk preparation, so the foliage is not prepared there; this runs either way. The
-	// terrain is drawn with the camera's rotation, which is where the game itself takes the matrix from.
-	@Inject(method = "addMainPass", at = @At("HEAD"))
-	private void mc2$prepareFoliage(FrameGraphBuilder frame, FeatureRenderDispatcher.PreparedFrame featureFrame,
-			GpuBufferSlice terrainFog, ChunkSectionsToRender sections, boolean consistentDepthRequired,
-			CallbackInfo ci) {
-		GpuFoliageRenderer.prepareTerrainFrame(levelRenderState.cameraRenderState.viewRotationMatrix, levelRenderState);
+	// Before the world is drawn at all: nothing is open and nothing is under way, so this is where the renderer may
+	// write to its buffers, have a pipeline compiled, and ask the chunk mesher to build a section again -- which is what
+	// it does when foliage is handed over or taken back, and which reaches into Sodium while Sodium owns the chunks.
+	// None of that can be done once the drawing has started. The terrain is drawn with the camera's rotation, which the
+	// game takes from this very state.
+	@Inject(method = "render", at = @At("HEAD"))
+	private void mc2$prepareFoliage(GraphicsResourceAllocator allocator, boolean renderBlockOutline,
+			CameraRenderState camera, GpuBufferSlice fog, Vector4f fogColor, boolean renderSky,
+			boolean consistentDepthRequired, CallbackInfo ci) {
+		GpuFoliageRenderer.prepareTerrainFrame(camera.viewRotationMatrix, levelRenderState);
 	}
 
 	@Inject(method = "executeSolid", at = @At(value = "INVOKE", shift = At.Shift.AFTER,
