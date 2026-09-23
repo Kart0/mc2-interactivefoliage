@@ -45,6 +45,9 @@ public class ModTemplate {
 	public static void onInitializeClient() {
 		LOGGER.info("Initializing {} Client on {}", MOD_ID, ModTemplate.xplat().loader());
 		LOGGER.debug("{}: { version: {}; friendly_name: {} }", MOD_ID, MOD_VERSION, MOD_FRIENDLY_NAME);
+		//? >=26.3 {
+		/*net.karto.mc2.mc2_interactivefoliage.gpu.GpuFoliageRenderer.preload();
+		*///?}
 	}
 
 	public static Platform xplat() {

@@ -52,9 +52,24 @@ final class IrisCompat {
 		*///?}
 	}
 
+	//? >=26.3 {
+	/*/^* Has the shader pack support set itself up now rather than from inside a call of Iris's; see IrisFoliageShaders. ^/
+	static void preload() {
+		//? iris {
+		if (IRIS) {
+			IrisFoliageShaders.preload();
+		}
+		//?}
+	}
+	*///?}
+
 	/** Whether the programs for the loaded pack are built; builds them the first time a pack is asked about. */
 	static boolean programsReady() {
-		//? iris {
+		//? >=26.3 {
+		/*// A pack's program does not reach the renderer's pipelines on 26.3 yet, so while one is loaded the chunk mesh
+		// keeps the foliage and the pack draws it as it draws any other block.
+		return false;
+		*///?} elif iris {
 		return IRIS && IrisFoliageShaders.ready();
 		//?} else {
 		/*return false;

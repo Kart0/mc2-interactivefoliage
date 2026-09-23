@@ -63,10 +63,8 @@ sealed class Loader(val id: String) {
 					if (ctx.stonecutter.eval(ctx.currentMcVersion, ">=1.20.1")) {
 						add("${ctx.modId}.gpu.mixins.json")
 					}
-					// Shader pack support, where it has been written; not on 26.3, where Iris is not ported yet. Its plugin
-					// skips every mixin unless Iris is installed.
-					if (ctx.stonecutter.eval(ctx.currentMcVersion, ">=1.20.1")
-						&& !ctx.stonecutter.eval(ctx.currentMcVersion, ">=26.3")) {
+					// Shader pack support. Its plugin skips every mixin unless Iris is installed.
+					if (ctx.stonecutter.eval(ctx.currentMcVersion, ">=1.20.1")) {
 						add("${ctx.modId}.iris.mixins.json")
 					}
 					// The foliage in Polytone's shadow map, which Polytone has from 1.21.1. Its plugin skips it unless Polytone is

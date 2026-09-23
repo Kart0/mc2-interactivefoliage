@@ -155,10 +155,6 @@ abstract class ModPlatformPlugin @Inject constructor() : Plugin<Project> {
 			if (!ctx.stonecutter.eval(ctx.currentMcVersion, ">=26.3")) {
 				exclude("*.terrain.mixins.json")
 			}
-			// Shader pack support is not written for 26.3 yet, so nothing there lists the Iris mixins.
-			if (ctx.stonecutter.eval(ctx.currentMcVersion, ">=26.3")) {
-				exclude("*.iris.mixins.json")
-			}
 			// The GPU foliage renderer has one set of shaders per generation of Minecraft's renderer, each in
 			// the shading language that generation speaks; a jar only carries the set its version loads. Before
 			// 1.21.1 the legacy set has a vertex shader of its own, and shares the legacy fragment shader.

@@ -391,6 +391,20 @@ public final class IrisFoliageShaders {
 	}
 	*///?}
 
+	//? >=26.3 {
+	/*/^*
+	 * Sets this class up, called while the client starts.
+	 * <p>
+	 * Everything here is worked out the first time the class is touched, and what touches it first is the mod's own hook
+	 * inside Iris: the one that changes a program's vertex shader, which Iris calls while it builds a pack's programs.
+	 * Setting up from in there -- reading Iris's own vertex format, building the mod's from it -- takes the client down
+	 * on 26.3, with no crash report, when a pack is turned on from the menu with no world to draw. Set up beforehand, the
+	 * same hook runs through hundreds of programs without trouble.
+	 ^/
+	public static void preload() {
+	}
+	*///?}
+
 	/** Whether a program of the mod's is being built on this thread. */
 	public static boolean isBuilding() {
 		return BUILDING.get();

@@ -1471,7 +1471,12 @@ public final class GpuFoliageRenderer {
 				.withDepthStencilState(new DepthStencilState(CompareOp.LESS_THAN_OR_EQUAL, true))
 				.build();
 		IrisCompat.setUp(shaderPackPipeline, shaderPackShadowPipeline,
-				List.of(SWAY_SETTINGS, GpuFoliageInteraction.LAYOUT), GpuFoliageRenderer::drawShadow);
+				//? >=26.3 {
+				/*BindGroupLayout.flattenUniforms(List.of(SWAY_SETTINGS, GpuFoliageInteraction.LAYOUT)),
+				*///?} else {
+				List.of(SWAY_SETTINGS, GpuFoliageInteraction.LAYOUT),
+				//?}
+				GpuFoliageRenderer::drawShadow);
 		//?} elif >=1.21.11 {
 		/*// Before 26.2 depth is not reversed, so the shadow map takes the same test as everything else. The shadow pipeline is
 		// a pipeline of its own only so the pack's shadow program is the one it draws with.
@@ -1672,6 +1677,16 @@ public final class GpuFoliageRenderer {
 			}
 		}
 		return sodiumChunkData;
+	}
+	*///?}
+
+	//? >=26.3 {
+	/*/^*
+	 * Sets up what the renderer needs before anything asks for it, called while the client starts. Only the shader pack
+	 * support has anything to do here; see IrisFoliageShaders.
+	 ^/
+	public static void preload() {
+		IrisCompat.preload();
 	}
 	*///?}
 

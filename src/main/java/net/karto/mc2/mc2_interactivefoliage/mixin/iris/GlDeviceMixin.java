@@ -1,6 +1,6 @@
 package net.karto.mc2.mc2_interactivefoliage.mixin.iris;
 
-//? iris && >=1.21.11 {
+//? iris && >=1.21.11 && <26.3 {
 
 //? >=26.3 {
 /*import com.mojang.renderpearl.backend.opengl.GlProgram;

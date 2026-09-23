@@ -63,6 +63,9 @@ public final class IrisMixinPlugin implements IMixinConfigPlugin {
 		//? >=1.21.11 {
 		// Programs are built from uniform lists and drawn through pipelines.
 		mixins.add("ExtendedShaderMixin");
+		//?}
+		//? >=1.21.11 && <26.3 {
+		// How a pack's program reaches the renderer's pipeline is not written for 26.3's render backend yet.
 		mixins.add("GlDeviceMixin");
 		//?}
 		//? <26.1.2 {
