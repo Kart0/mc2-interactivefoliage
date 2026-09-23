@@ -1680,16 +1680,6 @@ public final class GpuFoliageRenderer {
 	}
 	*///?}
 
-	//? >=26.3 {
-	/*/^*
-	 * Sets up what the renderer needs before anything asks for it, called while the client starts. Only the shader pack
-	 * support has anything to do here; see IrisFoliageShaders.
-	 ^/
-	public static void preload() {
-		IrisCompat.preload();
-	}
-	*///?}
-
 	/**
 	 * Draws what {@link #collectDraws} worked out: through the mod's own pipeline, or through a shader pack's programs
 	 * while one is loaded -- into its shadow map if this is its shadow pass. Iris binds the framebuffer a pack's program

@@ -81,8 +81,31 @@ import java.util.regex.Pattern;
  */
 public final class IrisFoliageShaders {
 
+	//? >=26.3 {
+	/*/^*
+	 * Iris's terrain format, which a shader pack's terrain program reads, with the renderer's two values after it, built
+	 * the first time it is asked for.
+	 * <p>
+	 * Built when this class is first touched, it was built from wherever that happened to be -- inside a call of Iris's,
+	 * while Iris and Sodium were still setting themselves up -- and reading Iris's own format from in there took the
+	 * client down on 26.3 with no crash report. Nothing reaches into Iris now until a shader pack is actually in use.
+	 ^/
+	private static VertexFormat format;
+
+	public static VertexFormat foliageFormat() {
+		if (format == null) {
+			format = buildFormat();
+		}
+		return format;
+	}
+	*///?} else {
 	/** Iris's terrain format, which a shader pack's terrain program reads, with the renderer's two values after it. */
-	public static final VertexFormat FORMAT = format();
+	public static final VertexFormat FORMAT = buildFormat();
+
+	public static VertexFormat foliageFormat() {
+		return FORMAT;
+	}
+	//?}
 
 	/** Set while a program of the mod's is being built, so the hooks inside Iris change that one and no other. */
 	private static final ThreadLocal<Boolean> BUILDING = ThreadLocal.withInitial(() -> false);
@@ -120,7 +143,7 @@ public final class IrisFoliageShaders {
 	private IrisFoliageShaders() {
 	}
 
-	private static VertexFormat format() {
+	private static VertexFormat buildFormat() {
 		//? >=26.2 {
 		VertexFormat.Builder builder = VertexFormat.builder(0);
 		for (VertexFormatElement element : IrisVertexFormats.TERRAIN.getElements()) {
@@ -300,7 +323,7 @@ public final class IrisFoliageShaders {
 			}
 			//? >=1.21.11 {
 			main = finish(access.mc2$createShader("mc2_foliage", ShaderKey.TERRAIN_CUTOUT, terrain.get(),
-					ProgramId.TerrainCutout, ShaderKey.TERRAIN_CUTOUT.getAlphaTest(), FORMAT,
+					ProgramId.TerrainCutout, ShaderKey.TERRAIN_CUTOUT.getAlphaTest(), foliageFormat(),
 					ShaderKey.TERRAIN_CUTOUT.getFogMode(), false, false, false, false, false
 					//? >=26.2 {
 					, Patch.VANILLA
@@ -308,11 +331,11 @@ public final class IrisFoliageShaders {
 			));
 			//?} elif >=1.21.1 {
 			/*main = finish(access.mc2$createShader("mc2_foliage", terrain.get(), ProgramId.TerrainCutout,
-					ShaderKey.TERRAIN_CUTOUT.getAlphaTest(), FORMAT, ShaderKey.TERRAIN_CUTOUT.getFogMode(),
+					ShaderKey.TERRAIN_CUTOUT.getAlphaTest(), foliageFormat(), ShaderKey.TERRAIN_CUTOUT.getFogMode(),
 					false, false, false, false, false));
 			*///?} else {
 			/*main = finish(access.mc2$createShader("mc2_foliage", terrain.get(), ProgramId.TerrainCutout,
-					ShaderKey.TERRAIN_CUTOUT.getAlphaTest(), FORMAT, ShaderKey.TERRAIN_CUTOUT.getFogMode(),
+					ShaderKey.TERRAIN_CUTOUT.getAlphaTest(), foliageFormat(), ShaderKey.TERRAIN_CUTOUT.getFogMode(),
 					false, false, false, false));
 			*///?}
 			if (access.mc2$shadowRenderTargets() != null) {
@@ -321,18 +344,18 @@ public final class IrisFoliageShaders {
 					//? >=1.21.11 {
 					shadow = finish(access.mc2$createShadowShader("mc2_foliage_shadow", ShaderKey.SHADOW_TERRAIN_CUTOUT,
 							shadowSource.get(), ProgramId.ShadowCutout, ShaderKey.SHADOW_TERRAIN_CUTOUT.getAlphaTest(),
-							FORMAT, false, false, false, false
+							foliageFormat(), false, false, false, false
 							//? >=26.2 {
 							, Patch.VANILLA
 							//?}
 					));
 					//?} elif >=1.21.1 {
 					/*shadow = finish(access.mc2$createShadowShader("mc2_foliage_shadow", shadowSource.get(),
-							ProgramId.ShadowCutout, ShaderKey.SHADOW_TERRAIN_CUTOUT.getAlphaTest(), FORMAT,
+							ProgramId.ShadowCutout, ShaderKey.SHADOW_TERRAIN_CUTOUT.getAlphaTest(), foliageFormat(),
 							false, false, false, false));
 					*///?} else {
 					/*shadow = finish(access.mc2$createShadowShader("mc2_foliage_shadow", shadowSource.get(),
-							ProgramId.ShadowCutout, ShaderKey.SHADOW_TERRAIN_CUTOUT.getAlphaTest(), FORMAT,
+							ProgramId.ShadowCutout, ShaderKey.SHADOW_TERRAIN_CUTOUT.getAlphaTest(), foliageFormat(),
 							false, false, false));
 					*///?}
 				}
@@ -388,20 +411,6 @@ public final class IrisFoliageShaders {
 	private static void closePrograms() {
 		main = null;
 		shadow = null;
-	}
-	*///?}
-
-	//? >=26.3 {
-	/*/^*
-	 * Sets this class up, called while the client starts.
-	 * <p>
-	 * Everything here is worked out the first time the class is touched, and what touches it first is the mod's own hook
-	 * inside Iris: the one that changes a program's vertex shader, which Iris calls while it builds a pack's programs.
-	 * Setting up from in there -- reading Iris's own vertex format, building the mod's from it -- takes the client down
-	 * on 26.3, with no crash report, when a pack is turned on from the menu with no world to draw. Set up beforehand, the
-	 * same hook runs through hundreds of programs without trouble.
-	 ^/
-	public static void preload() {
 	}
 	*///?}
 

@@ -52,17 +52,6 @@ final class IrisCompat {
 		*///?}
 	}
 
-	//? >=26.3 {
-	/*/^* Has the shader pack support set itself up now rather than from inside a call of Iris's; see IrisFoliageShaders. ^/
-	static void preload() {
-		//? iris {
-		if (IRIS) {
-			IrisFoliageShaders.preload();
-		}
-		//?}
-	}
-	*///?}
-
 	/** Whether the programs for the loaded pack are built; builds them the first time a pack is asked about. */
 	static boolean programsReady() {
 		//? >=26.3 {
@@ -96,7 +85,7 @@ final class IrisCompat {
 	//? iris {
 	/** The vertex format a pack's programs read, which the renderer's region buffers hold while one is loaded. */
 	static VertexFormat shaderPackFormat() {
-		return IrisFoliageShaders.FORMAT;
+		return IrisFoliageShaders.foliageFormat();
 	}
 
 	/** The format a section comes out of meshing in while a pack is loaded: Iris's terrain format. */

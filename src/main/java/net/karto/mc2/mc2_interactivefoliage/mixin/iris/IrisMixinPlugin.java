@@ -42,7 +42,14 @@ public final class IrisMixinPlugin implements IMixinConfigPlugin {
 
 	@Override
 	public boolean shouldApplyMixin(String targetClassName, String mixinClassName) {
+		//? >=26.3 {
+		/*// None of these hooks has anything to do on 26.3 until a pack's programs reach the renderer's pipelines: every
+		// one of them only acts while the mod builds a program of its own, which it does not there. Nothing is woven
+		// into Iris until there is a reason to.
+		return false;
+		*///?} else {
 		return IRIS;
+		//?}
 	}
 
 	@Override
@@ -60,6 +67,12 @@ public final class IrisMixinPlugin implements IMixinConfigPlugin {
 			return List.of();
 		}
 		List<String> mixins = new ArrayList<>();
+		//? >=26.3 {
+		/*// See shouldApplyMixin: none of them is registered on 26.3 yet.
+		if (true) {
+			return List.of();
+		}
+		*///?}
 		//? >=1.21.11 {
 		// Programs are built from uniform lists and drawn through pipelines.
 		mixins.add("ExtendedShaderMixin");
