@@ -3,22 +3,12 @@ package net.karto.mc2.mc2_interactivefoliage.gpu;
 //? iris {
 
 //? >=26.2 {
-//? >=26.3 {
-/*import com.mojang.renderpearl.api.GpuFormat;
-*///?} else {
 import com.mojang.blaze3d.GpuFormat;
 //?}
-//?}
 //? >=1.21.11 {
-//? >=26.3 {
-/*import com.mojang.renderpearl.backend.opengl.GlProgram;
-import com.mojang.renderpearl.backend.opengl.GlStateManager;
-import com.mojang.renderpearl.api.pipeline.RenderPipeline;
-*///?} else {
 import com.mojang.blaze3d.opengl.GlProgram;
 import com.mojang.blaze3d.opengl.GlStateManager;
 import com.mojang.blaze3d.pipeline.RenderPipeline;
-//?}
 //?} else {
 /*import com.mojang.blaze3d.platform.GlStateManager;
 import net.minecraft.client.renderer.ShaderInstance;
@@ -26,13 +16,8 @@ import org.lwjgl.opengl.GL20;
 import org.lwjgl.opengl.GL31;
 *///?}
 import com.mojang.blaze3d.vertex.BufferBuilder;
-//? >=26.3 {
-/*import com.mojang.renderpearl.api.vertex.VertexFormat;
-import com.mojang.renderpearl.api.vertex.VertexFormatElement;
-*///?} else {
 import com.mojang.blaze3d.vertex.VertexFormat;
 import com.mojang.blaze3d.vertex.VertexFormatElement;
-//?}
 import it.unimi.dsi.fastutil.objects.Object2IntMap;
 import net.irisshaders.iris.api.v0.IrisApi;
 import net.irisshaders.iris.pipeline.IrisRenderingPipeline;
@@ -81,31 +66,8 @@ import java.util.regex.Pattern;
  */
 public final class IrisFoliageShaders {
 
-	//? >=26.3 {
-	/*/^*
-	 * Iris's terrain format, which a shader pack's terrain program reads, with the renderer's two values after it, built
-	 * the first time it is asked for.
-	 * <p>
-	 * Built when this class is first touched, it was built from wherever that happened to be -- inside a call of Iris's,
-	 * while Iris and Sodium were still setting themselves up -- and reading Iris's own format from in there took the
-	 * client down on 26.3 with no crash report. Nothing reaches into Iris now until a shader pack is actually in use.
-	 ^/
-	private static VertexFormat format;
-
-	public static VertexFormat foliageFormat() {
-		if (format == null) {
-			format = buildFormat();
-		}
-		return format;
-	}
-	*///?} else {
 	/** Iris's terrain format, which a shader pack's terrain program reads, with the renderer's two values after it. */
-	public static final VertexFormat FORMAT = buildFormat();
-
-	public static VertexFormat foliageFormat() {
-		return FORMAT;
-	}
-	//?}
+	public static final VertexFormat FORMAT = format();
 
 	/** Set while a program of the mod's is being built, so the hooks inside Iris change that one and no other. */
 	private static final ThreadLocal<Boolean> BUILDING = ThreadLocal.withInitial(() -> false);
@@ -143,7 +105,7 @@ public final class IrisFoliageShaders {
 	private IrisFoliageShaders() {
 	}
 
-	private static VertexFormat buildFormat() {
+	private static VertexFormat format() {
 		//? >=26.2 {
 		VertexFormat.Builder builder = VertexFormat.builder(0);
 		for (VertexFormatElement element : IrisVertexFormats.TERRAIN.getElements()) {
@@ -323,7 +285,7 @@ public final class IrisFoliageShaders {
 			}
 			//? >=1.21.11 {
 			main = finish(access.mc2$createShader("mc2_foliage", ShaderKey.TERRAIN_CUTOUT, terrain.get(),
-					ProgramId.TerrainCutout, ShaderKey.TERRAIN_CUTOUT.getAlphaTest(), foliageFormat(),
+					ProgramId.TerrainCutout, ShaderKey.TERRAIN_CUTOUT.getAlphaTest(), FORMAT,
 					ShaderKey.TERRAIN_CUTOUT.getFogMode(), false, false, false, false, false
 					//? >=26.2 {
 					, Patch.VANILLA
@@ -331,11 +293,11 @@ public final class IrisFoliageShaders {
 			));
 			//?} elif >=1.21.1 {
 			/*main = finish(access.mc2$createShader("mc2_foliage", terrain.get(), ProgramId.TerrainCutout,
-					ShaderKey.TERRAIN_CUTOUT.getAlphaTest(), foliageFormat(), ShaderKey.TERRAIN_CUTOUT.getFogMode(),
+					ShaderKey.TERRAIN_CUTOUT.getAlphaTest(), FORMAT, ShaderKey.TERRAIN_CUTOUT.getFogMode(),
 					false, false, false, false, false));
 			*///?} else {
 			/*main = finish(access.mc2$createShader("mc2_foliage", terrain.get(), ProgramId.TerrainCutout,
-					ShaderKey.TERRAIN_CUTOUT.getAlphaTest(), foliageFormat(), ShaderKey.TERRAIN_CUTOUT.getFogMode(),
+					ShaderKey.TERRAIN_CUTOUT.getAlphaTest(), FORMAT, ShaderKey.TERRAIN_CUTOUT.getFogMode(),
 					false, false, false, false));
 			*///?}
 			if (access.mc2$shadowRenderTargets() != null) {
@@ -344,18 +306,18 @@ public final class IrisFoliageShaders {
 					//? >=1.21.11 {
 					shadow = finish(access.mc2$createShadowShader("mc2_foliage_shadow", ShaderKey.SHADOW_TERRAIN_CUTOUT,
 							shadowSource.get(), ProgramId.ShadowCutout, ShaderKey.SHADOW_TERRAIN_CUTOUT.getAlphaTest(),
-							foliageFormat(), false, false, false, false
+							FORMAT, false, false, false, false
 							//? >=26.2 {
 							, Patch.VANILLA
 							//?}
 					));
 					//?} elif >=1.21.1 {
 					/*shadow = finish(access.mc2$createShadowShader("mc2_foliage_shadow", shadowSource.get(),
-							ProgramId.ShadowCutout, ShaderKey.SHADOW_TERRAIN_CUTOUT.getAlphaTest(), foliageFormat(),
+							ProgramId.ShadowCutout, ShaderKey.SHADOW_TERRAIN_CUTOUT.getAlphaTest(), FORMAT,
 							false, false, false, false));
 					*///?} else {
 					/*shadow = finish(access.mc2$createShadowShader("mc2_foliage_shadow", shadowSource.get(),
-							ProgramId.ShadowCutout, ShaderKey.SHADOW_TERRAIN_CUTOUT.getAlphaTest(), foliageFormat(),
+							ProgramId.ShadowCutout, ShaderKey.SHADOW_TERRAIN_CUTOUT.getAlphaTest(), FORMAT,
 							false, false, false));
 					*///?}
 				}

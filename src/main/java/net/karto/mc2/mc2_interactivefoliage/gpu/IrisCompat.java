@@ -4,19 +4,11 @@ package net.karto.mc2.mc2_interactivefoliage.gpu;
 
 //? iris {
 import com.mojang.blaze3d.vertex.BufferBuilder;
-//? >=26.3 {
-/*import com.mojang.renderpearl.api.vertex.VertexFormat;
-*///?} else {
 import com.mojang.blaze3d.vertex.VertexFormat;
-//?}
 import net.karto.mc2.mc2_interactivefoliage.ModTemplate;
 import net.minecraft.world.level.block.state.BlockState;
 //? >=1.21.11 {
-//? >=26.3 {
-/*import com.mojang.renderpearl.api.pipeline.RenderPipeline;
-*///?} else {
 import com.mojang.blaze3d.pipeline.RenderPipeline;
-//?}
 
 import java.util.List;
 //?} else {
@@ -54,11 +46,7 @@ final class IrisCompat {
 
 	/** Whether the programs for the loaded pack are built; builds them the first time a pack is asked about. */
 	static boolean programsReady() {
-		//? >=26.3 {
-		/*// A pack's program does not reach the renderer's pipelines on 26.3 yet, so while one is loaded the chunk mesh
-		// keeps the foliage and the pack draws it as it draws any other block.
-		return false;
-		*///?} elif iris {
+		//? iris {
 		return IRIS && IrisFoliageShaders.ready();
 		//?} else {
 		/*return false;
@@ -85,7 +73,7 @@ final class IrisCompat {
 	//? iris {
 	/** The vertex format a pack's programs read, which the renderer's region buffers hold while one is loaded. */
 	static VertexFormat shaderPackFormat() {
-		return IrisFoliageShaders.foliageFormat();
+		return IrisFoliageShaders.FORMAT;
 	}
 
 	/** The format a section comes out of meshing in while a pack is loaded: Iris's terrain format. */

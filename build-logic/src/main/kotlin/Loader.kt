@@ -63,7 +63,7 @@ sealed class Loader(val id: String) {
 					if (ctx.stonecutter.eval(ctx.currentMcVersion, ">=1.20.1")) {
 						add("${ctx.modId}.gpu.mixins.json")
 					}
-					// Shader pack support. Its plugin skips every mixin unless Iris is installed.
+					// Shader pack support, where it has been written. Its plugin skips every mixin unless Iris is installed.
 					if (ctx.stonecutter.eval(ctx.currentMcVersion, ">=1.20.1")) {
 						add("${ctx.modId}.iris.mixins.json")
 					}
@@ -71,10 +71,6 @@ sealed class Loader(val id: String) {
 					// installed.
 					if (ctx.stonecutter.eval(ctx.currentMcVersion, ">=1.21.1")) {
 						add("${ctx.modId}.polytone.mixins.json")
-					}
-					// From 26.3 the foliage is drawn into the render pass the terrain is drawn in, which only a mixin hands out.
-					if (ctx.stonecutter.eval(ctx.currentMcVersion, ">=26.3")) {
-						add("${ctx.modId}.terrain.mixins.json")
 					}
 				},
 				depends = ctx.extension.dependencies.required.associate { it.modid.get() to it.fabricLikeVersionRange.get() },
@@ -145,17 +141,12 @@ sealed class Loader(val id: String) {
 						add(ForgeMixin("${ctx.modId}.gpu.mixins.json"))
 					}
 					// Shader pack support, as on Fabric.
-					if (ctx.stonecutter.eval(ctx.currentMcVersion, ">=1.20.1")
-						&& !ctx.stonecutter.eval(ctx.currentMcVersion, ">=26.3")) {
+					if (ctx.stonecutter.eval(ctx.currentMcVersion, ">=1.20.1")) {
 						add(ForgeMixin("${ctx.modId}.iris.mixins.json"))
 					}
 					// Polytone's shadow map, as on Fabric.
 					if (ctx.stonecutter.eval(ctx.currentMcVersion, ">=1.21.1")) {
 						add(ForgeMixin("${ctx.modId}.polytone.mixins.json"))
-					}
-					// The terrain's render pass, as on Fabric.
-					if (ctx.stonecutter.eval(ctx.currentMcVersion, ">=26.3")) {
-						add(ForgeMixin("${ctx.modId}.terrain.mixins.json"))
 					}
 				}
 			)

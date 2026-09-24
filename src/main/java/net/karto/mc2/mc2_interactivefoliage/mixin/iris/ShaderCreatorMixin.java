@@ -18,9 +18,6 @@ import org.spongepowered.asm.mixin.injection.Redirect;
 
 import java.util.EnumMap;
 import java.util.Map;
-//? >=26.3 {
-/*import java.util.Set;
-*///?}
 
 /**
  * Where a foliage program's vertex shader is changed: right after Iris has translated the pack's source, and before it
@@ -29,17 +26,7 @@ import java.util.Map;
 @Mixin(value = ShaderCreator.class, remap = false)
 public abstract class ShaderCreatorMixin {
 
-	//? >=26.3 {
-	/*// From 26.3 the translator is told which of the pack's textures are in use as well.
-	@Redirect(method = {"create", "createShadow"}, at = @At(value = "INVOKE",
-			target = "Lnet/irisshaders/iris/pipeline/transform/TransformPatcher;patchVanilla(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Lnet/irisshaders/iris/gl/blending/AlphaTest;ZZZLnet/irisshaders/iris/gl/state/ShaderAttributeInputs;Lit/unimi/dsi/fastutil/objects/Object2ObjectMap;Ljava/util/Set;)Ljava/util/Map;"))
-	private static Map<PatchShaderType, String> mc2$swayFoliage(String name, String vertex, String geometry,
-			String tessControl, String tessEval, String fragment, AlphaTest alpha, boolean isLines, boolean isClouds,
-			boolean hasChunkOffset, ShaderAttributeInputs inputs,
-			Object2ObjectMap<Tri<String, TextureType, TextureStage>, String> textureMap, Set<String> textures) {
-		Map<PatchShaderType, String> translated = TransformPatcher.patchVanilla(name, vertex, geometry, tessControl,
-				tessEval, fragment, alpha, isLines, isClouds, hasChunkOffset, inputs, textureMap, textures);
-	*///?} elif >=1.21.11 {
+	//? >=1.21.11 {
 	@Redirect(method = {"create", "createShadow"}, at = @At(value = "INVOKE",
 			target = "Lnet/irisshaders/iris/pipeline/transform/TransformPatcher;patchVanilla(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Lnet/irisshaders/iris/gl/blending/AlphaTest;ZZZLnet/irisshaders/iris/gl/state/ShaderAttributeInputs;Lit/unimi/dsi/fastutil/objects/Object2ObjectMap;)Ljava/util/Map;"))
 	private static Map<PatchShaderType, String> mc2$swayFoliage(String name, String vertex, String geometry,

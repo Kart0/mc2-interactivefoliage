@@ -151,27 +151,16 @@ abstract class ModPlatformPlugin @Inject constructor() : Plugin<Project> {
 			if (!ctx.stonecutter.eval(ctx.currentMcVersion, ">=1.21.1")) {
 				exclude("*.polytone.mixins.json")
 			}
-			// The terrain pass mixin is only needed from 26.3.
-			if (!ctx.stonecutter.eval(ctx.currentMcVersion, ">=26.3")) {
-				exclude("*.terrain.mixins.json")
-			}
 			// The GPU foliage renderer has one set of shaders per generation of Minecraft's renderer, each in
 			// the shading language that generation speaks; a jar only carries the set its version loads. Before
 			// 1.21.1 the legacy set has a vertex shader of its own, and shares the legacy fragment shader.
-			if (ctx.stonecutter.eval(ctx.currentMcVersion, ">=26.3")) {
-				// 26.3 rewrote the shading language: includes instead of imports, and a location on every input.
-				exclude("assets/*/shaders/core/foliage.*", "assets/*/shaders/core/foliage_terrain.vsh",
-						"assets/*/shaders/core/foliage_legacy.*", "assets/*/shaders/core/foliage_legacy_1_20.*")
-			} else if (ctx.stonecutter.eval(ctx.currentMcVersion, ">=1.21.11")) {
-				exclude("assets/*/shaders/core/foliage_26_3.*", "assets/*/shaders/core/foliage_legacy.*",
-						"assets/*/shaders/core/foliage_legacy_1_20.*")
+			if (ctx.stonecutter.eval(ctx.currentMcVersion, ">=1.21.11")) {
+				exclude("assets/*/shaders/core/foliage_legacy.*", "assets/*/shaders/core/foliage_legacy_1_20.*")
 			} else if (ctx.stonecutter.eval(ctx.currentMcVersion, ">=1.21.1")) {
-				exclude("assets/*/shaders/core/foliage.*", "assets/*/shaders/core/foliage_26_3.*",
-						"assets/*/shaders/core/foliage_terrain.vsh", "assets/*/shaders/core/foliage_legacy_1_20.*")
+				exclude("assets/*/shaders/core/foliage.*", "assets/*/shaders/core/foliage_legacy_1_20.*")
 			} else {
-				exclude("assets/*/shaders/core/foliage.*", "assets/*/shaders/core/foliage_26_3.*",
-						"assets/*/shaders/core/foliage_terrain.vsh",
-						"assets/*/shaders/core/foliage_legacy.json", "assets/*/shaders/core/foliage_legacy.vsh")
+				exclude("assets/*/shaders/core/foliage.*", "assets/*/shaders/core/foliage_legacy.json",
+						"assets/*/shaders/core/foliage_legacy.vsh")
 			}
 		}
 	}

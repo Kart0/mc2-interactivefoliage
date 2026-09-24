@@ -55,15 +55,6 @@ deps.iris = "sZbVsl2Q"
 deps.sodium = "tZQ3jqnf"
 publish.additionalVersions = ["26.1.1", "26.1"]
 
-[fabric."26.3"]
-deps.minecraft = "26.3"
-deps.fabric-api = "0.161.0+26.3"
-deps.sway = "J9WbqmZ9"
-deps.modmenu = "21.0.0-beta.1"
-# Compiled against for the shader pack support: Iris 1.11.6+26.3-fabric and the Sodium it needs.
-deps.iris = "bAdKrpw8"
-deps.sodium = "bAZQdGpg"
-
 [fabric."26.2"]
 deps.minecraft = "26.2"
 deps.fabric-api = "0.157.0+26.2"

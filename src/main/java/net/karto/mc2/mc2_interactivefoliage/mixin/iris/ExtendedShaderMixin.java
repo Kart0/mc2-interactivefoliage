@@ -1,13 +1,9 @@
 package net.karto.mc2.mc2_interactivefoliage.mixin.iris;
 
-//? iris && >=1.21.11 {
+//? >=1.21.11 {
 
 //? >=26.2 {
-//? >=26.3 {
-/*import com.mojang.renderpearl.api.pipeline.BindGroupLayout;
-*///?} else {
 import com.mojang.blaze3d.pipeline.BindGroupLayout;
-//?}
 //?} else {
 /*import com.mojang.blaze3d.pipeline.RenderPipeline;
 *///?}
@@ -26,16 +22,7 @@ import java.util.List;
 @Mixin(value = ExtendedShader.class, remap = false)
 public abstract class ExtendedShaderMixin {
 
-	//? >=26.3 {
-	/*// 26.3 moved the program to the render backend, and hands it the uniforms the bind groups hold rather than the
-	// groups themselves.
-	@ModifyArg(method = "<init>", at = @At(value = "INVOKE",
-			target = "Lcom/mojang/renderpearl/backend/opengl/GlProgram;setupBindGroupLayouts(Ljava/util/List;)V"))
-	private List<BindGroupLayout.UniformDescription> mc2$addFoliageLayouts(
-			List<BindGroupLayout.UniformDescription> uniforms) {
-		return IrisFoliageShaders.isBuilding() ? IrisFoliageShaders.withFoliageLayouts(uniforms) : uniforms;
-	}
-	*///?} elif >=26.2 {
+	//? >=26.2 {
 	@ModifyArg(method = "<init>", at = @At(value = "INVOKE",
 			target = "Lcom/mojang/blaze3d/opengl/GlProgram;setupBindGroupLayouts(Ljava/util/List;)V"))
 	private List<BindGroupLayout> mc2$addFoliageLayouts(List<BindGroupLayout> layouts) {

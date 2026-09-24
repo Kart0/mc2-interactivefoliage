@@ -1,16 +1,10 @@
 package net.karto.mc2.mc2_interactivefoliage.mixin.iris;
 
-//? iris && >=1.21.11 && <26.3 {
+//? >=1.21.11 {
 
-//? >=26.3 {
-/*import com.mojang.renderpearl.backend.opengl.GlProgram;
-import com.mojang.renderpearl.backend.opengl.GlRenderPipeline;
-import com.mojang.renderpearl.api.pipeline.RenderPipeline;
-*///?} else {
 import com.mojang.blaze3d.opengl.GlProgram;
 import com.mojang.blaze3d.opengl.GlRenderPipeline;
 import com.mojang.blaze3d.pipeline.RenderPipeline;
-//?}
 import net.karto.mc2.mc2_interactivefoliage.gpu.IrisFoliageShaders;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
