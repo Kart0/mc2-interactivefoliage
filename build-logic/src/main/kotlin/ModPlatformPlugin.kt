@@ -151,10 +151,17 @@ abstract class ModPlatformPlugin @Inject constructor() : Plugin<Project> {
 			if (!ctx.stonecutter.eval(ctx.currentMcVersion, ">=1.21.1")) {
 				exclude("*.polytone.mixins.json")
 			}
+			// Nor is there shader pack or Polytone support on 26.3 yet.
+			if (ctx.stonecutter.eval(ctx.currentMcVersion, ">=26.3")) {
+				exclude("*.iris.mixins.json", "*.polytone.mixins.json")
+			}
 			// The GPU foliage renderer has one set of shaders per generation of Minecraft's renderer, each in
 			// the shading language that generation speaks; a jar only carries the set its version loads. Before
 			// 1.21.1 the legacy set has a vertex shader of its own, and shares the legacy fragment shader.
-			if (ctx.stonecutter.eval(ctx.currentMcVersion, ">=1.21.11")) {
+			if (ctx.stonecutter.eval(ctx.currentMcVersion, ">=26.3")) {
+				// 26.3 speaks a shading language of its own, and nothing draws with the mod's shaders there yet.
+				exclude("assets/*/shaders/**")
+			} else if (ctx.stonecutter.eval(ctx.currentMcVersion, ">=1.21.11")) {
 				exclude("assets/*/shaders/core/foliage_legacy.*", "assets/*/shaders/core/foliage_legacy_1_20.*")
 			} else if (ctx.stonecutter.eval(ctx.currentMcVersion, ">=1.21.1")) {
 				exclude("assets/*/shaders/core/foliage.*", "assets/*/shaders/core/foliage_legacy_1_20.*")

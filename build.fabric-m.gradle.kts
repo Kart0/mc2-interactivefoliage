@@ -38,6 +38,13 @@ loom {
 		environment = "client"
 		programArgs("--username=Dev")
 		configName = "Fabric Client"
+		// From 26.3 the game compiles its shaders with native code (shaderc) on its worker threads, and Mojang's launcher
+		// starts it with the JVM arguments that needs; Loom does not pass them. Without the extra stack shadow pages the
+		// compiler overflows a worker's stack now and then while the resources load, and the client dies natively
+		// (0xC0000005) with no crash report.
+		if (stonecutter.eval(stonecutter.current.version, ">=26.3")) {
+			vmArgs("-XX:StackShadowPages=32", "--add-exports", "java.base/jdk.internal.misc=ALL-UNNAMED")
+		}
 	}
 	runs.named("server") {
 		server()
@@ -73,7 +80,9 @@ dependencies {
 	implementation("maven.modrinth:sway:${prop("deps.sway")}")
 	// Optional dependencies: compiled against for the shader pack support, where it has been written.
 	if (stonecutter.eval(stonecutter.current.version, ">=26.1.2")) {
-		compileOnly("maven.modrinth:iris:${prop("deps.iris")}")
+		if (hasProperty("deps.iris")) {
+			compileOnly("maven.modrinth:iris:${prop("deps.iris")}")
+		}
 		compileOnly("maven.modrinth:sodium:${prop("deps.sodium")}")
 	}
 }

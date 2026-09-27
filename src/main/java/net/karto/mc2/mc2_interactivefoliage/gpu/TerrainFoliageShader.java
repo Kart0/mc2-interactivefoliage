@@ -1,10 +1,16 @@
 package net.karto.mc2.mc2_interactivefoliage.gpu;
 
-//? >=1.21.11 {
+//? >=1.21.11 && <26.3 {
 
+//? >=26.3 {
+/*import com.mojang.renderpearl.api.pipeline.RenderPipeline;
+import com.mojang.renderpearl.api.pipeline.ShaderSource;
+import com.mojang.renderpearl.api.pipeline.ShaderType;
+*///?} else {
 import com.mojang.blaze3d.pipeline.RenderPipeline;
 import com.mojang.blaze3d.shaders.ShaderSource;
 import com.mojang.blaze3d.shaders.ShaderType;
+//?}
 import com.mojang.blaze3d.systems.RenderSystem;
 import net.karto.mc2.mc2_interactivefoliage.ModTemplate;
 import net.minecraft.client.Minecraft;

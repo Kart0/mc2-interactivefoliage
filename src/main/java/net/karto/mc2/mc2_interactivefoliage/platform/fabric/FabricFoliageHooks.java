@@ -48,7 +48,10 @@ public final class FabricFoliageHooks {
 				^///?}
 		*///?}
 
-		//? >=26.1.2 {
+		// Not yet on 26.3, where the world is drawn inside one render pass vanilla opens: the foliage is to be drawn into
+		// that pass, and until it is, the renderer is never started and the chunk mesh keeps every plant.
+		//? >=26.3 {
+		//?} elif >=26.1.2 {
 		LevelRenderEvents.AFTER_OPAQUE_TERRAIN.register(context -> GpuFoliageRenderer.draw(context.levelState()));
 		//?} elif >=1.21.11 {
 		/*// There is no event for the moment the opaque terrain is done before 26.1.2. The one before the

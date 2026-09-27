@@ -9,31 +9,62 @@ import com.github.razorplay01.sway.api.behavior.contributors.MultiBlockContribut
 import com.github.razorplay01.sway.client.behavior.multiblock.HangingVineMultiblockBehavior;
 import com.github.razorplay01.sway.config.SwayConfig;
 //? >=26.2 {
+//? >=26.3 {
+/*import com.mojang.renderpearl.api.GpuFormat;
+import com.mojang.renderpearl.api.pipeline.PrimitiveTopology;
+*///?} else {
 import com.mojang.blaze3d.GpuFormat;
 import com.mojang.blaze3d.PrimitiveTopology;
 //?}
+//?}
 //? >=1.21.11 {
+//? >=26.3 {
+/*import com.mojang.renderpearl.api.buffers.GpuBuffer;
+import com.mojang.renderpearl.api.buffers.GpuBufferSlice;
+*///?} else {
 import com.mojang.blaze3d.buffers.GpuBuffer;
 import com.mojang.blaze3d.buffers.GpuBufferSlice;
+//?}
 import com.mojang.blaze3d.buffers.Std140Builder;
 import com.mojang.blaze3d.buffers.Std140SizeCalculator;
 //?}
 //? >=26.2 {
+//? >=26.3 {
+/*import com.mojang.renderpearl.api.pipeline.BindGroupLayout;
+import com.mojang.renderpearl.api.pipeline.DepthStencilState;
+import com.mojang.renderpearl.api.pipeline.CompareOp;
+*///?} else {
 import com.mojang.blaze3d.pipeline.BindGroupLayout;
 import com.mojang.blaze3d.pipeline.DepthStencilState;
 import com.mojang.blaze3d.platform.CompareOp;
+//?}
 //?} elif >=26.1.2 {
 /*import com.mojang.blaze3d.pipeline.DepthStencilState;
 *///?} elif >=1.21.11 {
 /*import com.mojang.blaze3d.platform.DepthTestFunction;
 *///?}
 //? >=1.21.11 {
+//? >=26.3 {
+/*import com.mojang.renderpearl.api.pipeline.RenderPipeline;
+*///?} else {
 import com.mojang.blaze3d.pipeline.RenderPipeline;
+//?}
 import com.mojang.blaze3d.pipeline.RenderTarget;
+//? >=26.3 {
+/*import com.mojang.renderpearl.api.pipeline.UniformType;
+import com.mojang.renderpearl.api.commands.RenderPass;
+*///?} else {
 import com.mojang.blaze3d.shaders.UniformType;
 import com.mojang.blaze3d.systems.RenderPass;
+//?}
 import com.mojang.blaze3d.systems.RenderSystem;
+//? >=26.3 {
+/*import com.mojang.renderpearl.api.textures.FilterMode;
+import com.mojang.renderpearl.api.textures.GpuTextureView;
+*///?} else {
 import com.mojang.blaze3d.textures.FilterMode;
+import com.mojang.blaze3d.textures.GpuTextureView;
+//?}
 //?} else {
 /*import com.mojang.blaze3d.shaders.Uniform;
 import com.mojang.blaze3d.systems.RenderSystem;
@@ -55,8 +86,13 @@ import com.mojang.blaze3d.vertex.MeshData;
 /*import com.google.common.collect.ImmutableMap;
 *///?}
 import com.mojang.blaze3d.vertex.DefaultVertexFormat;
+//? >=26.3 {
+/*import com.mojang.renderpearl.api.vertex.VertexFormat;
+import com.mojang.renderpearl.api.vertex.VertexFormatElement;
+*///?} else {
 import com.mojang.blaze3d.vertex.VertexFormat;
 import com.mojang.blaze3d.vertex.VertexFormatElement;
+//?}
 import net.karto.mc2.mc2_interactivefoliage.FoliageSettings;
 import net.karto.mc2.mc2_interactivefoliage.ModTemplate;
 import net.minecraft.client.Minecraft;
@@ -65,7 +101,11 @@ import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.renderer.BindGroupLayouts;
 //?}
 //? >=1.21.11 {
+//? >=26.3 {
+/*import net.minecraft.client.renderer.DynamicGpuData;
+*///?} else {
 import net.minecraft.client.renderer.DynamicUniforms;
+//?}
 import net.minecraft.client.renderer.RenderPipelines;
 //?}
 //? >=26.1.2 {
@@ -355,7 +395,7 @@ public final class GpuFoliageRenderer {
 	 * blend state -- and only swaps in our shaders and adds the sway weight binding and the sway settings.
 	 * The shader files are discovered by resource pack scanning, so no registration call is needed.
 	 */
-	//? >=26.2 {
+	//? >=26.2 && <26.3 {
 	private static final RenderPipeline PIPELINE = RenderPipeline.builder(RenderPipelines.BLOCK_SNIPPET)
 			.withLocation(Identifier.fromNamespaceAndPath(ModTemplate.MOD_ID, "pipeline/foliage"))
 			.withVertexShader(Identifier.fromNamespaceAndPath(ModTemplate.MOD_ID, "core/foliage"))
@@ -365,7 +405,7 @@ public final class GpuFoliageRenderer {
 			.withBindGroupLayout(GpuFoliageInteraction.LAYOUT)
 			.withShaderDefine("ALPHA_CUTOUT", 0.5F)
 			.build();
-	//?} elif >=1.21.11 {
+	//?} elif >=1.21.11 && <26.2 {
 	/*// Vanilla's block snippet is private before 26.2, so the same state is spelled out here: the samplers
 	// and uniforms its shaders read, one vertex format, and the depth state every block pipeline uses.
 	private static final RenderPipeline PIPELINE = blockPipeline("pipeline/foliage", FOLIAGE_FORMAT);
@@ -395,7 +435,7 @@ public final class GpuFoliageRenderer {
 	}
 	*///?}
 
-	//? >=26.2 {
+	//? >=26.2 && <26.3 {
 	/**
 	 * The pipeline foliage is drawn with while the terrain's shaders compile with the sway spliced in, which is nearly
 	 * always: the chunk mesh's own shaders, so foliage is lit and coloured as the terrain around it, a resource pack's
@@ -432,7 +472,7 @@ public final class GpuFoliageRenderer {
 			.withBindGroupLayout(SWAY_SETTINGS)
 			.withBindGroupLayout(GpuFoliageInteraction.LAYOUT)
 			.build();
-	//?} elif >=1.21.11 {
+	//?} elif >=1.21.11 && <26.2 {
 	/*// Drawn with Sodium's chunk shaders while Sodium draws the chunks and they compile with the mod's vertices read in;
 	// see the newer pipeline.
 	private static final RenderPipeline SODIUM_PIPELINE = RenderPipeline.builder()
@@ -1452,8 +1492,8 @@ public final class GpuFoliageRenderer {
 	 * the camera's frustum does not say what casts a shadow into view.
 	 */
 	//? >=1.21.11 {
-	public static void drawPolytoneShadow(Matrix4f shadowMatrix, com.mojang.blaze3d.textures.GpuTextureView color,
-			com.mojang.blaze3d.textures.GpuTextureView depth) {
+	public static void drawPolytoneShadow(Matrix4f shadowMatrix, GpuTextureView color,
+			GpuTextureView depth) {
 	//?} else {
 	/*// Before 1.21.11 Polytone leaves its shadow map bound while it draws into it, so the foliage goes wherever it is.
 	public static void drawPolytoneShadow(Matrix4f shadowMatrix) {
@@ -1561,6 +1601,13 @@ public final class GpuFoliageRenderer {
 	}
 
 	//? >=1.21.11 {
+	// 26.3 draws the whole world inside one render pass it opens itself, so the foliage cannot open its own the way it
+	// does up to 26.2. Until it is drawn into vanilla's pass, nothing is drawn here, and the chunk mesh keeps the plants.
+	//? >=26.3 {
+	/*private static void submitDraws(Minecraft minecraft, Vec3 camera, Matrix4f shadowModelView, Matrix4f shadowProjection,
+			GpuTextureView shadowColor, GpuTextureView shadowDepth) {
+	}
+	*///?} else {
 	/**
 	 * The pipeline foliage is drawn with while no shader pack is loaded: the shaders the chunks are drawn with --
 	 * Sodium's while Sodium draws them, the terrain's otherwise -- where they compile, and the mod's own where they don't.
@@ -1604,7 +1651,7 @@ public final class GpuFoliageRenderer {
 	 * drawn with the pipeline the screen is, into the targets it hands over.
 	 */
 	private static void submitDraws(Minecraft minecraft, Vec3 camera, Matrix4f shadowModelView, Matrix4f shadowProjection,
-			com.mojang.blaze3d.textures.GpuTextureView shadowColor, com.mojang.blaze3d.textures.GpuTextureView shadowDepth) {
+			GpuTextureView shadowColor, GpuTextureView shadowDepth) {
 		List<Region> drawn = DRAWN;
 		boolean shadowPass = shadowModelView != null;
 		//? iris {
@@ -1678,8 +1725,8 @@ public final class GpuFoliageRenderer {
 		// hands over its shadow pass is not reliably the shadow map's, and plants projected any other way land at the wrong
 		// depth in it.
 		GpuBufferSlice projection = shadowPass ? shadowProjectionBuffer().getBuffer(shadowProjection) : null;
-		com.mojang.blaze3d.textures.GpuTextureView color = shadowColor != null ? shadowColor : target.getColorTextureView();
-		com.mojang.blaze3d.textures.GpuTextureView depth = shadowDepth != null ? shadowDepth : target.getDepthTextureView();
+		GpuTextureView color = shadowColor != null ? shadowColor : target.getColorTextureView();
+		GpuTextureView depth = shadowDepth != null ? shadowDepth : target.getDepthTextureView();
 
 		Runnable draw = () -> {
 		try (RenderPass pass = RenderSystem.getDevice()
@@ -1752,6 +1799,7 @@ public final class GpuFoliageRenderer {
 		//?}
 		draw.run();
 	}
+	//?}
 	//?}
 
 	//? <1.21.11 {

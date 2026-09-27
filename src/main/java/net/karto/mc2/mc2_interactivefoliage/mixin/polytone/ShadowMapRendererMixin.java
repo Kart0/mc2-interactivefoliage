@@ -1,6 +1,6 @@
 package net.karto.mc2.mc2_interactivefoliage.mixin.polytone;
 
-//? >=1.21.1 {
+//? >=1.21.1 && <26.3 {
 import net.karto.mc2.mc2_interactivefoliage.gpu.GpuFoliageRenderer;
 import org.joml.Matrix4f;
 import org.spongepowered.asm.mixin.Final;
