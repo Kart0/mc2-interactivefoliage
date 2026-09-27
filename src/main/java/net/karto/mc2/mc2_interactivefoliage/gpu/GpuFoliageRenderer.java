@@ -45,7 +45,9 @@ import com.mojang.blaze3d.platform.CompareOp;
 *///?}
 //? >=1.21.11 {
 //? >=26.3 {
-/*import com.mojang.renderpearl.api.pipeline.RenderPipeline;
+/*import com.mojang.renderpearl.api.pipeline.ColorTargetState;
+import com.mojang.renderpearl.api.pipeline.CompiledRenderPipeline;
+import com.mojang.renderpearl.api.pipeline.RenderPipeline;
 *///?} else {
 import com.mojang.blaze3d.pipeline.RenderPipeline;
 //?}
@@ -395,7 +397,30 @@ public final class GpuFoliageRenderer {
 	 * blend state -- and only swaps in our shaders and adds the sway weight binding and the sway settings.
 	 * The shader files are discovered by resource pack scanning, so no registration call is needed.
 	 */
-	//? >=26.2 && <26.3 {
+	//? >=26.3 {
+	/*// Vanilla's block snippet is private again on 26.3, so what it holds is listed: the uniform blocks and samplers the
+	// shaders read, the block format with the mod's two values, and the depth state every block pipeline uses. The
+	// foliage is drawn into vanilla's own pass, which writes one colour target; a pipeline whose targets do not match
+	// the pass is refused.
+	private static final RenderPipeline PIPELINE = RenderPipeline.builder()
+			.withLocation(Identifier.fromNamespaceAndPath(ModTemplate.MOD_ID, "pipeline/foliage"))
+			.withVertexShader(Identifier.fromNamespaceAndPath(ModTemplate.MOD_ID, "core/foliage_modern"))
+			.withFragmentShader(Identifier.fromNamespaceAndPath(ModTemplate.MOD_ID, "core/foliage_modern"))
+			.withVertexBinding(0, FOLIAGE_FORMAT)
+			.withPrimitiveTopology(PrimitiveTopology.QUADS)
+			.withDepthStencilState(DepthStencilState.DEFAULT)
+			.withColorTargetState(ColorTargetState.DEFAULT)
+			.withBindGroupLayout(BindGroupLayouts.GLOBALS)
+			.withBindGroupLayout(BindGroupLayouts.FOG)
+			.withBindGroupLayout(BindGroupLayouts.SAMPLER0)
+			.withBindGroupLayout(BindGroupLayouts.SAMPLER2)
+			.withBindGroupLayout(BindGroupLayouts.PROJECTION)
+			.withBindGroupLayout(BindGroupLayouts.DYNAMIC_TRANSFORMS)
+			.withBindGroupLayout(SWAY_SETTINGS)
+			.withBindGroupLayout(GpuFoliageInteraction.LAYOUT)
+			.withShaderDefine("ALPHA_CUTOUT", 0.5F)
+			.build();
+	*///?} elif >=26.2 {
 	private static final RenderPipeline PIPELINE = RenderPipeline.builder(RenderPipelines.BLOCK_SNIPPET)
 			.withLocation(Identifier.fromNamespaceAndPath(ModTemplate.MOD_ID, "pipeline/foliage"))
 			.withVertexShader(Identifier.fromNamespaceAndPath(ModTemplate.MOD_ID, "core/foliage"))
@@ -1280,12 +1305,22 @@ public final class GpuFoliageRenderer {
 	}
 
 	//? >=1.21.11 {
-	/** Called by each loader's hooks once the opaque terrain is drawn. */
+	/**
+	 * Called by each loader's hooks once the opaque terrain is drawn -- on 26.3, as the level's extraction ends, to
+	 * prepare what vanilla's pass will draw; see {@link #submitDraws}.
+	 */
 	public static void draw(LevelRenderState levelState) {
 		// The render state carries the camera and the cull frustum vanilla already prepared this
 		// frame, which is available whether or not Sodium owns the terrain renderer.
 		var cameraState = levelState.cameraRenderState;
 		boolean hasCamera = cameraState != null && cameraState.pos != null;
+		//? >=26.3 {
+		/*// Nothing from an earlier frame is drawn, whatever this one decides.
+		pendingDraw = null;
+		if (hasCamera) {
+			LEVEL_MODEL_VIEW.set(cameraState.viewRotationMatrix);
+		}
+		*///?}
 		//? >=26.1.2 {
 		Frustum frustum = hasCamera ? cameraState.cullFrustum : null;
 		//?} else {
@@ -1601,11 +1636,127 @@ public final class GpuFoliageRenderer {
 	}
 
 	//? >=1.21.11 {
-	// 26.3 draws the whole world inside one render pass it opens itself, so the foliage cannot open its own the way it
-	// does up to 26.2. Until it is drawn into vanilla's pass, nothing is drawn here, and the chunk mesh keeps the plants.
 	//? >=26.3 {
-	/*private static void submitDraws(Minecraft minecraft, Vec3 camera, Matrix4f shadowModelView, Matrix4f shadowProjection,
+	/*/^*
+	 * Prepares what {@link #collectDraws} worked out, for {@link #drawIntoLevelPass} to draw.
+	 * <p>
+	 * 26.3 draws the opaque world inside one render pass vanilla opens itself, and while it is open no buffer may be
+	 * written to, no other pass opened and no pipeline compiled. So the foliage is drawn in two halves: everything that
+	 * writes happens here, as the level's extraction ends and before anything is drawn, and what is left -- binding and
+	 * drawing -- waits for vanilla's pass. Only the screen is drawn on 26.3 so far; the shadow arguments are not used.
+	 ^/
+	private static void submitDraws(Minecraft minecraft, Vec3 camera, Matrix4f shadowModelView, Matrix4f shadowProjection,
 			GpuTextureView shadowColor, GpuTextureView shadowDepth) {
+		CompiledRenderPipeline pipeline = compiledPipeline();
+		if (pipeline == null) {
+			return;
+		}
+		// Every region's offset from the camera, in one mapping of vanilla's transform buffer, which stays valid until
+		// the frame ends.
+		Region[] regions = DRAWN.toArray(new Region[0]);
+		Vector4f noModulation = new Vector4f(1.0F, 1.0F, 1.0F, 1.0F);
+		Matrix4f noTextureTransform = new Matrix4f();
+		DynamicGpuData.Transform[] transforms = new DynamicGpuData.Transform[regions.length];
+		for (int i = 0; i < regions.length; i++) {
+			BlockPos origin = regions[i].origin;
+			transforms[i] = new DynamicGpuData.Transform(
+					LEVEL_MODEL_VIEW,
+					noModulation,
+					new Vector3f(
+							(float) (origin.getX() - camera.x),
+							(float) (origin.getY() - camera.y),
+							(float) (origin.getZ() - camera.z)),
+					noTextureTransform);
+		}
+		GpuBufferSlice[] offsets = RenderSystem.getDynamicUniforms().writeTransforms(transforms);
+		int[] drawList = Arrays.copyOf(draws, drawsSize);
+
+		// The shared index buffer is replaced, the old one closed, whenever it has to grow, so it may not grow inside the
+		// pass the terrain was just drawn from it in. It is asked for here, and vanilla grows every shared index buffer once,
+		// before its pass opens.
+		int longestDraw = 0;
+		for (int i = 2; i < drawList.length; i += 3) {
+			longestDraw = Math.max(longestDraw, drawList[i]);
+		}
+		int indicesNeeded = indexCountFor(longestDraw);
+		RenderSystem.AutoStorageIndexBuffer indices = RenderSystem.getSequentialBuffer(PrimitiveTopology.QUADS);
+		indices.requestIndexCount(indicesNeeded);
+		GpuBuffer settings = swaySettings(camera);
+		GpuBuffer interaction = GpuFoliageInteraction.upload(camera);
+
+		pendingDraw = pass -> {
+			GpuBuffer indexBuffer = indices.getBuffer();
+			if (indexBuffer == null || !indices.hasStorage(indicesNeeded)) {
+				return;
+			}
+			AbstractTexture atlas = minecraft.getTextureManager().getTexture(TextureAtlas.LOCATION_BLOCKS);
+			pass.setPipeline(pipeline);
+			// Projection, fog and the globals are bound by vanilla as it opens the pass.
+			pass.setUniform("Sampler0", atlas.getTextureView(), atlas.getSampler());
+			pass.setUniform("Sampler2", minecraft.gameRenderer.lightmap(),
+					RenderSystem.getSamplerCache().getClampToEdge(FilterMode.LINEAR));
+			pass.setUniform(SWAY_SETTINGS_UNIFORM, settings);
+			pass.setUniform(GpuFoliageInteraction.UNIFORM, interaction);
+			pass.setIndexBuffer(indexBuffer, indices.type());
+			int boundRegion = -1;
+			for (int i = 0; i < drawList.length; i += 3) {
+				int regionIndex = drawList[i];
+				if (regionIndex != boundRegion) {
+					pass.setUniform("DynamicTransforms", offsets[regionIndex]);
+					pass.setVertexBuffer(0, regions[regionIndex].vertices.slice());
+					boundRegion = regionIndex;
+				}
+				// The sequential index buffer counts from zero, and the base vertex moves it to where this run of sections
+				// starts in the region's buffer.
+				pass.drawIndexed(indexCountFor(drawList[i + 2]), 1, 0, drawList[i + 1], 0);
+			}
+		};
+	}
+
+	/^* This frame's foliage, prepared and waiting for vanilla's pass, or null when there is nothing to draw. ^/
+	private static java.util.function.Consumer<RenderPass> pendingDraw;
+	/^* The matrix vanilla draws the level with this frame: the camera's rotation, which it pushes as it starts. ^/
+	private static final Matrix4f LEVEL_MODEL_VIEW = new Matrix4f();
+	/^* Vanilla's own terrain pipeline, as compiled when the mod's last failed to; see {@link #compiledPipeline}. ^/
+	private static CompiledRenderPipeline pipelineFailedWith;
+
+	/^*
+	 * Draws the foliage prepared this frame into vanilla's pass, called by LevelPassMixin once the opaque terrain is in
+	 * it. Each frame's foliage is drawn once, and not at all where nothing was prepared.
+	 ^/
+	public static void drawIntoLevelPass(RenderPass pass) {
+		java.util.function.Consumer<RenderPass> draw = pendingDraw;
+		pendingDraw = null;
+		if (draw != null) {
+			draw.accept(pass);
+		}
+	}
+
+	/^*
+	 * The mod's pipeline as the game has compiled it, or null where it could not be.
+	 * <p>
+	 * The game compiles a pipeline the first time it is asked for, which is why this is asked while preparing, with no
+	 * pass open. It does not remember a pipeline that failed, and would compile it again on every request, so a failure
+	 * is remembered here until the game reloads its shaders -- which shows as its own terrain pipeline coming back as a
+	 * different compiled one, since a reload compiles everything afresh and closes what it had.
+	 ^/
+	private static CompiledRenderPipeline compiledPipeline() {
+		CompiledRenderPipeline terrain = RenderSystem.getCompiledPipelineNullable(RenderPipelines.SOLID_TERRAIN);
+		if (pipelineFailedWith != null && pipelineFailedWith == terrain) {
+			return null;
+		}
+		CompiledRenderPipeline compiled;
+		try {
+			compiled = RenderSystem.getCompiledPipelineNullable(PIPELINE);
+		} catch (RuntimeException e) {
+			// A shader that does not compile is thrown rather than handed back as null.
+			ModTemplate.LOGGER.error("The GPU foliage pipeline did not compile; the foliage it holds is not drawn", e);
+			compiled = null;
+		}
+		if (compiled == null) {
+			pipelineFailedWith = terrain;
+		}
+		return compiled;
 	}
 	*///?} else {
 	/**

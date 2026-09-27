@@ -6,7 +6,9 @@ import com.github.razorplay01.sway.api.SwayAPI;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientChunkEvents;
 import net.fabricmc.fabric.api.client.model.loading.v1.ModelLoadingPlugin;
 import net.fabricmc.fabric.api.client.model.loading.v1.ModelModifier;
-//? >=26.1.2 {
+//? >=26.3 {
+/*import net.fabricmc.fabric.api.client.rendering.v1.level.LevelExtractionEvents;
+*///?} elif >=26.1.2 {
 import net.fabricmc.fabric.api.client.rendering.v1.level.LevelRenderEvents;
 //?} elif >=1.21.11 {
 /*import net.fabricmc.fabric.api.client.rendering.v1.world.WorldRenderEvents;
@@ -48,10 +50,12 @@ public final class FabricFoliageHooks {
 				^///?}
 		*///?}
 
-		// Not yet on 26.3, where the world is drawn inside one render pass vanilla opens: the foliage is to be drawn into
-		// that pass, and until it is, the renderer is never started and the chunk mesh keeps every plant.
+		// On 26.3 the opaque world is drawn inside one render pass vanilla opens, in which nothing may be written, so the
+		// foliage is prepared as the level's extraction ends, before anything is drawn, and LevelPassMixin draws it into
+		// that pass.
 		//? >=26.3 {
-		//?} elif >=26.1.2 {
+		/*LevelExtractionEvents.END_EXTRACTION.register(context -> GpuFoliageRenderer.draw(context.levelState()));
+		*///?} elif >=26.1.2 {
 		LevelRenderEvents.AFTER_OPAQUE_TERRAIN.register(context -> GpuFoliageRenderer.draw(context.levelState()));
 		//?} elif >=1.21.11 {
 		/*// There is no event for the moment the opaque terrain is done before 26.1.2. The one before the

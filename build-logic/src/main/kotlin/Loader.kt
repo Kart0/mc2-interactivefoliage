@@ -75,6 +75,11 @@ sealed class Loader(val id: String) {
 						&& !ctx.stonecutter.eval(ctx.currentMcVersion, ">=26.3")) {
 						add("${ctx.modId}.polytone.mixins.json")
 					}
+					// From 26.3 the foliage is drawn into the render pass vanilla draws the opaque world in, which only a mixin
+					// hands out.
+					if (ctx.stonecutter.eval(ctx.currentMcVersion, ">=26.3")) {
+						add("${ctx.modId}.pass.mixins.json")
+					}
 				},
 				depends = ctx.extension.dependencies.required.associate { it.modid.get() to it.fabricLikeVersionRange.get() },
 				recommends = ctx.extension.dependencies.optional.associate { it.modid.get() to it.fabricLikeVersionRange.get() },
