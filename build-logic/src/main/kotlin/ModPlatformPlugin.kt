@@ -163,18 +163,19 @@ abstract class ModPlatformPlugin @Inject constructor() : Plugin<Project> {
 			// the shading language that generation speaks; a jar only carries the set its version loads. Before
 			// 1.21.1 the legacy set has a vertex shader of its own, and shares the legacy fragment shader.
 			// From 26.3 the language has includes and a location on every input: the modern set, and only that set,
-			// with the sway shared by all of them. The terrain's spliced shaders are not carried there yet.
+			// with the sway shared by all of them and the foliage's uniform blocks in an include of their own. The terrain's spliced shaders are not carried there yet.
 			if (ctx.stonecutter.eval(ctx.currentMcVersion, ">=26.3")) {
 				exclude("assets/*/shaders/core/foliage.*", "assets/*/shaders/core/foliage_terrain.vsh",
 						"assets/*/shaders/core/foliage_legacy.*", "assets/*/shaders/core/foliage_legacy_1_20.*")
 			} else if (ctx.stonecutter.eval(ctx.currentMcVersion, ">=1.21.11")) {
-				exclude("assets/*/shaders/core/foliage_modern.*",
+				exclude("assets/*/shaders/core/foliage_modern.*", "assets/*/shaders/include/foliage_uniforms.glsl",
 						"assets/*/shaders/core/foliage_legacy.*", "assets/*/shaders/core/foliage_legacy_1_20.*")
 			} else if (ctx.stonecutter.eval(ctx.currentMcVersion, ">=1.21.1")) {
 				exclude("assets/*/shaders/core/foliage.*", "assets/*/shaders/core/foliage_modern.*",
-						"assets/*/shaders/core/foliage_legacy_1_20.*")
+						"assets/*/shaders/include/foliage_uniforms.glsl", "assets/*/shaders/core/foliage_legacy_1_20.*")
 			} else {
 				exclude("assets/*/shaders/core/foliage.*", "assets/*/shaders/core/foliage_modern.*",
+						"assets/*/shaders/include/foliage_uniforms.glsl",
 						"assets/*/shaders/core/foliage_legacy.json", "assets/*/shaders/core/foliage_legacy.vsh")
 			}
 		}

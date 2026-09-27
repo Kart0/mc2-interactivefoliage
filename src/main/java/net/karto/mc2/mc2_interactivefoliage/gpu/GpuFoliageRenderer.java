@@ -460,6 +460,32 @@ public final class GpuFoliageRenderer {
 	}
 	*///?}
 
+	//? >=26.3 {
+	/*/^*
+	 * The pipeline foliage is drawn with while Sodium draws the chunks and a copy of its chunk shaders reads the mod's
+	 * vertices: the shaders the chunks are drawn with then. See {@link SodiumFoliageShader}, which compiles it.
+	 ^/
+	private static final RenderPipeline SODIUM_PIPELINE = RenderPipeline.builder()
+			.withLocation(Identifier.fromNamespaceAndPath(ModTemplate.MOD_ID, "pipeline/foliage_sodium"))
+			.withVertexShader(SodiumFoliageShader.SHADER)
+			.withFragmentShader(SodiumFoliageShader.SHADER)
+			.withVertexBinding(0, FOLIAGE_FORMAT)
+			.withPrimitiveTopology(PrimitiveTopology.QUADS)
+			.withDepthStencilState(DepthStencilState.DEFAULT)
+			.withColorTargetState(ColorTargetState.DEFAULT)
+			.withBindGroupLayout(BindGroupLayouts.GLOBALS)
+			.withBindGroupLayout(BindGroupLayouts.FOG)
+			.withBindGroupLayout(BindGroupLayouts.PROJECTION)
+			.withBindGroupLayout(BindGroupLayouts.DYNAMIC_TRANSFORMS)
+			.withBindGroupLayout(BindGroupLayout.builder()
+					.withUniform(SodiumFoliageShader.BLOCK_TEXTURE, UniformType.COMBINED_IMAGE_SAMPLER)
+					.withUniform(SodiumFoliageShader.LIGHT_TEXTURE, UniformType.COMBINED_IMAGE_SAMPLER)
+					.build())
+			.withBindGroupLayout(SWAY_SETTINGS)
+			.withBindGroupLayout(GpuFoliageInteraction.LAYOUT)
+			.build();
+	*///?}
+
 	//? >=26.2 && <26.3 {
 	/**
 	 * The pipeline foliage is drawn with while the terrain's shaders compile with the sway spliced in, which is nearly
@@ -1647,7 +1673,12 @@ public final class GpuFoliageRenderer {
 	 ^/
 	private static void submitDraws(Minecraft minecraft, Vec3 camera, Matrix4f shadowModelView, Matrix4f shadowProjection,
 			GpuTextureView shadowColor, GpuTextureView shadowDepth) {
-		CompiledRenderPipeline pipeline = compiledPipeline();
+		// While Sodium draws the chunks, with a copy of its chunk shaders where it compiles, so the foliage is lit and fogged
+		// exactly as the terrain around it; the mod's own otherwise.
+		CompiledRenderPipeline sodiumPipeline = SodiumBridge.drawsChunks()
+				? SodiumFoliageShader.compiled(SODIUM_PIPELINE) : null;
+		boolean sodiumShaders = sodiumPipeline != null;
+		CompiledRenderPipeline pipeline = sodiumShaders ? sodiumPipeline : compiledPipeline();
 		if (pipeline == null) {
 			return;
 		}
@@ -1691,9 +1722,12 @@ public final class GpuFoliageRenderer {
 			}
 			AbstractTexture atlas = minecraft.getTextureManager().getTexture(TextureAtlas.LOCATION_BLOCKS);
 			pass.setPipeline(pipeline);
-			// Projection, fog and the globals are bound by vanilla as it opens the pass.
-			pass.setUniform("Sampler0", atlas.getTextureView(), atlas.getSampler());
-			pass.setUniform("Sampler2", minecraft.gameRenderer.lightmap(),
+			// Projection, fog and the globals are bound by vanilla as it opens the pass. Sodium's shaders pick mip levels
+			// themselves, so they sample the atlas as Sodium's chunks do: smoothly, between mip levels. The mod's own shader
+			// reads it as the atlas is set to be read.
+			pass.setUniform(sodiumShaders ? SodiumFoliageShader.BLOCK_TEXTURE : "Sampler0", atlas.getTextureView(),
+					sodiumShaders ? RenderSystem.getSamplerCache().getClampToEdge(FilterMode.LINEAR, true) : atlas.getSampler());
+			pass.setUniform(sodiumShaders ? SodiumFoliageShader.LIGHT_TEXTURE : "Sampler2", minecraft.gameRenderer.lightmap(),
 					RenderSystem.getSamplerCache().getClampToEdge(FilterMode.LINEAR));
 			pass.setUniform(SWAY_SETTINGS_UNIFORM, settings);
 			pass.setUniform(GpuFoliageInteraction.UNIFORM, interaction);

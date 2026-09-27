@@ -23,24 +23,7 @@ layout(location = 3) in ivec2 UV2;
 layout(location = 4) in float SwayCell;
 layout(location = 5) in float SwayWeights;
 
-// Settings the player changes in game, and the pushes on the plants near the player, written by the mod into
-// buffers so they apply on the next frame. See sway.glsl for what each holds.
-layout(std140) uniform FoliageSway {
-    float mc2_SwayIntensity;
-    float mc2_CalmSway;
-    vec4 mc2_SwayEdge;
-    vec4 mc2_Weather;
-};
-
-#define MC2_MAX_CELLS 128
-layout(std140) uniform FoliageInteraction {
-    int mc2_CellCount;
-    vec4 mc2_CellBoundsMin;
-    vec4 mc2_CellBoundsMax;
-    vec4 mc2_CellPosition[MC2_MAX_CELLS];
-    vec4 mc2_CellForce[MC2_MAX_CELLS];
-};
-
+#include <mc2_interactivefoliage:foliage_uniforms.glsl>
 #include <mc2_interactivefoliage:sway.glsl>
 
 uniform sampler2D Sampler2;
