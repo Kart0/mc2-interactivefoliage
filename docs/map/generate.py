@@ -107,7 +107,7 @@ def main():
 		"files": files,
 		"unmapped": unmapped,
 	}
-	(HERE / "foliage-map.json").write_text(json.dumps(data, indent=1, ensure_ascii=False) + "\n", encoding="utf-8")
+	(HERE / "foliage-map.json").write_text(json.dumps(data, indent=1, ensure_ascii=False) + "\n", encoding="utf-8", newline="\n")
 
 	template = (HERE / "template.html").read_text(encoding="utf-8")
 	marker = "/*MAP_DATA*/null"
@@ -115,9 +115,9 @@ def main():
 		problems.append("template.html has no /*MAP_DATA*/null marker")
 	else:
 		inline = json.dumps(data, ensure_ascii=False).replace("</", "<\\/")
-		(HERE / "index.html").write_text(template.replace(marker, inline), encoding="utf-8")
+		(HERE / "index.html").write_text(template.replace(marker, inline), encoding="utf-8", newline="\n")
 
-	(ROOT / "docs/VERSION-MAP.md").write_text(markdown(data), encoding="utf-8")
+	(ROOT / "docs/VERSION-MAP.md").write_text(markdown(data), encoding="utf-8", newline="\n")
 
 	for w in warnings:
 		print("warning:", w)
