@@ -2,22 +2,37 @@ package net.karto.mc2.mc2_interactivefoliage.gpu;
 
 //? iris {
 
-/*//? >=26.2 {
-import com.mojang.blaze3d.GpuFormat;
+//? >=26.2 {
+//? >=26.3 {
+import com.mojang.renderpearl.api.GpuFormat;
+//?} else {
+/*import com.mojang.blaze3d.GpuFormat;
+*///?}
 //?}
 //? >=1.21.11 {
-import com.mojang.blaze3d.opengl.GlProgram;
+//? >=26.3 {
+import com.mojang.renderpearl.backend.opengl.GlProgram;
+import com.mojang.renderpearl.backend.opengl.GlStateManager;
+import com.mojang.renderpearl.api.pipeline.RenderPipeline;
+//?} else {
+/*import com.mojang.blaze3d.opengl.GlProgram;
 import com.mojang.blaze3d.opengl.GlStateManager;
 import com.mojang.blaze3d.pipeline.RenderPipeline;
+*///?}
 //?} else {
-/^import com.mojang.blaze3d.platform.GlStateManager;
+/*import com.mojang.blaze3d.platform.GlStateManager;
 import net.minecraft.client.renderer.ShaderInstance;
 import org.lwjgl.opengl.GL20;
 import org.lwjgl.opengl.GL31;
-^///?}
+*///?}
 import com.mojang.blaze3d.vertex.BufferBuilder;
-import com.mojang.blaze3d.vertex.VertexFormat;
+//? >=26.3 {
+import com.mojang.renderpearl.api.vertex.VertexFormat;
+import com.mojang.renderpearl.api.vertex.VertexFormatElement;
+//?} else {
+/*import com.mojang.blaze3d.vertex.VertexFormat;
 import com.mojang.blaze3d.vertex.VertexFormatElement;
+*///?}
 import it.unimi.dsi.fastutil.objects.Object2IntMap;
 import net.irisshaders.iris.api.v0.IrisApi;
 import net.irisshaders.iris.pipeline.IrisRenderingPipeline;
@@ -37,7 +52,11 @@ import net.irisshaders.iris.shaderpack.programs.ProgramSource;
 import net.irisshaders.iris.vertices.BlockSensitiveBufferBuilder;
 import net.irisshaders.iris.vertices.IrisVertexFormats;
 import net.karto.mc2.mc2_interactivefoliage.ModTemplate;
-import net.karto.mc2.mc2_interactivefoliage.mixin.iris.IrisRenderingPipelineAccessor;
+//? >=26.3 {
+import net.irisshaders.iris.api.v0.IrisProgram;
+//?} else {
+/*import net.karto.mc2.mc2_interactivefoliage.mixin.iris.IrisRenderingPipelineAccessor;
+*///?}
 import net.minecraft.world.level.block.state.BlockState;
 
 import java.io.IOException;
@@ -49,7 +68,7 @@ import java.util.Optional;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-/^*
+/**
  * Draws the GPU renderer's foliage through a loaded shader pack, so plants sway and get pushed exactly as without one
  * while the pack lights, shades and shadows them.
  * <p>
@@ -63,27 +82,27 @@ import java.util.regex.Pattern;
  * <p>
  * Everything here reaches into Iris itself, so any step that goes wrong is caught, logged once, and leaves the
  * foliage to the chunk mesh until the next pack loads; the pack itself keeps working either way.
- ^/
+ */
 public final class IrisFoliageShaders {
 
-	/^* Iris's terrain format, which a shader pack's terrain program reads, with the renderer's two values after it. ^/
+	/** Iris's terrain format, which a shader pack's terrain program reads, with the renderer's two values after it. */
 	public static final VertexFormat FORMAT = format();
 
-	/^* Set while a program of the mod's is being built, so the hooks inside Iris change that one and no other. ^/
+	/** Set while a program of the mod's is being built, so the hooks inside Iris change that one and no other. */
 	private static final ThreadLocal<Boolean> BUILDING = ThreadLocal.withInitial(() -> false);
 
 	private static final Pattern POSITION_INPUT = Pattern.compile("\\bin\\s+vec3\\s+iris_Position\\s*;");
 	private static final Pattern POSITION = Pattern.compile("\\biris_Position\\b");
 	private static final Pattern MAIN = Pattern.compile("\\bvoid\\s+main\\s*\\(\\s*(?:void\\s*)?\\)");
-	/^* What the pack reads in place of its position: the same position, moved. ^/
+	/** What the pack reads in place of its position: the same position, moved. */
 	private static final String SWAYED_POSITION = "mc2_swayedPosition";
 
-	/^* Whether the renderer has handed over what drawing through a pack takes; nothing is built before. ^/
+	/** Whether the renderer has handed over what drawing through a pack takes; nothing is built before. */
 	private static boolean configured;
 	//? >=1.21.11 {
 	private static RenderPipeline pipeline;
 	private static RenderPipeline shadowPipeline;
-	/^* Bind group layouts from 26.2, uniform descriptions before: whatever the version declares a program's uniforms with. ^/
+	/** Bind group layouts from 26.2, uniform descriptions before: whatever the version declares a program's uniforms with. */
 	private static List<?> layouts = List.of();
 	//?}
 
@@ -92,14 +111,18 @@ public final class IrisFoliageShaders {
 	private static GlProgram main;
 	private static GlProgram shadow;
 	//?} else {
-	/^private static ShaderInstance main;
+	/*private static ShaderInstance main;
 	private static ShaderInstance shadow;
-	^///?}
-	/^* Bumped for every pack loaded, so sections meshed for the last one are meshed again with this one's block ids. ^/
+	*///?}
+	/** Bumped for every pack loaded, so sections meshed for the last one are meshed again with this one's block ids. */
 	private static int generation;
 	private static IrisCompat.ShadowDraw foliageShadowDraw;
 	//? >=26.1.2 {
 	private static boolean shadowCallbackRegistered;
+	//?}
+	//? >=26.3 {
+	/** Whether Iris has been told to draw the renderer's pipeline with the pack's program; see setUp. */
+	private static boolean assigned;
 	//?}
 
 	private IrisFoliageShaders() {
@@ -116,14 +139,14 @@ public final class IrisFoliageShaders {
 				.addAttribute("SwayWeights", GpuFormat.R32_FLOAT)
 				.build();
 		//?} else {
-		/^return GpuFoliageRenderer.withSwayValues(IrisVertexFormats.TERRAIN);
-		^///?}
+		/*return GpuFoliageRenderer.withSwayValues(IrisVertexFormats.TERRAIN);
+		*///?}
 	}
 
-	/^*
+	/**
 	 * The renderer's pipelines for drawing through a shader pack -- in the pack's own pass and into its shadow map -- and
 	 * the uniform blocks they bind beyond Iris's own: the sway settings and the plant pushes.
-	 ^/
+	 */
 	//? >=1.21.11 {
 	static void setUp(RenderPipeline foliagePipeline, RenderPipeline foliageShadowPipeline,
 			List<?> foliageLayouts, IrisCompat.ShadowDraw shadowDraw) {
@@ -131,13 +154,21 @@ public final class IrisFoliageShaders {
 		shadowPipeline = foliageShadowPipeline;
 		layouts = List.copyOf(foliageLayouts);
 	//?} else {
-	/^// Before 1.21.11 there are no pipelines: the renderer draws with the programs themselves, see program.
+	/*// Before 1.21.11 there are no pipelines: the renderer draws with the programs themselves, see program.
 	static void setUp(IrisCompat.ShadowDraw shadowDraw) {
-	^///?}
+	*///?}
 		configured = true;
 		foliageShadowDraw = shadowDraw;
-		//? >=26.1.2 {
-		if (!shadowCallbackRegistered) {
+		//? >=26.3 {
+		// On 26.3 Iris swaps the program of any pipeline it has been told about for the pack's own, as it does for the
+		// terrain's: the foliage is drawn with the pack's terrain cutout program, as the pack wrote it. Nothing is built by
+		// the mod, and nothing is drawn into the shadow map, yet. Iris refuses a pipeline told about twice.
+		if (!assigned) {
+			assigned = true;
+			IrisApi.getInstance().assignPipeline(foliagePipeline, IrisProgram.TERRAIN_CUTOUT);
+		}
+		//?} elif >=26.1.2 {
+		/*if (!shadowCallbackRegistered) {
 			shadowCallbackRegistered = true;
 			// Called by Iris in its shadow pass once the terrain is in the shadow map, with the sun's matrices and the camera
 			// it rendered from.
@@ -145,14 +176,14 @@ public final class IrisFoliageShaders {
 					(modelView, projection, cameraX, cameraY, cameraZ, tickDelta) ->
 							drawShadow(modelView, projection, cameraX, cameraY, cameraZ));
 		}
-		//?}
+		*///?}
 	}
 
-	/^*
+	/**
 	 * Draws the foliage into the shadow map, in the middle of Iris's shadow pass once the terrain is in it. From 26.1.2
 	 * Iris calls this through its shadow render callback; before, it has none, and ShadowRendererMixin calls it at the same
 	 * point.
-	 ^/
+	 */
 	public static void drawShadow(org.joml.Matrix4f modelView, org.joml.Matrix4f projection,
 			double cameraX, double cameraY, double cameraZ) {
 		if (owner != null && shadow != null && foliageShadowDraw != null) {
@@ -164,11 +195,11 @@ public final class IrisFoliageShaders {
 		return IrisApi.getInstance().isShaderPackInUse();
 	}
 
-	/^*
+	/**
 	 * Builds the programs for the pack loaded now, once per pack, and returns whether there are programs to draw with.
 	 * Called on the render thread each frame the renderer draws through a pack: a pack can load before the renderer
 	 * is ever used, and building here rather than as it loads never depends on which comes first.
-	 ^/
+	 */
 	static boolean ready() {
 		if (!configured || !(Iris.getPipelineManager().getPipelineNullable() instanceof IrisRenderingPipeline current)) {
 			// The pack was turned off: its programs go with it.
@@ -182,9 +213,16 @@ public final class IrisFoliageShaders {
 			closePrograms();
 			owner = current;
 			generation++;
-			build(current);
+			//? <26.3 {
+			/*build(current);
+			*///?}
 		}
-		return main != null;
+		//? >=26.3 {
+		// Iris supplies the program itself; see setUp.
+		return true;
+		//?} else {
+		/*return main != null;
+		*///?}
 	}
 
 	static int generation() {
@@ -192,7 +230,7 @@ public final class IrisFoliageShaders {
 	}
 
 	//? >=1.21.11 {
-	/^* The program one of the renderer's pipelines draws with, or null for any other pipeline, left to Iris. ^/
+	/** The program one of the renderer's pipelines draws with, or null for any other pipeline, left to Iris. */
 	public static GlProgram programFor(RenderPipeline requested) {
 		if (requested == null || Iris.getPipelineManager().getPipelineNullable() != owner) {
 			return null;
@@ -203,15 +241,15 @@ public final class IrisFoliageShaders {
 		return requested == shadowPipeline ? shadow : null;
 	}
 	//?} else {
-	/^/^¹* The program the renderer draws foliage with in the pack's own pass, or in its shadow pass. ¹^/
+	/*/^* The program the renderer draws foliage with in the pack's own pass, or in its shadow pass. ^/
 	static ShaderInstance program(boolean shadowPass) {
 		return shadowPass ? shadow : main;
 	}
 
-	/^¹*
+	/^*
 	 * Sets what the mod's part of a program reads, once the program is applied: none of it is among the uniforms a shader
 	 * instance knows, which Iris lists itself, so each is set on the program directly.
-	 ¹^/
+	 ^/
 	static void setSwayUniforms(ShaderInstance program, float intensity, float calmSway, float edgeMinX, float edgeMinZ,
 			float edgeMaxX,
 			float edgeMaxZ, int cameraX, int cameraY, int cameraZ, float offsetX, float offsetY, float offsetZ,
@@ -225,25 +263,25 @@ public final class IrisFoliageShaders {
 		GL20.glUniform1f(GL20.glGetUniformLocation(id, "mc2_GameTime"), gameTime);
 		GL20.glUniform4f(GL20.glGetUniformLocation(id, "mc2_Weather"), weather.x, weather.y, weather.z, weather.w);
 	}
-	^///?}
+	*///?}
 
 	static boolean hasShadowProgram() {
 		return shadow != null;
 	}
 
-	/^*
+	/**
 	 * Tells Iris which block the next vertices belong to, as it is told for the chunk mesh, so the pack sees the same
 	 * block ids, light emission and block centres on foliage the renderer draws.
-	 ^/
+	 */
 	static void beginBlock(BufferBuilder builder, BlockState state, int x, int y, int z) {
 		Object2IntMap<BlockState> ids = WorldRenderingSettings.INSTANCE.getBlockStateIds();
 		if (ids != null && (Object) builder instanceof BlockSensitiveBufferBuilder blocks) {
 			//? >=1.21.1 {
 			blocks.beginBlock(ids.getOrDefault(state, -1), (byte) 0, (byte) state.getLightEmission(), x, y, z);
 			//?} else {
-			/^// Before 1.21.1 ids are shorts and no light emission is written; Iris passes -1 for the render type of a block.
+			/*// Before 1.21.1 ids are shorts and no light emission is written; Iris passes -1 for the render type of a block.
 			blocks.beginBlock((short) ids.getOrDefault(state, -1), (short) -1, x, y, z);
-			^///?}
+			*///?}
 		}
 	}
 
@@ -253,7 +291,7 @@ public final class IrisFoliageShaders {
 		}
 	}
 
-	/^* Marks what the renderer draws as terrain cutout for the pack, which some packs read to tell passes apart. ^/
+	/** Marks what the renderer draws as terrain cutout for the pack, which some packs read to tell passes apart. */
 	static Object beginTerrainPhase() {
 		WorldRenderingPipeline current = Iris.getPipelineManager().getPipelineNullable();
 		if (current == null) {
@@ -264,7 +302,7 @@ public final class IrisFoliageShaders {
 		return previous;
 	}
 
-	/^* Takes what {@link #beginTerrainPhase} returned, typed loosely so callers never name Iris's classes. ^/
+	/** Takes what {@link #beginTerrainPhase} returned, typed loosely so callers never name Iris's classes. */
 	static void endTerrainPhase(Object previous) {
 		WorldRenderingPipeline current = Iris.getPipelineManager().getPipelineNullable();
 		if (current != null && previous instanceof WorldRenderingPhase phase) {
@@ -272,7 +310,9 @@ public final class IrisFoliageShaders {
 		}
 	}
 
-	/^* Builds the mod's two programs for a pack; on any failure leaves none, and says why once. ^/
+	// Not on 26.3 yet: Iris supplies the pack's own program there for now; see setUp.
+	//? <26.3 {
+	/*/^* Builds the mod's two programs for a pack; on any failure leaves none, and says why once. ^/
 	private static void build(IrisRenderingPipeline created) {
 		IrisRenderingPipelineAccessor access = (IrisRenderingPipelineAccessor) created;
 		BUILDING.set(true);
@@ -331,8 +371,11 @@ public final class IrisFoliageShaders {
 		}
 	}
 
+	*///?}
+
 	//? >=1.21.11 {
-	/^* Links the program Iris compiled, or fails the same way Iris would for one of the pack's own. ^/
+	//? <26.3 {
+	/*/^* Links the program Iris compiled, or fails the same way Iris would for one of the pack's own. ^/
 	private static GlProgram finish(ShaderSupplier supplier) {
 		int program = supplier.id().program();
 		// 35714 is GL_LINK_STATUS.
@@ -341,6 +384,7 @@ public final class IrisFoliageShaders {
 		}
 		return supplier.shader().get();
 	}
+	*///?}
 
 	private static void closePrograms() {
 		if (main != null) {
@@ -353,10 +397,10 @@ public final class IrisFoliageShaders {
 		}
 	}
 	//?} else {
-	/^/^¹*
+	/*/^*
 	 * Checks the program Iris linked, which only logs a failure before 1.21.11, and ties the plant pushes' uniform block
 	 * to the binding the renderer uploads them to, as the mod's own shader's is.
-	 ¹^/
+	 ^/
 	private static ShaderInstance finish(ShaderInstance program) {
 		int id = program.getId();
 		if (GlStateManager.glGetProgrami(id, 35714) == 0) {
@@ -374,15 +418,15 @@ public final class IrisFoliageShaders {
 		main = null;
 		shadow = null;
 	}
-	^///?}
+	*///?}
 
-	/^* Whether a program of the mod's is being built on this thread. ^/
+	/** Whether a program of the mod's is being built on this thread. */
 	public static boolean isBuilding() {
 		return BUILDING.get();
 	}
 
 	//? >=1.21.11 {
-	/^* The uniform blocks the mod's programs bind on top of Iris's. ^/
+	/** The uniform blocks the mod's programs bind on top of Iris's. */
 	@SuppressWarnings("unchecked")
 	public static <T> List<T> withFoliageLayouts(List<T> irisLayouts) {
 		List<T> all = new ArrayList<>(irisLayouts);
@@ -391,11 +435,11 @@ public final class IrisFoliageShaders {
 	}
 	//?}
 
-	/^*
+	/**
 	 * The pack's vertex shader, as Iris translated it, reading a moved position in place of its own: the position
 	 * input is kept under its name, since Iris binds it by that name, and every use of it reads the moved one instead,
 	 * which a {@code main} of the mod's sets before running the pack's.
-	 ^/
+	 */
 	public static String patchVertex(String vertex) {
 		if (count(POSITION_INPUT, vertex) != 1) {
 			throw new IllegalStateException("Expected one position input in the translated vertex shader");
@@ -419,10 +463,10 @@ public final class IrisFoliageShaders {
 		return found;
 	}
 
-	/^*
+	/**
 	 * What is appended to the pack's vertex shader. The blocks are named with Iris's prefix, which it adds when it
 	 * looks a program's uniform blocks up, and they hold what the mod's own vertex shader reads under the same names.
-	 ^/
+	 */
 	//? >=1.21.11 {
 	private static final String SWAY_SHADER = """
 			// Added by MC2 - Interactive Foliage: the foliage it draws sways as it does without a shader pack.
@@ -452,7 +496,7 @@ public final class IrisFoliageShaders {
 			}
 			""";
 	//?} else {
-	/^// Before 1.21.11 a program reads loose uniforms, and the region's offset is Iris's chunk offset. The pushes' block
+	/*// Before 1.21.11 a program reads loose uniforms, and the region's offset is Iris's chunk offset. The pushes' block
 	// keeps the name the mod's own shader gives it, and is bound by index rather than looked up through Iris.
 	private static final String SWAY_SHADER = """
 			// Added by MC2 - Interactive Foliage: the foliage it draws sways as it does without a shader pack.
@@ -482,7 +526,7 @@ public final class IrisFoliageShaders {
 			    mc2_packMain();
 			}
 			""";
-	^///?}
+	*///?}
 
 	private static String readSway() {
 		String path = "/assets/" + ModTemplate.MOD_ID + "/shaders/include/sway.glsl";
@@ -496,4 +540,4 @@ public final class IrisFoliageShaders {
 		}
 	}
 }
-*///?}
+//?}

@@ -606,10 +606,10 @@ public final class GpuFoliageRenderer {
 	/** The format the regions hold: the mod's own, or the one a shader pack's programs read while one is loaded. */
 	private static VertexFormat regionFormat() {
 		//? iris {
-		/*return meshedForShaderPack ? IrisCompat.shaderPackFormat() : FOLIAGE_FORMAT;
-		*///?} else {
-		return FOLIAGE_FORMAT;
-		//?}
+		return meshedForShaderPack ? IrisCompat.shaderPackFormat() : FOLIAGE_FORMAT;
+		//?} else {
+		/*return FOLIAGE_FORMAT;
+		*///?}
 	}
 	/** Our own per-vertex data: the plant's anchor block and its two weights, one float each. */
 	private static final int WEIGHT_BYTES = Float.BYTES * 2;
@@ -705,14 +705,14 @@ public final class GpuFoliageRenderer {
 	private static double shelterCheckedZ;
 	private static int meshedPackGeneration;
 	//? iris {
-	/*private static boolean shaderPackSetUp;
+	private static boolean shaderPackSetUp;
 	//? >=1.21.11 {
-	/^* The pipeline drawn with while a shader pack is loaded; see {@link IrisFoliageShaders}. ^/
+	/** The pipeline drawn with while a shader pack is loaded; see {@link IrisFoliageShaders}. */
 	private static RenderPipeline shaderPackPipeline;
-	/^* The same, for drawing into a shader pack's shadow map. ^/
+	/** The same, for drawing into a shader pack's shadow map. */
 	private static RenderPipeline shaderPackShadowPipeline;
 	//?}
-	*///?}
+	//?}
 
 	//? >=1.21.11 {
 	/** Holds the sway settings the shader reads; rewritten only when one of them changes. */
@@ -992,6 +992,11 @@ public final class GpuFoliageRenderer {
 				chunkSection.close();
 				chunkSection = null;
 			}
+			// A frame is prepared as the level's extraction ends and drawn a little later, and in between the regions can
+			// be let go of: a shader pack loading as the level starts to be drawn reloads everything, which discards them
+			// all. What was prepared from them is not drawn then; the next frame is prepared from what is there.
+			pendingDraw = null;
+			pendingLevelUniforms = null;
 			//?}
 		}
 
@@ -1402,6 +1407,7 @@ public final class GpuFoliageRenderer {
 		//? >=26.3 {
 		// Nothing from an earlier frame is drawn, whatever this one decides.
 		pendingDraw = null;
+		pendingLevelUniforms = null;
 		if (hasCamera) {
 			LEVEL_MODEL_VIEW.set(cameraState.viewRotationMatrix);
 		}
@@ -1443,10 +1449,10 @@ public final class GpuFoliageRenderer {
 		}
 		boolean shaderPack = IrisCompat.shaderPackInUse();
 		//? iris {
-		/*if (shaderPack) {
+		if (shaderPack) {
 			setUpShaderPack();
 		}
-		*///?}
+		//?}
 		// Drawn through a shader pack only with the programs built for it. Where they could not be, the chunk mesh keeps
 		// the foliage for as long as that pack is loaded, drawn by the pack as it draws any other block.
 		if (shaderPack && !IrisCompat.programsReady()) {
@@ -1527,17 +1533,33 @@ public final class GpuFoliageRenderer {
 	}
 
 	//? iris {
-	/*/^*
+	/**
 	 * Builds the pipeline the renderer draws with while a shader pack is loaded, once: the pack's programs take the
 	 * place of its shaders, and it holds Iris's terrain format so they find every attribute they read.
-	 ^/
+	 */
 	private static void setUpShaderPack() {
 		if (shaderPackSetUp) {
 			return;
 		}
 		shaderPackSetUp = true;
-		//? >=26.2 {
+		//? >=26.3 {
+		// Compiled by the game first, from the mod's own shaders, and handed to Iris, which draws it with the pack's
+		// terrain cutout program instead while the level is drawn. It holds Iris's terrain format, so that program finds
+		// every attribute it reads, and draws into vanilla's pass, whose one colour target it has to match.
 		shaderPackPipeline = RenderPipeline.builder(RenderPipelines.BLOCK_SNIPPET)
+				.withLocation(Identifier.fromNamespaceAndPath(ModTemplate.MOD_ID, "pipeline/foliage_shader_pack"))
+				.withVertexShader(Identifier.fromNamespaceAndPath(ModTemplate.MOD_ID, "core/foliage_modern"))
+				.withFragmentShader(Identifier.fromNamespaceAndPath(ModTemplate.MOD_ID, "core/foliage_modern"))
+				.withVertexBinding(0, IrisCompat.shaderPackFormat())
+				.withColorTargetState(ColorTargetState.DEFAULT)
+				.withBindGroupLayout(SWAY_SETTINGS)
+				.withBindGroupLayout(GpuFoliageInteraction.LAYOUT)
+				.withShaderDefine("ALPHA_CUTOUT", 0.5F)
+				.build();
+		IrisCompat.setUp(shaderPackPipeline, null, List.of(SWAY_SETTINGS, GpuFoliageInteraction.LAYOUT),
+				GpuFoliageRenderer::drawShadow);
+		//?} elif >=26.2 {
+		/*shaderPackPipeline = RenderPipeline.builder(RenderPipelines.BLOCK_SNIPPET)
 				.withLocation(Identifier.fromNamespaceAndPath(ModTemplate.MOD_ID, "pipeline/foliage_shader_pack"))
 				.withVertexShader(Identifier.fromNamespaceAndPath(ModTemplate.MOD_ID, "core/foliage"))
 				.withFragmentShader(Identifier.fromNamespaceAndPath(ModTemplate.MOD_ID, "core/foliage"))
@@ -1562,8 +1584,8 @@ public final class GpuFoliageRenderer {
 				.build();
 		IrisCompat.setUp(shaderPackPipeline, shaderPackShadowPipeline,
 				List.of(SWAY_SETTINGS, GpuFoliageInteraction.LAYOUT), GpuFoliageRenderer::drawShadow);
-		//?} elif >=1.21.11 {
-		/^// Before 26.2 depth is not reversed, so the shadow map takes the same test as everything else. The shadow pipeline is
+		*///?} elif >=1.21.11 {
+		/*// Before 26.2 depth is not reversed, so the shadow map takes the same test as everything else. The shadow pipeline is
 		// a pipeline of its own only so the pack's shadow program is the one it draws with.
 		shaderPackPipeline = blockPipeline("pipeline/foliage_shader_pack", IrisCompat.shaderPackFormat());
 		shaderPackShadowPipeline = blockPipeline("pipeline/foliage_shader_pack_shadow", IrisCompat.shaderPackFormat());
@@ -1571,13 +1593,13 @@ public final class GpuFoliageRenderer {
 				List.of(new RenderPipeline.UniformDescription(SWAY_SETTINGS_UNIFORM, UniformType.UNIFORM_BUFFER),
 						new RenderPipeline.UniformDescription(GpuFoliageInteraction.UNIFORM, UniformType.UNIFORM_BUFFER)),
 				GpuFoliageRenderer::drawShadow);
-		^///?} else {
-		/^// Before 1.21.11 the renderer draws with the pack's programs themselves, so only the shadow draw is handed over.
+		*///?} else {
+		/*// Before 1.21.11 the renderer draws with the pack's programs themselves, so only the shadow draw is handed over.
 		IrisCompat.setUp(GpuFoliageRenderer::drawShadow);
-		^///?}
+		*///?}
 	}
 
-	*///?}
+	//?}
 
 	/** Holds the sun's projection for drawing into a shadow map: a shader pack's, or Polytone's. */
 	//? >=26.1.2 {
@@ -1640,11 +1662,11 @@ public final class GpuFoliageRenderer {
 	}
 
 	//? iris {
-	/*/^*
+	/**
 	 * Draws the foliage into a shader pack's shadow map, called by Iris in the middle of its shadow pass, so plants cast
 	 * shadows that sway with them. Every section near the player the chunk mesh left its foliage out of is drawn: the
 	 * shadow's view is not the camera's, so neither the camera's frustum nor Sodium's view of what is visible applies.
-	 ^/
+	 */
 	private static void drawShadow(Matrix4f modelView, Matrix4f projection, double cameraX, double cameraY, double cameraZ) {
 		Minecraft minecraft = Minecraft.getInstance();
 		if (!active || !meshedForShaderPack || !IrisCompat.hasShadowProgram() || minecraft.level == null) {
@@ -1654,12 +1676,12 @@ public final class GpuFoliageRenderer {
 			//? >=1.21.11 {
 			submitDraws(minecraft, new Vec3(cameraX, cameraY, cameraZ), modelView, projection, null, null);
 			//?} else {
-			/^IrisCompat.inTerrainPhase(() -> drawLegacy(minecraft, new Vec3(cameraX, cameraY, cameraZ), DRAWN, modelView,
+			/*IrisCompat.inTerrainPhase(() -> drawLegacy(minecraft, new Vec3(cameraX, cameraY, cameraZ), DRAWN, modelView,
 					projection));
-			^///?}
+			*///?}
 		}
 	}
-	*///?}
+	//?}
 
 	/**
 	 * Works out this frame's draw calls into {@link #DRAWN} and {@link #draws}: the sections the chunk mesh left their
@@ -1736,13 +1758,17 @@ public final class GpuFoliageRenderer {
 		// a copy of Sodium's while Sodium draws them, the terrain's own -- a resource pack's included -- otherwise. Where
 		// those do not compile, the mod's own. While Sodium draws the chunks the terrain's shaders are not what the chunks
 		// around the foliage are drawn with, so the mod keeps to its own rather than follow them.
-		boolean sodium = SodiumBridge.drawsChunks();
+		// While a shader pack is loaded, with the pack's own program, which Iris puts in place of the pipeline's as the
+		// level is drawn; the pipeline is compiled here all the same, since Iris builds on what the game compiled.
+		boolean shaderPack = meshedForShaderPack;
+		boolean sodium = !shaderPack && SodiumBridge.drawsChunks();
 		CompiledRenderPipeline sodiumPipeline = sodium ? SodiumFoliageShader.compiled(SODIUM_PIPELINE) : null;
-		CompiledRenderPipeline terrainPipeline = sodium ? null : TerrainFoliageShader.compiled(TERRAIN_PIPELINE);
+		CompiledRenderPipeline terrainPipeline = shaderPack || sodium ? null : TerrainFoliageShader.compiled(TERRAIN_PIPELINE);
 		boolean sodiumShaders = sodiumPipeline != null;
 		boolean terrainShaders = terrainPipeline != null;
-		CompiledRenderPipeline pipeline = sodiumShaders ? sodiumPipeline
-				: terrainShaders ? terrainPipeline : compiledPipeline();
+		CompiledRenderPipeline pipeline = shaderPack ? compiledPipeline(shaderPackPipeline)
+				: sodiumShaders ? sodiumPipeline
+				: terrainShaders ? terrainPipeline : compiledPipeline(PIPELINE);
 		if (pipeline == null) {
 			return;
 		}
@@ -1751,16 +1777,19 @@ public final class GpuFoliageRenderer {
 		// Where each region is. The terrain's shaders read it from the section's block, and the terrain's own block holds
 		// the view and the atlas's size, which their fragment shader samples the atlas by. The others read it from a
 		// transform: every region's offset from the camera, in one mapping of vanilla's transform buffer, which stays
-		// valid until the frame ends.
-		GpuBufferSlice[] offsets = new GpuBufferSlice[regions.length];
-		GpuBufferSlice terrainUniform = null;
-		if (terrainShaders) {
-			terrainUniform = RenderSystem.getDynamicUniforms().writeTerrainTransform(LEVEL_MODEL_VIEW,
-					atlas.getTextureView().getWidth(0), atlas.getTextureView().getHeight(0));
-			for (int i = 0; i < regions.length; i++) {
-				offsets[i] = regions[i].chunkSection().slice();
+		// valid until the frame ends. Both hold the view, so both are written as the level starts to be drawn, once the
+		// view is final -- see writeLevelUniforms -- and read by the draw from these.
+		GpuBufferSlice[] regionBlocks = new GpuBufferSlice[regions.length];
+		GpuBufferSlice[] terrainBlock = new GpuBufferSlice[1];
+		pendingLevelUniforms = () -> {
+			if (terrainShaders) {
+				terrainBlock[0] = RenderSystem.getDynamicUniforms().writeTerrainTransform(LEVEL_MODEL_VIEW,
+						atlas.getTextureView().getWidth(0), atlas.getTextureView().getHeight(0));
+				for (int i = 0; i < regions.length; i++) {
+					regionBlocks[i] = regions[i].chunkSection().slice();
+				}
+				return;
 			}
-		} else {
 			Vector4f noModulation = new Vector4f(1.0F, 1.0F, 1.0F, 1.0F);
 			Matrix4f noTextureTransform = new Matrix4f();
 			DynamicGpuData.Transform[] transforms = new DynamicGpuData.Transform[regions.length];
@@ -1775,11 +1804,10 @@ public final class GpuFoliageRenderer {
 								(float) (origin.getZ() - camera.z)),
 						noTextureTransform);
 			}
-			offsets = RenderSystem.getDynamicUniforms().writeTransforms(transforms);
-		}
+			System.arraycopy(RenderSystem.getDynamicUniforms().writeTransforms(transforms), 0, regionBlocks, 0,
+					regions.length);
+		};
 		String regionUniform = terrainShaders ? "ChunkSection" : "DynamicTransforms";
-		GpuBufferSlice terrainBlock = terrainUniform;
-		GpuBufferSlice[] regionBlocks = offsets;
 		int[] drawList = Arrays.copyOf(draws, drawsSize);
 
 		// The shared index buffer is replaced, the old one closed, whenever it has to grow, so it may not grow inside the
@@ -1795,17 +1823,19 @@ public final class GpuFoliageRenderer {
 		GpuBuffer settings = swaySettings(camera);
 		GpuBuffer interaction = GpuFoliageInteraction.upload(camera);
 
-		pendingDraw = pass -> {
+		java.util.function.Consumer<RenderPass> draw = pass -> {
 			GpuBuffer indexBuffer = indices.getBuffer();
-			if (indexBuffer == null || !indices.hasStorage(indicesNeeded)) {
+			if (indexBuffer == null || !indices.hasStorage(indicesNeeded) || regions.length > 0 && regionBlocks[0] == null) {
+				// Not drawn where the level's uniforms were not written this frame.
 				return;
 			}
-			pass.setPipeline(pipeline);
+			// Asked for again here, as the level is drawn, which is when Iris hands back the pack's program in its place.
+			pass.setPipeline(shaderPack ? RenderSystem.getCompiledPipeline(shaderPackPipeline) : pipeline);
 			// Projection, fog and the globals are bound by vanilla as it opens the pass. The chunk shaders pick mip levels
 			// themselves, so they sample the atlas as the chunk mesh does: smoothly, between mip levels. The mod's own shader
 			// reads it as the atlas is set to be read.
-			if (terrainBlock != null) {
-				pass.setUniform("TerrainUniform", terrainBlock);
+			if (terrainBlock[0] != null) {
+				pass.setUniform("TerrainUniform", terrainBlock[0]);
 			}
 			pass.setUniform(sodiumShaders ? SodiumFoliageShader.BLOCK_TEXTURE : "Sampler0", atlas.getTextureView(),
 					sodiumShaders || terrainShaders
@@ -1828,14 +1858,33 @@ public final class GpuFoliageRenderer {
 				pass.drawIndexed(indexCountFor(drawList[i + 2]), 1, 0, drawList[i + 1], 0);
 			}
 		};
+		// Drawn as the pack's cutout terrain, which some packs read to tell what they are drawing apart.
+		pendingDraw = shaderPack ? pass -> IrisCompat.inTerrainPhase(() -> draw.accept(pass)) : draw;
 	}
 
 	/** This frame's foliage, prepared and waiting for vanilla's pass, or null when there is nothing to draw. */
 	private static java.util.function.Consumer<RenderPass> pendingDraw;
+	/** Writes this frame's uniforms that hold the view, once it is final; see {@link #writeLevelUniforms}. */
+	private static Runnable pendingLevelUniforms;
+
+	/**
+	 * Writes the uniforms of this frame's foliage that hold the view -- each region's transform, or the terrain's own block
+	 * -- called by LevelPassMixin as vanilla starts to draw the level, before any pass is open. The view is final only
+	 * then: while a shader pack is loaded Iris moves the camera's bobbing out of the projection and into the view just
+	 * before the level is drawn, and foliage drawn with the view as it was extracted slid about with every step.
+	 */
+	public static void writeLevelUniforms(Matrix4f view) {
+		Runnable write = pendingLevelUniforms;
+		pendingLevelUniforms = null;
+		if (write != null) {
+			LEVEL_MODEL_VIEW.set(view);
+			write.run();
+		}
+	}
 	/** The matrix vanilla draws the level with this frame: the camera's rotation, which it pushes as it starts. */
 	private static final Matrix4f LEVEL_MODEL_VIEW = new Matrix4f();
-	/** Vanilla's own terrain pipeline, as compiled when the mod's last failed to; see {@link #compiledPipeline}. */
-	private static CompiledRenderPipeline pipelineFailedWith;
+	/** Vanilla's own terrain pipeline as compiled when each of the mod's last failed to; see {@link #compiledPipeline}. */
+	private static final Map<RenderPipeline, CompiledRenderPipeline> PIPELINES_FAILED_WITH = new java.util.IdentityHashMap<>();
 
 	/**
 	 * Draws the foliage prepared this frame into vanilla's pass, called by LevelPassMixin once the opaque terrain is in
@@ -1857,21 +1906,21 @@ public final class GpuFoliageRenderer {
 	 * is remembered here until the game reloads its shaders -- which shows as its own terrain pipeline coming back as a
 	 * different compiled one, since a reload compiles everything afresh and closes what it had.
 	 */
-	private static CompiledRenderPipeline compiledPipeline() {
+	private static CompiledRenderPipeline compiledPipeline(RenderPipeline requested) {
 		CompiledRenderPipeline terrain = RenderSystem.getCompiledPipelineNullable(RenderPipelines.SOLID_TERRAIN);
-		if (pipelineFailedWith != null && pipelineFailedWith == terrain) {
+		if (PIPELINES_FAILED_WITH.containsKey(requested) && PIPELINES_FAILED_WITH.get(requested) == terrain) {
 			return null;
 		}
 		CompiledRenderPipeline compiled;
 		try {
-			compiled = RenderSystem.getCompiledPipelineNullable(PIPELINE);
+			compiled = RenderSystem.getCompiledPipelineNullable(requested);
 		} catch (RuntimeException e) {
 			// A shader that does not compile is thrown rather than handed back as null.
 			ModTemplate.LOGGER.error("The GPU foliage pipeline did not compile; the foliage it holds is not drawn", e);
 			compiled = null;
 		}
 		if (compiled == null) {
-			pipelineFailedWith = terrain;
+			PIPELINES_FAILED_WITH.put(requested, terrain);
 		}
 		return compiled;
 	}
@@ -3012,12 +3061,12 @@ public final class GpuFoliageRenderer {
 					// Another mod may draw the plant lower than its block, as the chunk mesh shows it.
 					float lift = TerrainSlabsCompat.offsetY(level, pos, state);
 					//? iris {
-					/*if (meshedForShaderPack) {
+					if (meshedForShaderPack) {
 						// The pack reads which block each vertex belongs to, and where its centre is, as it does on the
 						// chunk mesh; Iris writes them as the vertices go in.
 						IrisCompat.beginBlock(builder, state, offsetX + dx, offsetY + dy, offsetZ + dz);
 					}
-					*///?}
+					//?}
 					//? >=26.1.2 {
 					modelRenderer.tesselateBlock(output, offsetX + dx, offsetY + dy + lift, offsetZ + dz,
 							level, pos, state, GpuFoliageSplit.modelFor(state, models.get(state)),
@@ -3051,10 +3100,10 @@ public final class GpuFoliageRenderer {
 		}
 
 		//? iris {
-		/*if (meshedForShaderPack) {
+		if (meshedForShaderPack) {
 			IrisCompat.endBlock(builder);
 		}
-		*///?}
+		//?}
 		//? >=1.21.1 {
 		MeshData mesh = builder.build();
 		//?} else {
@@ -3075,10 +3124,10 @@ public final class GpuFoliageRenderer {
 			// shader packs -- and the vertices would then be read at a stride they were not written at. A
 			// section that comes back in another format is left to the chunk mesh instead of drawn as noise.
 			//? iris {
-			/*VertexFormat expected = meshedForShaderPack ? IrisCompat.shaderPackMeshFormat() : DefaultVertexFormat.BLOCK;
-			*///?} else {
-			VertexFormat expected = DefaultVertexFormat.BLOCK;
-			//?}
+			VertexFormat expected = meshedForShaderPack ? IrisCompat.shaderPackMeshFormat() : DefaultVertexFormat.BLOCK;
+			//?} else {
+			/*VertexFormat expected = DefaultVertexFormat.BLOCK;
+			*///?}
 			if (!expected.equals(mesh.drawState().format())) {
 				warnForeignVertexFormat(mesh.drawState().format());
 				removeSection(key);

@@ -1,6 +1,6 @@
 package net.karto.mc2.mc2_interactivefoliage.mixin.iris;
 
-//? >=1.21.11 && iris {
+//? >=1.21.11 && iris && <26.3 {
 
 /*import com.mojang.blaze3d.opengl.GlProgram;
 import com.mojang.blaze3d.opengl.GlRenderPipeline;
