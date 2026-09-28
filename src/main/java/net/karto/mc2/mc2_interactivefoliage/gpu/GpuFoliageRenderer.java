@@ -712,7 +712,10 @@ public final class GpuFoliageRenderer {
 	/** The same, for drawing into a shader pack's shadow map. */
 	private static RenderPipeline shaderPackShadowPipeline;
 	//?}
-	//?}
+	//?} elif >=26.3 {
+	/*// Never set where there is no shader pack support: no frame is drawn through a pack there.
+	private static RenderPipeline shaderPackPipeline;
+	*///?}
 
 	//? >=1.21.11 {
 	/** Holds the sway settings the shader reads; rewritten only when one of them changes. */

@@ -106,6 +106,13 @@ deps.sodium = "zg4YQ9EL"
 deps.sway = "XM676SHi"
 publish.additionalVersions = ["26.1.1", "26.1"]
 
+[neoforge."26.3"]
+deps.minecraft = "26.3"
+deps.neoforge = "26.3.0.26-beta"
+deps.sway = "26eSF65d"
+# Compiled against only, shipped by nobody: Sodium 0.9.2+mc26.3. There is no Iris for NeoForge 26.3 yet.
+deps.sodium = "VHtnT9Q4"
+
 [neoforge."26.2"]
 deps.minecraft = "26.2"
 deps.sway = "tdbnjztx"

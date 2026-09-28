@@ -59,6 +59,15 @@ class Context(
 		project.sc.properties.rawOrNull("publish", "additionalVersions")?.to<List<String>>().orEmpty()
 	}
 
+	/**
+	 * Whether this version carries the shader pack support, as Stonecutter's `iris` constant says: wherever there is an
+	 * Iris to write it against. There is none for NeoForge 26.3 yet.
+	 */
+	val shaderPackSupport: Boolean by lazy {
+		stonecutter.eval(currentMcVersion, ">=1.20.1")
+			&& !(loader is Loader.NeoForge && stonecutter.eval(currentMcVersion, ">=26.3"))
+	}
+
 	val javaVersion: JavaVersion by lazy {
 		when {
 			stonecutter.eval(currentMcVersion, ">=26") -> JavaVersion.VERSION_25

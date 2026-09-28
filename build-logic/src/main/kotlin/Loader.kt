@@ -146,13 +146,18 @@ sealed class Loader(val id: String) {
 					if (ctx.stonecutter.eval(ctx.currentMcVersion, ">=1.20.1")) {
 						add(ForgeMixin("${ctx.modId}.gpu.mixins.json"))
 					}
-					// Shader pack support, as on Fabric.
-					if (ctx.stonecutter.eval(ctx.currentMcVersion, ">=1.20.1")) {
+					// Shader pack support, as on Fabric, where there is an Iris for the loader to write it against.
+					if (ctx.shaderPackSupport) {
 						add(ForgeMixin("${ctx.modId}.iris.mixins.json"))
 					}
-					// Polytone's shadow map, as on Fabric.
-					if (ctx.stonecutter.eval(ctx.currentMcVersion, ">=1.21.1")) {
+					// Polytone's shadow map, as on Fabric: not on 26.3 yet.
+					if (ctx.stonecutter.eval(ctx.currentMcVersion, ">=1.21.1")
+						&& !ctx.stonecutter.eval(ctx.currentMcVersion, ">=26.3")) {
 						add(ForgeMixin("${ctx.modId}.polytone.mixins.json"))
+					}
+					// Vanilla's render pass, as on Fabric.
+					if (ctx.stonecutter.eval(ctx.currentMcVersion, ">=26.3")) {
+						add(ForgeMixin("${ctx.modId}.pass.mixins.json"))
 					}
 				}
 			)

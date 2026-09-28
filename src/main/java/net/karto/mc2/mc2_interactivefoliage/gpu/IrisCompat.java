@@ -48,7 +48,10 @@ final class IrisCompat {
 		//? iris {
 		return IRIS && IrisFoliageShaders.shaderPackInUse();
 		//?} else {
-		/*return false;
+		/*// An Iris installed where the support has not been written counts as a pack always loaded, with no programs to
+		// draw through it: the chunk mesh keeps the foliage, drawn by the pack, rather than the renderer drawing it over
+		// the pack unlit.
+		return net.karto.mc2.mc2_interactivefoliage.ModTemplate.xplat().isModLoaded("iris");
 		*///?}
 	}
 
@@ -171,5 +174,21 @@ final class IrisCompat {
 		}
 	}
 	//?}
+
+	//? !iris && >=26.3 {
+	/*// Where the support has not been written no frame is drawn through a pack, and these are never reached.
+	static com.mojang.renderpearl.api.pipeline.CompiledRenderPipeline withFoliageProgram(
+			com.mojang.renderpearl.api.pipeline.CompiledRenderPipeline iris) {
+		return iris;
+	}
+
+	static void bindSwayBlocks(com.mojang.renderpearl.api.buffers.GpuBuffer settings,
+			com.mojang.renderpearl.api.buffers.GpuBuffer interaction) {
+	}
+
+	static void inTerrainPhase(Runnable draw) {
+		draw.run();
+	}
+	*///?}
 }
 //?}

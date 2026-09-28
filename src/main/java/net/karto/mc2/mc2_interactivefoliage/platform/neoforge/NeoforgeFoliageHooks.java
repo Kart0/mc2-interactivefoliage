@@ -31,6 +31,9 @@ import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.client.event.ModelEvent;
 import net.neoforged.neoforge.client.event.RenderLevelStageEvent;
+//? >=26.3 {
+import net.neoforged.neoforge.client.event.ExtractLevelRenderStateEvent;
+//?}
 import net.neoforged.neoforge.event.level.ChunkEvent;
 
 import java.util.ArrayList;
@@ -45,12 +48,20 @@ public final class NeoforgeFoliageHooks {
 	private NeoforgeFoliageHooks() {
 	}
 
-	//? >=1.21.11 {
+	//? >=26.3 {
+	// From 26.3 the opaque world is drawn inside one pass vanilla opens itself, and AfterOpaqueBlocks fires inside it,
+	// where no buffer may be written. The frame is prepared as the level's extraction ends instead -- as Fabric's
+	// END_EXTRACTION does -- and drawn into vanilla's pass by LevelPassMixin.
 	@SubscribeEvent
+	public static void onExtractLevelRenderState(ExtractLevelRenderStateEvent event) {
+		GpuFoliageRenderer.draw(event.getRenderState());
+	}
+	//?} elif >=1.21.11 {
+	/^@SubscribeEvent
 	public static void onRenderLevelStage(RenderLevelStageEvent.AfterOpaqueBlocks event) {
 		GpuFoliageRenderer.draw(event.getLevelRenderState());
 	}
-	//?} else {
+	^///?} else {
 	/^// Straight after the cutout terrain, the last of the opaque layers. Sodium fires the same stage as it
 	// draws its own layers. The camera, the frustum and the terrain's matrices come with it.
 	@SubscribeEvent

@@ -28,6 +28,13 @@ neoForge {
 	version = prop("deps.neoforge")
 	accessTransformers.from(rootProject.file("src/main/resources/aw/${stonecutter.current.version}.cfg"))
 	validateAccessTransformers = true
+	// The NeoForm runtime this plugin brings fails to recompile 26.3's sources (an anonymous HolderSet.Named narrowing
+	// contents()); a newer one does.
+	if (stonecutter.eval(stonecutter.current.version, ">=26.3")) {
+		neoFormRuntime {
+			version = "2.0.31"
+		}
+	}
 
 	if (hasProperty("deps.parchment")) parchment {
 		val (mc, ver) = prop("deps.parchment").split(':')
@@ -44,6 +51,11 @@ neoForge {
 			// NeoForge validates every draw in the dev environment only, and the check indexes 16 vertex bindings
 			// into the one-element arrays Iris answers for its pipelines, crashing the first frame with a shader pack.
 			systemProperty("neoforge.disableGlValidation", "true")
+			// 26.3's version manifest asks for this export, which the plugin leaves out (it passes the rest, among them
+			// -XX:StackShadowPages=32, whose absence killed Fabric's dev runs); the launcher passes it.
+			if (stonecutter.eval(stonecutter.current.version, ">=26.3")) {
+				jvmArguments.addAll("--add-exports", "java.base/jdk.internal.misc=ALL-UNNAMED")
+			}
 		}
 		register("server") {
 			server()
@@ -70,8 +82,9 @@ dependencies {
 	// jarJar(libs.moulberry.mixinconstraints)
 	implementation("maven.modrinth:sway:${prop("deps.sway")}")
 	// Optional dependencies: compiled against for the shader pack support, where it has been written.
+	// Only where there is one to compile against: no Iris exists for NeoForge 26.3 yet.
 	if (stonecutter.eval(stonecutter.current.version, ">=1.21.1")) {
-		compileOnly("maven.modrinth:iris:${prop("deps.iris")}")
+		if (hasProperty("deps.iris")) compileOnly("maven.modrinth:iris:${prop("deps.iris")}")
 		compileOnly("maven.modrinth:sodium:${prop("deps.sodium")}")
 	}
 }

@@ -36,8 +36,9 @@ stonecutter parameters {
 	swaps["mod_group"] = "\"${properties.get<String>("mod.group")}\";"
 	swaps["minecraft"] = "\"${current.version}\";"
 	constants["release"] = properties.get<String>("mod.id") != "modtemplate"
-	// Where the shader pack support has been written; the build scripts ask the same of each version.
-	constants["iris"] = eval(current.version, ">=1.20.1")
+	// Where the shader pack support has been written; the build scripts ask the same of each version. There is no Iris
+	// for NeoForge 26.3 to write it against yet.
+	constants["iris"] = eval(current.version, ">=1.20.1") && current.project != "26.3-neoforge"
 }
 
 for (version in stonecutter.versions.map { it.version }.distinct()) tasks.register("publish$version") {
