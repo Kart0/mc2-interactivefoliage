@@ -484,6 +484,32 @@ public final class GpuFoliageRenderer {
 			.withBindGroupLayout(SWAY_SETTINGS)
 			.withBindGroupLayout(GpuFoliageInteraction.LAYOUT)
 			.build();
+
+	/^*
+	 * The pipeline foliage is drawn with while the terrain's shaders compile with the sway spliced in: the chunk mesh's
+	 * own shaders, so foliage is lit and coloured as the terrain around it, a resource pack's shaders included. See
+	 * {@link TerrainFoliageShader}, which compiles it. Vanilla's terrain snippet is private, so what it holds is listed:
+	 * the section's block and the terrain's own, and no transform, which the terrain's shaders do not read.
+	 ^/
+	private static final RenderPipeline TERRAIN_PIPELINE = RenderPipeline.builder()
+			.withLocation(Identifier.fromNamespaceAndPath(ModTemplate.MOD_ID, "pipeline/foliage_terrain"))
+			.withVertexShader(TerrainFoliageShader.VERTEX)
+			.withFragmentShader(TerrainFoliageShader.TERRAIN)
+			.withVertexBinding(0, FOLIAGE_FORMAT)
+			.withPrimitiveTopology(PrimitiveTopology.QUADS)
+			.withDepthStencilState(DepthStencilState.DEFAULT)
+			.withColorTargetState(ColorTargetState.DEFAULT)
+			.withBindGroupLayout(BindGroupLayouts.GLOBALS)
+			.withBindGroupLayout(BindGroupLayouts.FOG)
+			.withBindGroupLayout(BindGroupLayouts.SAMPLER0)
+			.withBindGroupLayout(BindGroupLayouts.SAMPLER2)
+			.withBindGroupLayout(BindGroupLayouts.PROJECTION)
+			.withBindGroupLayout(BindGroupLayouts.CHUNK_SECTION)
+			.withBindGroupLayout(BindGroupLayouts.TERRAIN_INFO)
+			.withBindGroupLayout(SWAY_SETTINGS)
+			.withBindGroupLayout(GpuFoliageInteraction.LAYOUT)
+			.withShaderDefine("ALPHA_CUTOUT", 0.5F)
+			.build();
 	*///?}
 
 	//? >=26.2 && <26.3 {
@@ -929,11 +955,44 @@ public final class GpuFoliageRenderer {
 			}
 		}
 
+		//? >=26.3 {
+		/*/^*
+		 * The terrain shaders' ChunkSection block for this region, made when first asked for, while a frame is prepared.
+		 * <p>
+		 * It holds the region's corner and full visibility, which never change for a region, so it is written once. The
+		 * game's own storage for these blocks is not used: it lends one storage out for one kind of use at a time, and on
+		 * 26.3 that storage is also the vertex buffer the chunks are drawn from with multidraw, which asking for the
+		 * other kind closes mid-frame.
+		 ^/
+		private GpuBuffer chunkSection;
+
+		GpuBuffer chunkSection() {
+			if (chunkSection == null) {
+				ByteBuffer data = MemoryUtil.memAlloc(DynamicGpuData.CHUNK_SECTION_UBO_SIZE);
+				try {
+					Std140Builder.intoBuffer(data).putIVec3(origin.getX(), origin.getY(), origin.getZ()).putFloat(1.0F);
+					data.position(0);
+					chunkSection = RenderSystem.getDevice().createBuffer(() -> "MC2 foliage chunk section",
+							GpuBuffer.USAGE_UNIFORM, data);
+				} finally {
+					MemoryUtil.memFree(data);
+				}
+			}
+			return chunkSection;
+		}
+		*///?}
+
 		void closeBuffers() {
 			if (vertices != null) {
 				vertices.close();
 				vertices = null;
 			}
+			//? >=26.3 {
+			/*if (chunkSection != null) {
+				chunkSection.close();
+				chunkSection = null;
+			}
+			*///?}
 		}
 
 		void free() {
@@ -1673,33 +1732,54 @@ public final class GpuFoliageRenderer {
 	 ^/
 	private static void submitDraws(Minecraft minecraft, Vec3 camera, Matrix4f shadowModelView, Matrix4f shadowProjection,
 			GpuTextureView shadowColor, GpuTextureView shadowDepth) {
-		// While Sodium draws the chunks, with a copy of its chunk shaders where it compiles, so the foliage is lit and fogged
-		// exactly as the terrain around it; the mod's own otherwise.
-		CompiledRenderPipeline sodiumPipeline = SodiumBridge.drawsChunks()
-				? SodiumFoliageShader.compiled(SODIUM_PIPELINE) : null;
+		// With the shaders the chunks are drawn with, so the foliage is lit and coloured exactly as the terrain around it:
+		// a copy of Sodium's while Sodium draws them, the terrain's own -- a resource pack's included -- otherwise. Where
+		// those do not compile, the mod's own. While Sodium draws the chunks the terrain's shaders are not what the chunks
+		// around the foliage are drawn with, so the mod keeps to its own rather than follow them.
+		boolean sodium = SodiumBridge.drawsChunks();
+		CompiledRenderPipeline sodiumPipeline = sodium ? SodiumFoliageShader.compiled(SODIUM_PIPELINE) : null;
+		CompiledRenderPipeline terrainPipeline = sodium ? null : TerrainFoliageShader.compiled(TERRAIN_PIPELINE);
 		boolean sodiumShaders = sodiumPipeline != null;
-		CompiledRenderPipeline pipeline = sodiumShaders ? sodiumPipeline : compiledPipeline();
+		boolean terrainShaders = terrainPipeline != null;
+		CompiledRenderPipeline pipeline = sodiumShaders ? sodiumPipeline
+				: terrainShaders ? terrainPipeline : compiledPipeline();
 		if (pipeline == null) {
 			return;
 		}
-		// Every region's offset from the camera, in one mapping of vanilla's transform buffer, which stays valid until
-		// the frame ends.
 		Region[] regions = DRAWN.toArray(new Region[0]);
-		Vector4f noModulation = new Vector4f(1.0F, 1.0F, 1.0F, 1.0F);
-		Matrix4f noTextureTransform = new Matrix4f();
-		DynamicGpuData.Transform[] transforms = new DynamicGpuData.Transform[regions.length];
-		for (int i = 0; i < regions.length; i++) {
-			BlockPos origin = regions[i].origin;
-			transforms[i] = new DynamicGpuData.Transform(
-					LEVEL_MODEL_VIEW,
-					noModulation,
-					new Vector3f(
-							(float) (origin.getX() - camera.x),
-							(float) (origin.getY() - camera.y),
-							(float) (origin.getZ() - camera.z)),
-					noTextureTransform);
+		AbstractTexture atlas = minecraft.getTextureManager().getTexture(TextureAtlas.LOCATION_BLOCKS);
+		// Where each region is. The terrain's shaders read it from the section's block, and the terrain's own block holds
+		// the view and the atlas's size, which their fragment shader samples the atlas by. The others read it from a
+		// transform: every region's offset from the camera, in one mapping of vanilla's transform buffer, which stays
+		// valid until the frame ends.
+		GpuBufferSlice[] offsets = new GpuBufferSlice[regions.length];
+		GpuBufferSlice terrainUniform = null;
+		if (terrainShaders) {
+			terrainUniform = RenderSystem.getDynamicUniforms().writeTerrainTransform(LEVEL_MODEL_VIEW,
+					atlas.getTextureView().getWidth(0), atlas.getTextureView().getHeight(0));
+			for (int i = 0; i < regions.length; i++) {
+				offsets[i] = regions[i].chunkSection().slice();
+			}
+		} else {
+			Vector4f noModulation = new Vector4f(1.0F, 1.0F, 1.0F, 1.0F);
+			Matrix4f noTextureTransform = new Matrix4f();
+			DynamicGpuData.Transform[] transforms = new DynamicGpuData.Transform[regions.length];
+			for (int i = 0; i < regions.length; i++) {
+				BlockPos origin = regions[i].origin;
+				transforms[i] = new DynamicGpuData.Transform(
+						LEVEL_MODEL_VIEW,
+						noModulation,
+						new Vector3f(
+								(float) (origin.getX() - camera.x),
+								(float) (origin.getY() - camera.y),
+								(float) (origin.getZ() - camera.z)),
+						noTextureTransform);
+			}
+			offsets = RenderSystem.getDynamicUniforms().writeTransforms(transforms);
 		}
-		GpuBufferSlice[] offsets = RenderSystem.getDynamicUniforms().writeTransforms(transforms);
+		String regionUniform = terrainShaders ? "ChunkSection" : "DynamicTransforms";
+		GpuBufferSlice terrainBlock = terrainUniform;
+		GpuBufferSlice[] regionBlocks = offsets;
 		int[] drawList = Arrays.copyOf(draws, drawsSize);
 
 		// The shared index buffer is replaced, the old one closed, whenever it has to grow, so it may not grow inside the
@@ -1720,13 +1800,16 @@ public final class GpuFoliageRenderer {
 			if (indexBuffer == null || !indices.hasStorage(indicesNeeded)) {
 				return;
 			}
-			AbstractTexture atlas = minecraft.getTextureManager().getTexture(TextureAtlas.LOCATION_BLOCKS);
 			pass.setPipeline(pipeline);
-			// Projection, fog and the globals are bound by vanilla as it opens the pass. Sodium's shaders pick mip levels
-			// themselves, so they sample the atlas as Sodium's chunks do: smoothly, between mip levels. The mod's own shader
+			// Projection, fog and the globals are bound by vanilla as it opens the pass. The chunk shaders pick mip levels
+			// themselves, so they sample the atlas as the chunk mesh does: smoothly, between mip levels. The mod's own shader
 			// reads it as the atlas is set to be read.
+			if (terrainBlock != null) {
+				pass.setUniform("TerrainUniform", terrainBlock);
+			}
 			pass.setUniform(sodiumShaders ? SodiumFoliageShader.BLOCK_TEXTURE : "Sampler0", atlas.getTextureView(),
-					sodiumShaders ? RenderSystem.getSamplerCache().getClampToEdge(FilterMode.LINEAR, true) : atlas.getSampler());
+					sodiumShaders || terrainShaders
+							? RenderSystem.getSamplerCache().getClampToEdge(FilterMode.LINEAR, true) : atlas.getSampler());
 			pass.setUniform(sodiumShaders ? SodiumFoliageShader.LIGHT_TEXTURE : "Sampler2", minecraft.gameRenderer.lightmap(),
 					RenderSystem.getSamplerCache().getClampToEdge(FilterMode.LINEAR));
 			pass.setUniform(SWAY_SETTINGS_UNIFORM, settings);
@@ -1736,7 +1819,7 @@ public final class GpuFoliageRenderer {
 			for (int i = 0; i < drawList.length; i += 3) {
 				int regionIndex = drawList[i];
 				if (regionIndex != boundRegion) {
-					pass.setUniform("DynamicTransforms", offsets[regionIndex]);
+					pass.setUniform(regionUniform, regionBlocks[regionIndex]);
 					pass.setVertexBuffer(0, regions[regionIndex].vertices.slice());
 					boundRegion = regionIndex;
 				}
