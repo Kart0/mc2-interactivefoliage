@@ -1673,9 +1673,11 @@ public final class GpuFoliageRenderer {
 			return;
 		}
 		if (collectDraws(null, null)) {
-			//? >=1.21.11 {
-			submitDraws(minecraft, new Vec3(cameraX, cameraY, cameraZ), modelView, projection, null, null);
-			//?} else {
+			//? >=26.3 {
+			drawIntoShadowMap(minecraft, new Vec3(cameraX, cameraY, cameraZ), modelView, projection);
+			//?} elif >=1.21.11 {
+			/*submitDraws(minecraft, new Vec3(cameraX, cameraY, cameraZ), modelView, projection, null, null);
+			*///?} else {
 			/*IrisCompat.inTerrainPhase(() -> drawLegacy(minecraft, new Vec3(cameraX, cameraY, cameraZ), DRAWN, modelView,
 					projection));
 			*///?}
@@ -1879,7 +1881,8 @@ public final class GpuFoliageRenderer {
 	 * then: while a shader pack is loaded Iris moves the camera's bobbing out of the projection and into the view just
 	 * before the level is drawn, and foliage drawn with the view as it was extracted slid about with every step.
 	 */
-	public static void writeLevelUniforms(Matrix4f view) {
+	public static void writeLevelUniforms(Matrix4f view, GpuBufferSlice terrainFog) {
+		levelFog = terrainFog;
 		Runnable write = pendingLevelUniforms;
 		pendingLevelUniforms = null;
 		if (write != null) {
@@ -1887,6 +1890,11 @@ public final class GpuFoliageRenderer {
 			write.run();
 		}
 	}
+	/**
+	 * The fog vanilla draws this frame's terrain with. It sets it only inside its main pass, so the shadow draw, which
+	 * comes before, binds it itself; see drawIntoShadowMap.
+	 */
+	private static GpuBufferSlice levelFog;
 	/** The matrix vanilla draws the level with this frame: the camera's rotation, which it pushes as it starts. */
 	private static final Matrix4f LEVEL_MODEL_VIEW = new Matrix4f();
 	/** Vanilla's own terrain pipeline as compiled when each of the mod's last failed to; see {@link #compiledPipeline}. */
@@ -1903,6 +1911,93 @@ public final class GpuFoliageRenderer {
 			draw.accept(pass);
 		}
 	}
+
+	//? iris {
+	/**
+	 * Draws the foliage {@link #collectDraws} found into a shader pack's shadow map, all at once and in a pass of the
+	 * mod's own: Iris runs its shadow callbacks with no pass open, before vanilla opens its main one. Iris turns the
+	 * depth test round, turns culling off and sizes the viewport for every pipeline drawn while it draws shadows, and
+	 * the pack's shadow program binds the map as it is set up, so the pass is opened on the main target as Iris opens
+	 * its own. What was prepared for vanilla's pass is left alone: it holds copies of its own.
+	 */
+	private static void drawIntoShadowMap(Minecraft minecraft, Vec3 camera, Matrix4f modelView, Matrix4f projection) {
+		// The pushes are the ones written for the screen this frame: writing them again would move the springs twice.
+		GpuBuffer interaction = GpuFoliageInteraction.uploaded();
+		GpuBufferSlice fog = levelFog;
+		if (interaction == null || fog == null || compiledPipeline(shaderPackPipeline) == null) {
+			return;
+		}
+		Region[] regions = DRAWN.toArray(new Region[0]);
+		for (Region region : regions) {
+			if (region.vertices == null) {
+				// Let go of since the frame was prepared; the next shadow pass draws from what is there.
+				return;
+			}
+		}
+		// Every region's offset from the camera, seen from the sun.
+		Vector4f noModulation = new Vector4f(1.0F, 1.0F, 1.0F, 1.0F);
+		Matrix4f noTextureTransform = new Matrix4f();
+		DynamicGpuData.Transform[] transforms = new DynamicGpuData.Transform[regions.length];
+		for (int i = 0; i < regions.length; i++) {
+			BlockPos origin = regions[i].origin;
+			transforms[i] = new DynamicGpuData.Transform(
+					modelView,
+					noModulation,
+					new Vector3f(
+							(float) (origin.getX() - camera.x),
+							(float) (origin.getY() - camera.y),
+							(float) (origin.getZ() - camera.z)),
+					noTextureTransform);
+		}
+		GpuBufferSlice[] regionBlocks = RenderSystem.getDynamicUniforms().writeTransforms(transforms);
+		int[] drawList = Arrays.copyOf(draws, drawsSize);
+		int longestDraw = 0;
+		for (int i = 2; i < drawList.length; i += 3) {
+			longestDraw = Math.max(longestDraw, drawList[i]);
+		}
+		// No pass is open, so the shared index buffer may grow here; vanilla's pass asks for it again as it draws.
+		RenderSystem.AutoStorageIndexBuffer indices = RenderSystem.getSequentialBuffer(PrimitiveTopology.QUADS);
+		GpuBuffer indexBuffer = indices.getBuffer(indexCountFor(longestDraw));
+		GpuBuffer settings = swaySettings(camera);
+		// The sun's projection, as Iris hands it over, as on 26.2.
+		GpuBufferSlice sunProjection = shadowProjectionBuffer().getBuffer(projection);
+		AbstractTexture atlas = minecraft.getTextureManager().getTexture(TextureAtlas.LOCATION_BLOCKS);
+		RenderTarget target = minecraft.gameRenderer.mainRenderTarget();
+		try (RenderPass pass = RenderSystem.getDevice()
+				.createCommandEncoder()
+				.createRenderPass(
+						() -> "MC2 foliage shadow",
+						target.getColorTextureView(),
+						Optional.empty(),
+						target.getDepthTextureView(),
+						OptionalDouble.empty())) {
+			// As vanilla binds them as it opens its main pass; the projection is the sun's, and the fog -- set by vanilla
+			// only inside that pass -- this frame's terrain fog.
+			RenderSystem.bindDefaultUniforms(pass);
+			// Iris hands back the pack's shadow program in the pipeline here, and the mod's swaying copy takes its place.
+			pass.setPipeline(IrisCompat.withFoliageProgram(RenderSystem.getCompiledPipeline(shaderPackPipeline)));
+			pass.setUniform("Projection", sunProjection);
+			pass.setUniform("Fog", fog);
+			pass.setUniform("Sampler0", atlas.getTextureView(), atlas.getSampler());
+			pass.setUniform("Sampler2", minecraft.gameRenderer.lightmap(),
+					RenderSystem.getSamplerCache().getClampToEdge(FilterMode.LINEAR));
+			pass.setUniform(SWAY_SETTINGS_UNIFORM, settings);
+			pass.setUniform(GpuFoliageInteraction.UNIFORM, interaction);
+			pass.setIndexBuffer(indexBuffer, indices.type());
+			IrisCompat.bindSwayBlocks(settings, interaction);
+			int boundRegion = -1;
+			for (int i = 0; i < drawList.length; i += 3) {
+				int regionIndex = drawList[i];
+				if (regionIndex != boundRegion) {
+					pass.setUniform("DynamicTransforms", regionBlocks[regionIndex]);
+					pass.setVertexBuffer(0, regions[regionIndex].vertices.slice());
+					boundRegion = regionIndex;
+				}
+				pass.drawIndexed(indexCountFor(drawList[i + 2]), 1, 0, drawList[i + 1], 0);
+			}
+		}
+	}
+	//?}
 
 	/**
 	 * The mod's pipeline as the game has compiled it, or null where it could not be.

@@ -209,6 +209,16 @@ public final class GpuFoliageInteraction {
 		}
 		return buffer;
 	}
+
+	//? >=26.3 {
+	/**
+	 * The pushes as last written, or null before any were: for drawing the foliage again in the same frame, as into a
+	 * shader pack's shadow map, without moving the plants' springs a second time.
+	 */
+	static GpuBuffer uploaded() {
+		return buffer;
+	}
+	//?}
 	//?}
 
 	/** Moves every plant's spring towards Sway's current push, or back to upright once Sway lets go. */

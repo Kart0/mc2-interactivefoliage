@@ -61,6 +61,7 @@ import com.mojang.renderpearl.backend.opengl.GlRenderPipeline;
 import com.mojang.renderpearl.backend.opengl.VertexArray;
 import com.mojang.renderpearl.frontend.FrontendRenderPipeline;
 import net.irisshaders.iris.api.v0.IrisProgram;
+import net.irisshaders.iris.api.v0.IrisShadowProgram;
 import net.irisshaders.iris.gl.IrisRenderSystem;
 import net.irisshaders.iris.mixinterface.GlRenderPipelineAccess;
 import org.lwjgl.opengl.GL;
@@ -191,14 +192,17 @@ public final class IrisFoliageShaders {
 		//? >=26.3 {
 		// On 26.3 Iris swaps the program of any pipeline it has been told about for the pack's own, as it does for the
 		// terrain's, and builds the pipeline that draws it; the renderer then puts its own program in the pack's place in
-		// that pipeline (see withFoliageProgram). Nothing is drawn into the shadow map yet. Iris refuses a pipeline told
-		// about twice.
+		// that pipeline (see withFoliageProgram). Iris keeps the shadow pass's programs apart, so the same pipeline is
+		// told about for both, and turns the depth test round itself there for every pipeline. Iris refuses a pipeline
+		// told about twice.
 		if (!assigned) {
 			assigned = true;
 			IrisApi.getInstance().assignPipeline(foliagePipeline, IrisProgram.TERRAIN_CUTOUT);
+			IrisApi.getInstance().assignPipelineShadow(foliagePipeline, IrisShadowProgram.SHADOW_TERRAIN_CUTOUT);
 		}
-		//?} elif >=26.1.2 {
-		/*if (!shadowCallbackRegistered) {
+		//?}
+		//? >=26.1.2 {
+		if (!shadowCallbackRegistered) {
 			shadowCallbackRegistered = true;
 			// Called by Iris in its shadow pass once the terrain is in the shadow map, with the sun's matrices and the camera
 			// it rendered from.
@@ -206,7 +210,7 @@ public final class IrisFoliageShaders {
 					(modelView, projection, cameraX, cameraY, cameraZ, tickDelta) ->
 							drawShadow(modelView, projection, cameraX, cameraY, cameraZ));
 		}
-		*///?}
+		//?}
 	}
 
 	/**
@@ -427,11 +431,13 @@ public final class IrisFoliageShaders {
 	 * The pipeline to draw the foliage with through the pack: the one Iris built around the pack's program for the
 	 * renderer's pipeline, with the mod's program in its place and the attributes tied to it, as Iris ties them -- by
 	 * name, Iris's prefixed first. Everything else is Iris's: the uniforms, their slots, the state. Built inside the pass
-	 * the first time, as Iris builds its own, and kept until the program goes. Where the mod has no program, the pack's
-	 * own is drawn with, unswayed.
+	 * the first time, as Iris builds its own, and kept until the program goes. In Iris's shadow pass the program is the
+	 * mod's shadow one, as Iris's is the pack's shadow one there. Where the mod has no program, the pack's own is drawn
+	 * with, unswayed.
 	 */
 	static CompiledRenderPipeline withFoliageProgram(CompiledRenderPipeline iris) {
-		if (main == null || !(iris instanceof FrontendRenderPipeline frontend)
+		GlProgram program = IrisApi.getInstance().isRenderingShadowPass() ? shadow : main;
+		if (program == null || !(iris instanceof FrontendRenderPipeline frontend)
 				|| !(frontend.backendRenderPipeline() instanceof GlRenderPipeline irisPipeline)) {
 			return iris;
 		}
@@ -451,9 +457,9 @@ public final class IrisFoliageShaders {
 			vertexBuffers.add(new BackendRenderPipeline.CreateInfo.VertexBuffer(slot, format.getVertexSize(),
 					format.getStepRate()));
 			for (VertexFormatElement element : format.getElements()) {
-				int location = GL33C.glGetAttribLocation(main.getProgramId(), "iris_" + element.name());
+				int location = GL33C.glGetAttribLocation(program.getProgramId(), "iris_" + element.name());
 				if (location == -1) {
-					location = GL33C.glGetAttribLocation(main.getProgramId(), element.name());
+					location = GL33C.glGetAttribLocation(program.getProgramId(), element.name());
 				}
 				if (location != -1) {
 					attributes.add(new BackendRenderPipeline.CreateInfo.AttribBinding(slot, location, element.offset(),
@@ -465,10 +471,10 @@ public final class IrisFoliageShaders {
 				original.shaders(), vertexBuffers, attributes, original.uniforms(), original.pushConstantsSize(),
 				original.depthStencilState(), original.polygonMode(), original.cull(), original.colorTargetStates(),
 				original.primitiveTopology());
-		VertexArray vertexArray = VertexArray.createSource(GL.getCapabilities(), new HashSet<>()).apply(main, createInfo);
+		VertexArray vertexArray = VertexArray.createSource(GL.getCapabilities(), new HashSet<>()).apply(program, createInfo);
 		VERTEX_ARRAYS.add(vertexArray);
 		built = new FrontendRenderPipeline(frontend.name(),
-				new GlRenderPipeline(IrisRenderSystem.getGlDevice(), createInfo, main, vertexArray),
+				new GlRenderPipeline(IrisRenderSystem.getGlDevice(), createInfo, program, vertexArray),
 				formats, frontend.uniformIndices(), frontend.uniforms(), frontend.colorTargetStates(),
 				frontend.wantsDepthTexture(), frontend.pushConstantSize());
 		WITH_FOLIAGE_PROGRAM.put(iris, built);

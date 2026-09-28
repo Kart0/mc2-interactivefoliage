@@ -29,13 +29,14 @@ public abstract class LevelPassMixin {
 
 	/**
 	 * The view is final only here, before any pass is open: while a shader pack is loaded, Iris moves the camera's
-	 * bobbing out of the projection and into the view just before the level is drawn.
+	 * bobbing out of the projection and into the view just before the level is drawn. The terrain's fog is kept for the
+	 * shadow map a shader pack draws next, before vanilla sets it.
 	 */
 	@Inject(method = "render", at = @At("HEAD"))
 	private void mc2$writeFoliageUniforms(GraphicsResourceAllocator resourceAllocator, boolean renderOutline,
 			CameraRenderState cameraState, GpuBufferSlice terrainFog, Vector4f fogColor, boolean shouldRenderSky,
 			boolean consistentDepthRequired, CallbackInfo ci) {
-		GpuFoliageRenderer.writeLevelUniforms(cameraState.viewRotationMatrix);
+		GpuFoliageRenderer.writeLevelUniforms(cameraState.viewRotationMatrix, terrainFog);
 	}
 
 	@Inject(method = "executeSolid", at = @At(value = "INVOKE",
