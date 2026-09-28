@@ -2,7 +2,7 @@ package net.karto.mc2.mc2_interactivefoliage.mixin.iris;
 
 //? iris {
 
-import it.unimi.dsi.fastutil.objects.Object2ObjectMap;
+/*import it.unimi.dsi.fastutil.objects.Object2ObjectMap;
 import net.irisshaders.iris.gl.blending.AlphaTest;
 import net.irisshaders.iris.gl.state.ShaderAttributeInputs;
 import net.irisshaders.iris.gl.texture.TextureType;
@@ -19,10 +19,10 @@ import org.spongepowered.asm.mixin.injection.Redirect;
 import java.util.EnumMap;
 import java.util.Map;
 
-/**
+/^*
  * Where a foliage program's vertex shader is changed: right after Iris has translated the pack's source, and before it
  * is compiled. Only while the mod builds one of its own; the pack's programs pass through untouched.
- */
+ ^/
 @Mixin(value = ShaderCreator.class, remap = false)
 public abstract class ShaderCreatorMixin {
 
@@ -36,7 +36,7 @@ public abstract class ShaderCreatorMixin {
 		Map<PatchShaderType, String> translated = TransformPatcher.patchVanilla(name, vertex, geometry, tessControl,
 				tessEval, fragment, alpha, isLines, isClouds, hasChunkOffset, inputs, textureMap);
 	//?} else {
-	/*// Before 1.21.11 clouds are not told apart, and shadow programs are built by the same method as the rest.
+	/^// Before 1.21.11 clouds are not told apart, and shadow programs are built by the same method as the rest.
 	@Redirect(method = "create", at = @At(value = "INVOKE",
 			target = "Lnet/irisshaders/iris/pipeline/transform/TransformPatcher;patchVanilla(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Lnet/irisshaders/iris/gl/blending/AlphaTest;ZZLnet/irisshaders/iris/gl/state/ShaderAttributeInputs;Lit/unimi/dsi/fastutil/objects/Object2ObjectMap;)Ljava/util/Map;"))
 	private static Map<PatchShaderType, String> mc2$swayFoliage(String name, String vertex, String geometry,
@@ -45,7 +45,7 @@ public abstract class ShaderCreatorMixin {
 			Object2ObjectMap<Tri<String, TextureType, TextureStage>, String> textureMap) {
 		Map<PatchShaderType, String> translated = TransformPatcher.patchVanilla(name, vertex, geometry, tessControl,
 				tessEval, fragment, alpha, isLines, hasChunkOffset, inputs, textureMap);
-	*///?}
+	^///?}
 		if (!IrisFoliageShaders.isBuilding()) {
 			return translated;
 		}
@@ -56,4 +56,4 @@ public abstract class ShaderCreatorMixin {
 		return patched;
 	}
 }
-//?}
+*///?}

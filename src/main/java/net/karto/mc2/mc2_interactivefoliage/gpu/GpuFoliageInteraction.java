@@ -7,26 +7,26 @@ import com.github.razorplay01.sway.client.SwayEngine;
 import com.github.razorplay01.sway.config.SwayConfig;
 //? >=1.21.11 {
 //? >=26.3 {
-/*import com.mojang.renderpearl.api.buffers.GpuBuffer;
-*///?} else {
-import com.mojang.blaze3d.buffers.GpuBuffer;
-//?}
+import com.mojang.renderpearl.api.buffers.GpuBuffer;
+//?} else {
+/*import com.mojang.blaze3d.buffers.GpuBuffer;
+*///?}
 import com.mojang.blaze3d.buffers.Std140Builder;
 import com.mojang.blaze3d.buffers.Std140SizeCalculator;
 //?}
 //? >=26.2 {
 //? >=26.3 {
-/*import com.mojang.renderpearl.api.pipeline.BindGroupLayout;
-*///?} else {
-import com.mojang.blaze3d.pipeline.BindGroupLayout;
-//?}
+import com.mojang.renderpearl.api.pipeline.BindGroupLayout;
+//?} else {
+/*import com.mojang.blaze3d.pipeline.BindGroupLayout;
+*///?}
 //?}
 //? >=1.21.11 {
 //? >=26.3 {
-/*import com.mojang.renderpearl.api.pipeline.UniformType;
-*///?} else {
-import com.mojang.blaze3d.shaders.UniformType;
-//?}
+import com.mojang.renderpearl.api.pipeline.UniformType;
+//?} else {
+/*import com.mojang.blaze3d.shaders.UniformType;
+*///?}
 import com.mojang.blaze3d.systems.RenderSystem;
 //?}
 import net.karto.mc2.mc2_interactivefoliage.ModTemplate;

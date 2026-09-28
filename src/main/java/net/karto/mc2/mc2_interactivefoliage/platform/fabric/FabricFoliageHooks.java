@@ -7,10 +7,10 @@ import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientChunkEvents;
 import net.fabricmc.fabric.api.client.model.loading.v1.ModelLoadingPlugin;
 import net.fabricmc.fabric.api.client.model.loading.v1.ModelModifier;
 //? >=26.3 {
-/*import net.fabricmc.fabric.api.client.rendering.v1.level.LevelExtractionEvents;
-*///?} elif >=26.1.2 {
-import net.fabricmc.fabric.api.client.rendering.v1.level.LevelRenderEvents;
-//?} elif >=1.21.11 {
+import net.fabricmc.fabric.api.client.rendering.v1.level.LevelExtractionEvents;
+//?} elif >=26.1.2 {
+/*import net.fabricmc.fabric.api.client.rendering.v1.level.LevelRenderEvents;
+*///?} elif >=1.21.11 {
 /*import net.fabricmc.fabric.api.client.rendering.v1.world.WorldRenderEvents;
 *///?} else {
 /*import net.fabricmc.fabric.api.client.rendering.v1.CoreShaderRegistrationCallback;
@@ -54,10 +54,10 @@ public final class FabricFoliageHooks {
 		// foliage is prepared as the level's extraction ends, before anything is drawn, and LevelPassMixin draws it into
 		// that pass.
 		//? >=26.3 {
-		/*LevelExtractionEvents.END_EXTRACTION.register(context -> GpuFoliageRenderer.draw(context.levelState()));
-		*///?} elif >=26.1.2 {
-		LevelRenderEvents.AFTER_OPAQUE_TERRAIN.register(context -> GpuFoliageRenderer.draw(context.levelState()));
-		//?} elif >=1.21.11 {
+		LevelExtractionEvents.END_EXTRACTION.register(context -> GpuFoliageRenderer.draw(context.levelState()));
+		//?} elif >=26.1.2 {
+		/*LevelRenderEvents.AFTER_OPAQUE_TERRAIN.register(context -> GpuFoliageRenderer.draw(context.levelState()));
+		*///?} elif >=1.21.11 {
 		/*// There is no event for the moment the opaque terrain is done before 26.1.2. The one before the
 		// translucent pass is the nearest: the opaque blocks are drawn by then, and the foliage still lands
 		// before anything see-through, which is what it has to be behind.

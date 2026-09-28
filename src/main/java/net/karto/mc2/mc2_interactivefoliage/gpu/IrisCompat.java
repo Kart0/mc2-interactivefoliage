@@ -3,7 +3,7 @@ package net.karto.mc2.mc2_interactivefoliage.gpu;
 //? >=1.20.1 {
 
 //? iris {
-import com.mojang.blaze3d.vertex.BufferBuilder;
+/*import com.mojang.blaze3d.vertex.BufferBuilder;
 import com.mojang.blaze3d.vertex.VertexFormat;
 import net.karto.mc2.mc2_interactivefoliage.ModTemplate;
 import net.minecraft.world.level.block.state.BlockState;
@@ -12,9 +12,9 @@ import com.mojang.blaze3d.pipeline.RenderPipeline;
 
 import java.util.List;
 //?} else {
-/*import net.minecraft.client.renderer.ShaderInstance;
+/^import net.minecraft.client.renderer.ShaderInstance;
+^///?}
 *///?}
-//?}
 
 /**
  * What the renderer asks about shader packs, answered without Iris's classes ever being loaded when Iris is not
@@ -24,13 +24,13 @@ import java.util.List;
 final class IrisCompat {
 
 	//? iris {
-	//? forge {
-	/*// Forge has Oculus, Iris ported to it, under its own id: Forge ignores the Iris id it says it provides.
+	/*//? forge {
+	/^// Forge has Oculus, Iris ported to it, under its own id: Forge ignores the Iris id it says it provides.
 	private static final boolean IRIS = ModTemplate.xplat().isModLoaded("oculus");
-	*///?} else {
+	^///?} else {
 	private static final boolean IRIS = ModTemplate.xplat().isModLoaded("iris");
 	//?}
-	//?}
+	*///?}
 
 	private IrisCompat() {
 	}
@@ -38,59 +38,59 @@ final class IrisCompat {
 	/** Whether a shader pack is loaded, which the renderer then draws through. */
 	static boolean shaderPackInUse() {
 		//? iris {
-		return IRIS && IrisFoliageShaders.shaderPackInUse();
-		//?} else {
-		/*return false;
-		*///?}
+		/*return IRIS && IrisFoliageShaders.shaderPackInUse();
+		*///?} else {
+		return false;
+		//?}
 	}
 
 	/** Whether the programs for the loaded pack are built; builds them the first time a pack is asked about. */
 	static boolean programsReady() {
 		//? iris {
-		return IRIS && IrisFoliageShaders.ready();
-		//?} else {
-		/*return false;
-		*///?}
+		/*return IRIS && IrisFoliageShaders.ready();
+		*///?} else {
+		return false;
+		//?}
 	}
 
 	static boolean hasShadowProgram() {
 		//? iris {
-		return IRIS && IrisFoliageShaders.hasShadowProgram();
-		//?} else {
-		/*return false;
-		*///?}
+		/*return IRIS && IrisFoliageShaders.hasShadowProgram();
+		*///?} else {
+		return false;
+		//?}
 	}
 
 	/** Changes each time a pack loads, so what was meshed for another pack is meshed again. */
 	static int programGeneration() {
 		//? iris {
-		return IRIS ? IrisFoliageShaders.generation() : 0;
-		//?} else {
-		/*return 0;
-		*///?}
+		/*return IRIS ? IrisFoliageShaders.generation() : 0;
+		*///?} else {
+		return 0;
+		//?}
 	}
 
 	//? iris {
-	/** The vertex format a pack's programs read, which the renderer's region buffers hold while one is loaded. */
+	/*/^* The vertex format a pack's programs read, which the renderer's region buffers hold while one is loaded. ^/
 	static VertexFormat shaderPackFormat() {
 		return IrisFoliageShaders.FORMAT;
 	}
 
-	/** The format a section comes out of meshing in while a pack is loaded: Iris's terrain format. */
+	/^* The format a section comes out of meshing in while a pack is loaded: Iris's terrain format. ^/
 	static VertexFormat shaderPackMeshFormat() {
 		return net.irisshaders.iris.vertices.IrisVertexFormats.TERRAIN;
 	}
 
-	/** Draws the foliage into a shader pack's shadow map, from the camera Iris rendered the shadow pass for. */
+	/^* Draws the foliage into a shader pack's shadow map, from the camera Iris rendered the shadow pass for. ^/
 	@FunctionalInterface
 	interface ShadowDraw {
 		void draw(org.joml.Matrix4f modelView, org.joml.Matrix4f projection, double cameraX, double cameraY, double cameraZ);
 	}
 
-	/**
+	/^*
 	 * Hands the renderer's shader pack pipelines -- for the pack's own pass and for its shadow map -- their extra uniform
 	 * blocks (bind group layouts from 26.2, uniform descriptions before) and its shadow draw to the Iris side.
-	 */
+	 ^/
 	//? >=1.21.11 {
 	static void setUp(RenderPipeline pipeline, RenderPipeline shadowPipeline, List<?> layouts,
 			ShadowDraw drawShadow) {
@@ -99,18 +99,18 @@ final class IrisCompat {
 		}
 	}
 	//?} else {
-	/*static void setUp(ShadowDraw drawShadow) {
+	/^static void setUp(ShadowDraw drawShadow) {
 		if (IRIS) {
 			IrisFoliageShaders.setUp(drawShadow);
 		}
 	}
 
-	/^* The pack's program the foliage is drawn with, in its own pass or its shadow pass, or null if there is none. ^/
+	/^¹* The pack's program the foliage is drawn with, in its own pass or its shadow pass, or null if there is none. ¹^/
 	static ShaderInstance program(boolean shadowPass) {
 		return IRIS ? IrisFoliageShaders.program(shadowPass) : null;
 	}
 
-	/^* Sets the sway's own uniforms on a pack's program, once it is applied. ^/
+	/^¹* Sets the sway's own uniforms on a pack's program, once it is applied. ¹^/
 	static void setSwayUniforms(ShaderInstance program, float intensity, float calmSway, org.joml.Vector4f edge,
 			int cameraX, int cameraY,
 			int cameraZ, float offsetX, float offsetY, float offsetZ, float gameTime, org.joml.Vector4f weather) {
@@ -119,7 +119,7 @@ final class IrisCompat {
 					cameraZ, offsetX, offsetY, offsetZ, gameTime, weather);
 		}
 	}
-	*///?}
+	^///?}
 
 	static void beginBlock(BufferBuilder builder, BlockState state, int x, int y, int z) {
 		if (IRIS) {
@@ -133,7 +133,7 @@ final class IrisCompat {
 		}
 	}
 
-	/** Runs a draw as terrain cutout for the pack. */
+	/^* Runs a draw as terrain cutout for the pack. ^/
 	static void inTerrainPhase(Runnable draw) {
 		if (!IRIS) {
 			draw.run();
@@ -146,6 +146,6 @@ final class IrisCompat {
 			IrisFoliageShaders.endTerrainPhase(previous);
 		}
 	}
-	//?}
+	*///?}
 }
 //?}

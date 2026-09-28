@@ -3,7 +3,7 @@ package net.karto.mc2.mc2_interactivefoliage.gpu;
 //? >=1.21.11 {
 
 //? >=26.3 {
-/*import com.mojang.renderpearl.api.pipeline.CompiledRenderPipeline;
+import com.mojang.renderpearl.api.pipeline.CompiledRenderPipeline;
 import com.mojang.renderpearl.api.pipeline.RenderPipeline;
 import com.mojang.renderpearl.api.pipeline.ShaderSource;
 import com.mojang.renderpearl.api.pipeline.ShaderType;
@@ -17,11 +17,11 @@ import java.io.Reader;
 import java.util.HashSet;
 import java.util.Optional;
 import java.util.Set;
-*///?} else {
-import com.mojang.blaze3d.pipeline.RenderPipeline;
+//?} else {
+/*import com.mojang.blaze3d.pipeline.RenderPipeline;
 import com.mojang.blaze3d.shaders.ShaderSource;
 import com.mojang.blaze3d.shaders.ShaderType;
-//?}
+*///?}
 import com.mojang.blaze3d.systems.RenderSystem;
 import net.karto.mc2.mc2_interactivefoliage.ModTemplate;
 import net.minecraft.client.Minecraft;
@@ -75,29 +75,29 @@ final class TerrainFoliageShader {
 			""";
 
 	//? >=26.3 {
-	/*/^*
+	/**
 	 * What goes in next to Position's declaration: the mod's two per-vertex values, at locations well clear of the ones a
 	 * terrain shader gives its own inputs, the blocks the sway reads, and the sway.
-	 ^/
+	 */
 	private static final String ADDITIONS = """
 			layout(location = 14) in float SwayCell;
 			layout(location = 15) in float SwayWeights;
 			#include <mc2_interactivefoliage:foliage_uniforms.glsl>
 			#include <mc2_interactivefoliage:sway.glsl>
 			""";
-	/^* An include, by namespace and path under that namespace's shader includes, or relative to the file. ^/
+	/** An include, by namespace and path under that namespace's shader includes, or relative to the file. */
 	private static final Pattern INCLUDE = Pattern.compile(
 			"^\\s*#include\\s*(?:<([\\w.-]+):([\\w/.-]+)>|\"([\\w/.-]+)\")\\s*$", Pattern.MULTILINE);
 	private static final String VERTEX_FILE = "minecraft:shaders/core/terrain.vsh";
 	private static final String FRAGMENT_FILE = "minecraft:shaders/core/terrain.fsh";
 
-	/^* The pipeline as last compiled, or null where it could not be; built again once the shaders reload. ^/
+	/** The pipeline as last compiled, or null where it could not be; built again once the shaders reload. */
 	private static CompiledRenderPipeline compiled;
-	/^* Vanilla's terrain pipeline as compiled when this one was last built, which a shader reload replaces. ^/
+	/** Vanilla's terrain pipeline as compiled when this one was last built, which a shader reload replaces. */
 	private static CompiledRenderPipeline compiledFor;
 	private static boolean built;
 
-	/^* Both shaders, already written out whole; nothing is left for the compiler to include. ^/
+	/** Both shaders, already written out whole; nothing is left for the compiler to include. */
 	private record BuiltSource(String vertex, String fragment) implements ShaderSource {
 		@Override
 		public String getShader(Identifier id, ShaderType type) {
@@ -116,8 +116,8 @@ final class TerrainFoliageShader {
 		public void close() {
 		}
 	}
-	*///?} else {
-	/** Hands the compiler the spliced vertex shader, and every other shader as the game holds it. */
+	//?} else {
+	/*/^* Hands the compiler the spliced vertex shader, and every other shader as the game holds it. ^/
 	private static final ShaderSource SOURCE = (id, type) -> {
 		String source = Minecraft.getInstance().getShaderManager().getShader(id, type);
 		if (!id.equals(VERTEX) || type != ShaderType.VERTEX) {
@@ -131,17 +131,17 @@ final class TerrainFoliageShader {
 		}
 		return spliced;
 	};
-	//?}
+	*///?}
 
 	private TerrainFoliageShader() {
 	}
 
 	//? >=26.3 {
-	/*/^*
+	/**
 	 * The pipeline compiled from the terrain shaders in use, or null where they could not be read that way or did not
 	 * compile. Built once after each shader reload -- which shows as vanilla's own terrain pipeline coming back as a
 	 * different compiled one -- when the one before is closed. Called while the frame is prepared, with no pass open.
-	 ^/
+	 */
 	static CompiledRenderPipeline compiled(RenderPipeline pipeline) {
 		CompiledRenderPipeline terrain = RenderSystem.getCompiledPipelineNullable(RenderPipelines.SOLID_TERRAIN);
 		if (built && terrain == compiledFor) {
@@ -180,7 +180,7 @@ final class TerrainFoliageShader {
 		return compiled;
 	}
 
-	/^* A shader file as the game reads it -- the topmost resource pack's -- by its full name, or null. ^/
+	/** A shader file as the game reads it -- the topmost resource pack's -- by its full name, or null. */
 	private static String read(String name) {
 		int colon = name.indexOf(':');
 		Optional<Resource> resource = Minecraft.getInstance().getResourceManager()
@@ -195,7 +195,7 @@ final class TerrainFoliageShader {
 		}
 	}
 
-	/^* Every include written out, each once, or null if one can't be found. ^/
+	/** Every include written out, each once, or null if one can't be found. */
 	private static String expand(String source, String from, Set<String> included) {
 		Matcher matcher = INCLUDE.matcher(source);
 		StringBuilder out = new StringBuilder();
@@ -216,16 +216,16 @@ final class TerrainFoliageShader {
 		matcher.appendTail(out);
 		return out.toString();
 	}
-	*///?} else {
-	/**
+	//?} else {
+	/*/^*
 	 * Whether the pipeline compiles from the terrain shaders in use. It is compiled here the first time it is asked about
 	 * after each resource reload -- the game forgets every compiled pipeline then -- and the answer is kept alongside it,
 	 * so asking every frame costs a lookup.
-	 */
+	 ^/
 	static boolean usable(RenderPipeline pipeline) {
 		return RenderSystem.getDevice().precompilePipeline(pipeline, SOURCE).isValid();
 	}
-	//?}
+	*///?}
 
 	/** The terrain vertex shader with the mod's additions spliced in, or null if it isn't shaped the way that needs. */
 	static String splice(String terrain, String additions) {
