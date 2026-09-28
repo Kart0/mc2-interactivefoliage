@@ -1,0 +1,198 @@
+#!/usr/bin/env python3
+"""Builds the MC2 Foliage Atlas from docs/map/curated.json and the source tree.
+
+Checks the hand-written facts against the code -- every file a node names must exist, and every source file and
+shader should be named by some node -- adds what can be read from the code itself (each file's Stonecutter guard,
+its size, the mixin configs), and writes:
+
+  docs/map/foliage-map.json   everything, for tools and conversations
+  docs/map/index.html         the interactive constellation, from template.html with the data inlined
+  docs/VERSION-MAP.md         the same facts as text, per version
+
+Run from anywhere: python docs/map/generate.py   (exits 1 if a named file is missing)
+"""
+import json
+import re
+import sys
+from pathlib import Path
+
+HERE = Path(__file__).resolve().parent
+ROOT = HERE.parents[1]
+JAVA = ROOT / "src/main/java/net/karto/mc2/mc2_interactivefoliage"
+ASSETS = ROOT / "src/main/resources/assets/mc2_interactivefoliage"
+RESOURCES = ROOT / "src/main/resources"
+
+
+def version_key(v):
+	return tuple(int(p) for p in v.split("."))
+
+
+def holds(bound, version):
+	m = re.fullmatch(r"(>=|<=|>|<|=)?(\d+(?:\.\d+)*)", bound.strip())
+	if not m:
+		raise ValueError(f"bad version bound {bound!r}")
+	op, v = m.group(1) or "=", version_key(m.group(2))
+	x = version_key(version)
+	return {">=": x >= v, "<=": x <= v, ">": x > v, "<": x < v, "=": x == v}[op]
+
+
+def applies(node, version, loader=None):
+	if not all(holds(b, version) for b in node.get("versions", [])):
+		return False
+	if loader and "loaders" in node and loader not in node["loaders"]:
+		return False
+	return True
+
+
+def scan_sources():
+	files = {}
+	for path in sorted(JAVA.rglob("*.java")):
+		rel = path.relative_to(JAVA).as_posix()
+		text = path.read_text(encoding="utf-8")
+		guard = next((line.strip() for line in text.splitlines() if line.startswith("//?")), "")
+		files[rel] = {"kind": "java", "lines": text.count("\n") + 1, "guard": guard}
+	for path in sorted((ASSETS / "shaders").rglob("*")):
+		if path.is_file():
+			rel = path.relative_to(ASSETS).as_posix()
+			files[rel] = {"kind": "shader", "lines": path.read_text(encoding="utf-8").count("\n") + 1, "guard": ""}
+	return files
+
+
+def scan_mixin_configs():
+	configs = {}
+	for path in sorted(RESOURCES.glob("*.mixins.json")):
+		data = json.loads(path.read_text(encoding="utf-8"))
+		configs[path.name] = {
+			"plugin": data.get("plugin"),
+			"required": data.get("required", True),
+			"mixins": sorted(data.get("mixins", []) + data.get("client", [])),
+		}
+	return configs
+
+
+def main():
+	curated = json.loads((HERE / "curated.json").read_text(encoding="utf-8"))
+	files = scan_sources()
+	problems, warnings = [], []
+
+	named = set()
+	for node in curated["nodes"]:
+		for f in node.get("files", []):
+			named.add(f)
+			if f not in files:
+				problems.append(f"node '{node['id']}' names {f}, which does not exist")
+	ids = {n["id"] for n in curated["nodes"]}
+	for edge in curated["edges"]:
+		for end in edge[:2]:
+			if end not in ids:
+				problems.append(f"edge {edge} names unknown node '{end}'")
+	for node in curated["nodes"]:
+		for v in curated["meta"]["versions"]:
+			applies(node, v)  # raises on a malformed bound
+	# Plumbing every mod has; not worth a node of its own.
+	trivial = {"ModTemplate.java", "platform/Platform.java", "platform/fabric/datagen/FabricDataGeneratorEntrypoint.java"}
+	unmapped = sorted(f for f in files if f not in named and f not in trivial)
+	for f in unmapped:
+		warnings.append(f"{f} is not named by any node: add it to a node in curated.json")
+
+	data = {
+		"meta": curated["meta"],
+		"groups": curated["groups"],
+		"nodes": [dict(n, fileInfo={f: files[f] for f in n.get("files", []) if f in files}) for n in curated["nodes"]],
+		"edges": [{"source": e[0], "target": e[1], "label": e[2]} for e in curated["edges"]],
+		"matrix": curated["matrix"],
+		"portRecipe": curated["portRecipe"],
+		"rules": curated["rules"],
+		"mixinConfigs": scan_mixin_configs(),
+		"files": files,
+		"unmapped": unmapped,
+	}
+	(HERE / "foliage-map.json").write_text(json.dumps(data, indent=1, ensure_ascii=False) + "\n", encoding="utf-8")
+
+	template = (HERE / "template.html").read_text(encoding="utf-8")
+	marker = "/*MAP_DATA*/null"
+	if marker not in template:
+		problems.append("template.html has no /*MAP_DATA*/null marker")
+	else:
+		inline = json.dumps(data, ensure_ascii=False).replace("</", "<\\/")
+		(HERE / "index.html").write_text(template.replace(marker, inline), encoding="utf-8")
+
+	(ROOT / "docs/VERSION-MAP.md").write_text(markdown(data), encoding="utf-8")
+
+	for w in warnings:
+		print("warning:", w)
+	for p in problems:
+		print("error:", p)
+	print(f"{len(data['nodes'])} nodes, {len(data['edges'])} edges, {len(files)} files, {len(unmapped)} unmapped")
+	return 1 if problems else 0
+
+
+def markdown(data):
+	meta, versions = data["meta"], data["meta"]["versions"]
+	groups = {g["id"]: g for g in data["groups"]}
+	out = [
+		"# MC2 Foliage version map",
+		"",
+		"<!-- Generated by docs/map/generate.py from docs/map/curated.json. Edit that file, then run the script. -->",
+		"",
+		meta["about"],
+		"",
+		"The interactive map is `docs/map/index.html` (open it in a browser). Per-version research notes: `docs/<version>-render-notes.md`.",
+		"",
+		"## Working rules",
+		"",
+		*[f"- {r}" for r in data["rules"]],
+		"",
+		"## Versions at a glance",
+		"",
+		"| | " + " | ".join(versions) + " |",
+		"|---|" + "---|" * len(versions),
+	]
+	for row in data["matrix"]["rows"]:
+		cells = [row["cells"].get(v, "").replace("|", "<br>") for v in versions]
+		out.append(f"| **{row['label']}** | " + " | ".join(cells) + " |")
+	out += ["", "## Porting to a new version", ""]
+	out += [f"{i}. {step}" for i, step in enumerate(data["portRecipe"], 1)]
+	out += ["", "## Pieces", ""]
+	for gid, group in groups.items():
+		members = [n for n in data["nodes"] if n["group"] == gid]
+		if not members:
+			continue
+		out += [f"### {group['label']}", "", group["about"], ""]
+		for n in members:
+			scope = []
+			if n.get("versions"):
+				scope.append(" ".join(n["versions"]))
+			if n.get("loaders"):
+				scope.append("/".join(n["loaders"]))
+			head = f"- **{n['label']}**" + (f" ({', '.join(scope)})" if scope else "")
+			out.append(f"{head}: {n['summary']}")
+			for d in n.get("details", []):
+				out.append(f"  - {d}")
+			for p in n.get("pitfalls", []):
+				out.append(f"  - Pitfall: {p}")
+			if n.get("files"):
+				out.append("  - Files: " + ", ".join(f"`{f}`" for f in n["files"]))
+			links = [f"{e['label']} {e['target']}" for e in data["edges"] if e["source"] == n["id"]]
+			if links:
+				out.append("  - Links: " + "; ".join(links))
+		out.append("")
+	out += ["## What each version carries", ""]
+	for v in versions:
+		loaders = meta["loadersByVersion"][v]
+		out.append(f"- **{v}** ({', '.join(loaders)}): " + ", ".join(
+			n["label"] for n in data["nodes"] if n["kind"] != "version" and applies(n, v)
+			and any(applies(n, v, l) for l in loaders)))
+	out += ["", "## Mixin configs (read from the source tree)", ""]
+	for name, cfg in data["mixinConfigs"].items():
+		extra = []
+		if cfg["plugin"]:
+			extra.append("plugin " + cfg["plugin"].rsplit(".", 1)[-1])
+		if not cfg["required"]:
+			extra.append("not required")
+		out.append(f"- `{name}`" + (f" ({', '.join(extra)})" if extra else "") + ": " + (", ".join(cfg["mixins"]) or "empty"))
+	return "\n".join(out) + "\n"
+
+
+if __name__ == "__main__":
+	sys.exit(main())

@@ -1,0 +1,2323 @@
+{
+ "meta": {
+  "title": "MC2 Foliage Atlas",
+  "about": "How MC2 Interactive Foliage works on every Minecraft version and loader it supports: its pieces, what each one hooks into, and every compatibility layer. Hand-written facts live in docs/map/curated.json; docs/map/generate.py checks them against the source tree, adds what it can read from the code, and writes foliage-map.json, index.html and docs/VERSION-MAP.md from them. Edit curated.json, never the generated files.",
+  "versions": [
+   "1.20.1",
+   "1.21.1",
+   "1.21.11",
+   "26.1.2",
+   "26.2",
+   "26.3"
+  ],
+  "loadersByVersion": {
+   "1.20.1": [
+    "fabric",
+    "forge"
+   ],
+   "1.21.1": [
+    "fabric",
+    "neoforge"
+   ],
+   "1.21.11": [
+    "fabric",
+    "neoforge"
+   ],
+   "26.1.2": [
+    "fabric",
+    "neoforge"
+   ],
+   "26.2": [
+    "fabric",
+    "neoforge"
+   ],
+   "26.3": [
+    "fabric",
+    "neoforge"
+   ]
+  },
+  "rangeSyntax": "A node's 'versions' is a list of Stonecutter-style bounds that must all hold, e.g. \">=1.21.11 <26.3\"; empty means every version. 'loaders' limits it to those loaders; absent means all."
+ },
+ "groups": [
+  {
+   "id": "core",
+   "label": "GPU renderer",
+   "about": "Meshes the foliage near the player on its own and draws it with the sway on the GPU."
+  },
+  {
+   "id": "split",
+   "label": "Mesh split & handover",
+   "about": "Takes the near foliage out of the chunk mesh, and hands it back and forth without a frame of double or missing plants."
+  },
+  {
+   "id": "motion",
+   "label": "Motion",
+   "about": "What moves the plants: Sway's pushes, the calm sway, the rain wind and its shelter."
+  },
+  {
+   "id": "shaders",
+   "label": "Shaders",
+   "about": "The mod's own shader sets, one per generation of Minecraft's shading language, all sharing sway.glsl."
+  },
+  {
+   "id": "terrain",
+   "label": "Terrain look",
+   "about": "Drawing the foliage with the shaders the chunks are drawn with, so it matches vanilla, Sodium and resource packs."
+  },
+  {
+   "id": "sodium",
+   "label": "Sodium & kin",
+   "about": "Sodium, Embeddium and Indium: who meshes and draws the chunks when they are installed."
+  },
+  {
+   "id": "iris",
+   "label": "Shader packs",
+   "about": "Iris and Oculus: the foliage drawn through a shader pack's own programs, swaying, into its shadow map too."
+  },
+  {
+   "id": "polytone",
+   "label": "Polytone",
+   "about": "The foliage in Polytone's shadow map."
+  },
+  {
+   "id": "loader",
+   "label": "Loaders",
+   "about": "Where the mod meets Fabric, NeoForge and Forge."
+  },
+  {
+   "id": "build",
+   "label": "Build & dev",
+   "about": "Stonecutter, build-logic, access wideners, mixin configs and the dev-run traps."
+  },
+  {
+   "id": "external",
+   "label": "Other mods",
+   "about": "Mods the renderer depends on or works with."
+  },
+  {
+   "id": "version",
+   "label": "Versions",
+   "about": "The Minecraft versions the mod is built for."
+  }
+ ],
+ "nodes": [
+  {
+   "id": "renderer",
+   "label": "GpuFoliageRenderer",
+   "group": "core",
+   "kind": "component",
+   "files": [
+    "gpu/GpuFoliageRenderer.java"
+   ],
+   "summary": "The GPU renderer. Meshes every section near the player that holds foliage, packs sections into 8x4x8 regions (Sodium's grouping) and draws each region's visible runs in as few calls as it can.",
+   "details": [
+    "Geometry comes from ModelBlockRenderer.tesselateBlock, the method the section compiler uses, so AO, light and biome tint are vanilla's.",
+    "Each vertex carries two extra values after the block format: SwayCell (which plant, for its push) and SwayWeights (how much of the vertex moves, 10+10 bits, plus 4 bits of wind exposure).",
+    "Rebuilds have a 4 ms budget per frame on every version; the near area adapts its radius.",
+    "Only near the player: further out the chunk mesh keeps the foliage, still.",
+    "Three draw paths by version: drawLegacy (<1.21.11), a pass of its own (1.21.11-26.2), prepare/draw split into vanilla's pass (26.3+)."
+   ],
+   "pitfalls": [
+    "It is one 3300-line file guarded per version; read the branch for the version you work on, not the first one you find."
+   ],
+   "fileInfo": {
+    "gpu/GpuFoliageRenderer.java": {
+     "kind": "java",
+     "lines": 3315,
+     "guard": "//? >=1.20.1 {"
+    }
+   }
+  },
+  {
+   "id": "draw-legacy",
+   "label": "Legacy draw",
+   "group": "core",
+   "kind": "path",
+   "versions": [
+    "<1.21.11"
+   ],
+   "files": [
+    "gpu/GpuFoliageRenderer.java"
+   ],
+   "summary": "Before 1.21.11: a ShaderInstance loaded from JSON and VertexBuffers per region, drawn right away from the loader's render event.",
+   "details": [
+    "Shader registered through CoreShaderRegistrationCallback (Fabric) or RegisterShadersEvent (NeoForge/Forge).",
+    "The frame hook hands over camera, frustum, model view and projection (legacy draw(Vec3, Frustum, Matrix4f, Matrix4f))."
+   ],
+   "fileInfo": {
+    "gpu/GpuFoliageRenderer.java": {
+     "kind": "java",
+     "lines": 3315,
+     "guard": "//? >=1.20.1 {"
+    }
+   }
+  },
+  {
+   "id": "draw-pass",
+   "label": "Own render pass",
+   "group": "core",
+   "kind": "path",
+   "versions": [
+    ">=1.21.11",
+    "<26.3"
+   ],
+   "files": [
+    "gpu/GpuFoliageRenderer.java"
+   ],
+   "summary": "1.21.11 to 26.2: RenderPipelines, compiled by the game, drawn in a render pass the mod opens itself right after the opaque terrain.",
+   "details": [
+    "draw(LevelRenderState) from the loader's opaque-terrain event; submitDraws writes the region transforms and draws.",
+    "From 26.2 depth is reversed, and uniforms are bind group layouts."
+   ],
+   "fileInfo": {
+    "gpu/GpuFoliageRenderer.java": {
+     "kind": "java",
+     "lines": 3315,
+     "guard": "//? >=1.20.1 {"
+    }
+   }
+  },
+  {
+   "id": "draw-split",
+   "label": "Prepare / draw split",
+   "group": "core",
+   "kind": "path",
+   "versions": [
+    ">=26.3"
+   ],
+   "files": [
+    "gpu/GpuFoliageRenderer.java",
+    "mixin/LevelPassMixin.java"
+   ],
+   "summary": "26.3+: the opaque world is drawn inside one pass vanilla opens (Main/Solid), where nothing may be written. So the frame is prepared as the level's extraction ends, the view is written at LevelRenderer.render HEAD, and only bind+draw happens inside vanilla's pass.",
+   "details": [
+    "Prepare: draw(LevelRenderState) at Fabric END_EXTRACTION / NeoForge ExtractLevelRenderStateEvent: collects draws, compiles pipelines, writes sway/push buffers, requests the shared index count.",
+    "writeLevelUniforms at LevelRenderer.render HEAD: region transforms or the terrain's block, with the final view (Iris moves bobbing into it just before).",
+    "drawIntoLevelPass from LevelPassMixin in executeSolid, before the solid features.",
+    "closeBuffers discards what was prepared: a pack switch reloads everything between prepare and draw."
+   ],
+   "pitfalls": [
+    "With a pass open, createRenderPass, writeToBuffer, copies and clears throw; mapped DynamicGpuData writes are fine.",
+    "Never ask for a compiled pipeline inside the pass: PipelineCache.get compiles on demand, and does not remember failures (compiledPipeline remembers them per shader reload).",
+    "Every uniform a pipeline declares must be bound before a draw, or setupDraw dies on a null buffer.",
+    "The shared index buffer may only grow outside a pass: requestIndexCount while preparing, getBuffer() in the pass.",
+    "Do not use DynamicGpuData.writeChunkSections: it shares storage with the MDI vertex buffer. Each region keeps its own ChunkSection UBO."
+   ],
+   "fileInfo": {
+    "gpu/GpuFoliageRenderer.java": {
+     "kind": "java",
+     "lines": 3315,
+     "guard": "//? >=1.20.1 {"
+    },
+    "mixin/LevelPassMixin.java": {
+     "kind": "java",
+     "lines": 50,
+     "guard": "//? >=26.3 {"
+    }
+   }
+  },
+  {
+   "id": "near-area",
+   "label": "Near area & regions",
+   "group": "core",
+   "kind": "component",
+   "files": [
+    "gpu/GpuFoliageRenderer.java"
+   ],
+   "summary": "Which sections the GPU owns: within an adaptive radius of the player, rebuilt nearest first. Regions out of range are freed before anything is drawn.",
+   "details": [
+    "Chunk load/unload come from the loader's chunk events (Sodium overwrites vanilla's dirty-marking routes).",
+    "Light changes and allChanged come through LevelExtractorMixin; block changes through ClientLevelMixin."
+   ],
+   "fileInfo": {
+    "gpu/GpuFoliageRenderer.java": {
+     "kind": "java",
+     "lines": 3315,
+     "guard": "//? >=1.20.1 {"
+    }
+   }
+  },
+  {
+   "id": "split",
+   "label": "GpuFoliageSplit",
+   "group": "split",
+   "kind": "component",
+   "files": [
+    "gpu/GpuFoliageSplit.java"
+   ],
+   "summary": "Decides who draws each plant. Every foliage model is wrapped by a loader-specific model; while a chunk mesher asks it for a block near the player (leaveToGpu), it hands back nothing.",
+   "details": [
+    "A block is foliage when Sway says it is interactive (SwayAPI.isInteractive).",
+    "Meshers hand the model the position: Fabric's rendering API, NeoForge's model extensions, Forge's model data. Vanilla, Sodium 0.6+ and Embeddium all go through them.",
+    "Sodium's LevelSlice (WorldSlice before 0.6) is how a Sodium build is recognised."
+   ],
+   "fileInfo": {
+    "gpu/GpuFoliageSplit.java": {
+     "kind": "java",
+     "lines": 441,
+     "guard": "//? >=1.20.1 {"
+    }
+   }
+  },
+  {
+   "id": "model-fabric",
+   "label": "GpuFoliageModel (FRAPI)",
+   "group": "split",
+   "kind": "hook",
+   "loaders": [
+    "fabric"
+   ],
+   "files": [
+    "gpu/GpuFoliageModel.java",
+    "platform/fabric/FabricFoliageHooks.java"
+   ],
+   "summary": "Fabric: wraps foliage models with ModelLoadingPlugin, outside Sway's wrapper, and withholds quads in emitQuads.",
+   "details": [
+    "modifyModelAfterBake before 1.21.11 (block read from the model id), modifyBlockModelAfterBake from 1.21.11 (the state is handed over)."
+   ],
+   "fileInfo": {
+    "gpu/GpuFoliageModel.java": {
+     "kind": "java",
+     "lines": 91,
+     "guard": "//? fabric {"
+    },
+    "platform/fabric/FabricFoliageHooks.java": {
+     "kind": "java",
+     "lines": 115,
+     "guard": "//? fabric {"
+    }
+   }
+  },
+  {
+   "id": "model-neoforge",
+   "label": "NeoforgeFoliageModel",
+   "group": "split",
+   "kind": "hook",
+   "loaders": [
+    "neoforge"
+   ],
+   "files": [
+    "platform/neoforge/NeoforgeFoliageModel.java",
+    "platform/neoforge/NeoforgeFoliageHooks.java"
+   ],
+   "summary": "NeoForge: wraps inside Sway's wrapper at ModelEvent.ModifyBakingResult. 1.21.1: BakedModelWrapper deciding in getModelData. 1.21.11+: answers the collectParts(level, pos, state, random, parts) extension.",
+   "details": [
+    "Sodium on NeoForge asks through collectParts too (NeoForgeModelAccess.collectPartsOf) with its LevelSlice."
+   ],
+   "fileInfo": {
+    "platform/neoforge/NeoforgeFoliageModel.java": {
+     "kind": "java",
+     "lines": 179,
+     "guard": "//? neoforge && >=1.21.1 {"
+    },
+    "platform/neoforge/NeoforgeFoliageHooks.java": {
+     "kind": "java",
+     "lines": 171,
+     "guard": "//? neoforge && >=1.21.1 {"
+    }
+   }
+  },
+  {
+   "id": "model-forge",
+   "label": "ForgeFoliageModel",
+   "group": "split",
+   "kind": "hook",
+   "loaders": [
+    "forge"
+   ],
+   "versions": [
+    "<1.21.1"
+   ],
+   "files": [
+    "platform/forge/ForgeFoliageModel.java",
+    "platform/forge/ForgeFoliageHooks.java"
+   ],
+   "summary": "Forge 1.20.1: decides in getModelData (vanilla and Embeddium call it for every block) and carries the answer in model data to getQuads. Sits outside Sway's wrapper.",
+   "details": [
+    "Embeddium hands getModelData a generated WorldSliceLocal, not WorldSlice."
+   ],
+   "fileInfo": {
+    "platform/forge/ForgeFoliageModel.java": {
+     "kind": "java",
+     "lines": 70,
+     "guard": "//? forge {"
+    },
+    "platform/forge/ForgeFoliageHooks.java": {
+     "kind": "java",
+     "lines": 141,
+     "guard": "//? forge {"
+    }
+   }
+  },
+  {
+   "id": "handover",
+   "label": "Mesh swap handover",
+   "group": "split",
+   "kind": "hook",
+   "files": [
+    "mixin/SectionMeshSwapMixin.java",
+    "gpu/GpuFoliageSplit.java"
+   ],
+   "summary": "The GPU takes or gives back a section only once the chunk mesh that matches it is on screen, so plants never vanish or double for a frame.",
+   "details": [
+    "Vanilla: LevelRenderer.addRecentlyCompiledChunk (1.20.1), RenderSection.setCompiled (1.21.1), setSectionMesh (1.21.11+).",
+    "Empty builds finish on a worker thread (before 1.21.11 and from 26.1.2): reported through onChunkMeshSwappedElsewhere.",
+    "Sodium: see Sodium upload hook."
+   ],
+   "fileInfo": {
+    "mixin/SectionMeshSwapMixin.java": {
+     "kind": "java",
+     "lines": 84,
+     "guard": "//? >=1.20.1 {"
+    },
+    "gpu/GpuFoliageSplit.java": {
+     "kind": "java",
+     "lines": 441,
+     "guard": "//? >=1.20.1 {"
+    }
+   }
+  },
+  {
+   "id": "dirty",
+   "label": "Change tracking",
+   "group": "split",
+   "kind": "hook",
+   "files": [
+    "mixin/ClientLevelMixin.java",
+    "mixin/LevelExtractorMixin.java"
+   ],
+   "summary": "Keeps the mod's meshes in step: block changes (ClientLevel.setBlocksDirty), light changes (setSectionDirty), and allChanged (resource reload, world swap, video options).",
+   "details": [
+    "The class that marks sections dirty is LevelRenderer before 26.2 and LevelExtractor from 26.2.",
+    "1.21.11-26.1: also catches the cull frustum at prepareCullFrustum (from 26.1.2 the camera state carries it)."
+   ],
+   "fileInfo": {
+    "mixin/ClientLevelMixin.java": {
+     "kind": "java",
+     "lines": 30,
+     "guard": "//? >=1.20.1 {"
+    },
+    "mixin/LevelExtractorMixin.java": {
+     "kind": "java",
+     "lines": 63,
+     "guard": "//? >=1.20.1 {"
+    }
+   }
+  },
+  {
+   "id": "sway-api",
+   "label": "Sway",
+   "group": "external",
+   "kind": "mod",
+   "summary": "Required. Decides which blocks are interactive, how they are pushed (BehaviorPipeline, contributors), and deforms them itself in CPU mode.",
+   "details": [
+    "Modrinth ids per version are in stonecutter.properties.toml (deps.sway).",
+    "Fabric: deforms in FRAPI emitBlockQuads. NeoForge/Forge: deforms in the model, the mod's wrapper sits inside it (NeoForge) or outside it (Forge)."
+   ],
+   "pitfalls": [
+    "Never modify Sway and do not contact its author (user's rule)."
+   ],
+   "fileInfo": {}
+  },
+  {
+   "id": "interaction",
+   "label": "GpuFoliageInteraction",
+   "group": "motion",
+   "kind": "component",
+   "files": [
+    "gpu/GpuFoliageInteraction.java"
+   ],
+   "summary": "Sway's push for each plant, followed through a damped spring and sent to the shader as a uniform block (up to 128 cells), keyed by the plant's anchor block.",
+   "details": [
+    "upload() also steps the springs: call it once per frame. A second draw in the same frame (shadow map) reuses uploaded()."
+   ],
+   "fileInfo": {
+    "gpu/GpuFoliageInteraction.java": {
+     "kind": "java",
+     "lines": 389,
+     "guard": "//? >=1.20.1 {"
+    }
+   }
+  },
+  {
+   "id": "proximity",
+   "label": "SwayProximityForceMixin",
+   "group": "motion",
+   "kind": "hook",
+   "files": [
+    "mixin/SwayProximityForceMixin.java"
+   ],
+   "summary": "While the GPU draws, entities push plants from a little further and a little harder than Sway alone, only as Sway reads it.",
+   "fileInfo": {
+    "mixin/SwayProximityForceMixin.java": {
+     "kind": "java",
+     "lines": 40,
+     "guard": "//? >=1.20.1 {"
+    }
+   }
+  },
+  {
+   "id": "wind",
+   "label": "Rain wind & shelter",
+   "group": "motion",
+   "kind": "component",
+   "files": [
+    "gpu/WindShelter.java"
+   ],
+   "summary": "Rain replaces the calm sway with a west wind with gusts (sway.glsl). WindShelter bakes each plant's exposure (roofs, upwind walls) into 4 bits of SwayWeights while meshing.",
+   "details": [
+    "Weather reaches the shader in the FoliageSway block (>=1.21.11) or as a loose uniform (legacy).",
+    "Tuning constants live in sway.glsl (MC2_WIND_LEAN etc.)."
+   ],
+   "fileInfo": {
+    "gpu/WindShelter.java": {
+     "kind": "java",
+     "lines": 327,
+     "guard": "//? >=1.20.1 {"
+    }
+   }
+  },
+  {
+   "id": "settings",
+   "label": "Settings & screen",
+   "group": "motion",
+   "kind": "component",
+   "files": [
+    "FoliageSettings.java",
+    "FoliageConfigScreen.java",
+    "platform/fabric/FabricModMenuIntegration.java",
+    "platform/fabric/FoliageKeyBindings.java",
+    "platform/neoforge/NeoforgeKeyBindings.java",
+    "platform/forge/ForgeKeyBindings.java"
+   ],
+   "summary": "The mod's own config file next to Sway's, the two-column screen with presets, renderer (CPU/GPU), waving, weather wind and distance.",
+   "pitfalls": [
+    "User-facing text goes through translation keys (the user translates). Update widgets in place, never rebuild the screen."
+   ],
+   "fileInfo": {
+    "FoliageSettings.java": {
+     "kind": "java",
+     "lines": 322,
+     "guard": ""
+    },
+    "FoliageConfigScreen.java": {
+     "kind": "java",
+     "lines": 683,
+     "guard": ""
+    },
+    "platform/fabric/FabricModMenuIntegration.java": {
+     "kind": "java",
+     "lines": 28,
+     "guard": "//? fabric {"
+    },
+    "platform/fabric/FoliageKeyBindings.java": {
+     "kind": "java",
+     "lines": 89,
+     "guard": "//? fabric {"
+    },
+    "platform/neoforge/NeoforgeKeyBindings.java": {
+     "kind": "java",
+     "lines": 94,
+     "guard": "//? neoforge {"
+    },
+    "platform/forge/ForgeKeyBindings.java": {
+     "kind": "java",
+     "lines": 63,
+     "guard": "//? forge {"
+    }
+   }
+  },
+  {
+   "id": "modcompat",
+   "label": "ModCompatRegistry",
+   "group": "motion",
+   "kind": "component",
+   "files": [
+    "ModCompatRegistry.java"
+   ],
+   "summary": "Registers third-party mods' plants with Sway (by id, skipped when the mod is absent), which also makes them GPU foliage.",
+   "fileInfo": {
+    "ModCompatRegistry.java": {
+     "kind": "java",
+     "lines": 367,
+     "guard": ""
+    }
+   }
+  },
+  {
+   "id": "sway-glsl",
+   "label": "sway.glsl",
+   "group": "shaders",
+   "kind": "shader",
+   "files": [
+    "shaders/include/sway.glsl"
+   ],
+   "summary": "The one place the motion is written: calm sway, pushes, rain wind. Spliced into every shader the foliage is drawn with: the mod's, the terrain's, Sodium's and a shader pack's.",
+   "fileInfo": {
+    "shaders/include/sway.glsl": {
+     "kind": "shader",
+     "lines": 175,
+     "guard": ""
+    }
+   }
+  },
+  {
+   "id": "sh-legacy",
+   "label": "foliage_legacy*",
+   "group": "shaders",
+   "kind": "shader",
+   "versions": [
+    "<1.21.11"
+   ],
+   "files": [
+    "shaders/core/foliage_legacy.json",
+    "shaders/core/foliage_legacy.vsh",
+    "shaders/core/foliage_legacy.fsh",
+    "shaders/core/foliage_legacy_1_20.json",
+    "shaders/core/foliage_legacy_1_20.vsh"
+   ],
+   "summary": "JSON ShaderInstance set. 1.21.1: foliage_legacy. 1.20.1: foliage_legacy_1_20 (own vsh with an attributes list; fog measured from the view), sharing the legacy fsh.",
+   "fileInfo": {
+    "shaders/core/foliage_legacy.json": {
+     "kind": "shader",
+     "lines": 26,
+     "guard": ""
+    },
+    "shaders/core/foliage_legacy.vsh": {
+     "kind": "shader",
+     "lines": 153,
+     "guard": ""
+    },
+    "shaders/core/foliage_legacy.fsh": {
+     "kind": "shader",
+     "lines": 27,
+     "guard": ""
+    },
+    "shaders/core/foliage_legacy_1_20.json": {
+     "kind": "shader",
+     "lines": 32,
+     "guard": ""
+    },
+    "shaders/core/foliage_legacy_1_20.vsh": {
+     "kind": "shader",
+     "lines": 152,
+     "guard": ""
+    }
+   }
+  },
+  {
+   "id": "sh-pipeline",
+   "label": "foliage.vsh/.fsh",
+   "group": "shaders",
+   "kind": "shader",
+   "versions": [
+    ">=1.21.11",
+    "<26.3"
+   ],
+   "files": [
+    "shaders/core/foliage.vsh",
+    "shaders/core/foliage.fsh",
+    "shaders/core/foliage_terrain.vsh"
+   ],
+   "summary": "RenderPipeline-era set (1.21.11-26.2). foliage_terrain.vsh is the placeholder name whose source TerrainFoliageShader builds.",
+   "fileInfo": {
+    "shaders/core/foliage.vsh": {
+     "kind": "shader",
+     "lines": 68,
+     "guard": ""
+    },
+    "shaders/core/foliage.fsh": {
+     "kind": "shader",
+     "lines": 26,
+     "guard": ""
+    },
+    "shaders/core/foliage_terrain.vsh": {
+     "kind": "shader",
+     "lines": 27,
+     "guard": ""
+    }
+   }
+  },
+  {
+   "id": "sh-modern",
+   "label": "foliage_modern",
+   "group": "shaders",
+   "kind": "shader",
+   "versions": [
+    ">=26.3"
+   ],
+   "files": [
+    "shaders/core/foliage_modern.vsh",
+    "shaders/core/foliage_modern.fsh",
+    "shaders/include/foliage_uniforms.glsl"
+   ],
+   "summary": "26.3's language: #include, a layout location on every input, compiled to SPIR-V by shaderc (VULKAN always defined). SwayCell at location 4, SwayWeights 5; the sway blocks in include/foliage_uniforms.glsl.",
+   "pitfalls": [
+    "26.3 reordered DynamicTransforms (ModelViewMat, TextureMat, ColorModulator, ModelOffset) and Globals."
+   ],
+   "fileInfo": {
+    "shaders/core/foliage_modern.vsh": {
+     "kind": "shader",
+     "lines": 48,
+     "guard": ""
+    },
+    "shaders/core/foliage_modern.fsh": {
+     "kind": "shader",
+     "lines": 28,
+     "guard": ""
+    },
+    "shaders/include/foliage_uniforms.glsl": {
+     "kind": "shader",
+     "lines": 26,
+     "guard": ""
+    }
+   }
+  },
+  {
+   "id": "shader-sets",
+   "label": "Shader set per jar",
+   "group": "build",
+   "kind": "rule",
+   "files": [],
+   "summary": "build-logic ModPlatformPlugin.configureProcessResources ships only the set a version loads: legacy (<1.21.1: legacy_1_20), pipeline (1.21.11-26.2), modern (26.3+).",
+   "fileInfo": {}
+  },
+  {
+   "id": "shader-verify",
+   "label": "Offline shader check",
+   "group": "shaders",
+   "kind": "rule",
+   "summary": "Every shader step is compiled offline with the game's own shaderc options (Vulkan target, auto bind/map) before a test, and shown in game with a self-made visible test pack (red for terrain.vsh, blue for Sodium's block_layer_opaque).",
+   "details": [
+    "Test packs live in versions/<v>/run/resourcepacks, never in the repo."
+   ],
+   "fileInfo": {}
+  },
+  {
+   "id": "terrain-shader",
+   "label": "TerrainFoliageShader",
+   "group": "terrain",
+   "kind": "component",
+   "versions": [
+    ">=1.21.11"
+   ],
+   "files": [
+    "gpu/TerrainFoliageShader.java"
+   ],
+   "summary": "Draws foliage with the terrain's own shaders (vanilla's or a resource pack's core/terrain.*): fragment as is, vertex with the sway spliced in (Position renamed, main wrapped).",
+   "details": [
+    "26.3: reads minecraft:shaders/core/terrain.vsh/.fsh, expands the terrain's includes first (GameTime is only in them), splices, then expands the mod's; binds TerrainUniform and a per-region ChunkSection UBO.",
+    "Only while Sodium does not draw the chunks."
+   ],
+   "fileInfo": {
+    "gpu/TerrainFoliageShader.java": {
+     "kind": "java",
+     "lines": 252,
+     "guard": "//? >=1.21.11 {"
+    }
+   }
+  },
+  {
+   "id": "legacy-terrain",
+   "label": "LegacyTerrainShader",
+   "group": "terrain",
+   "kind": "component",
+   "versions": [
+    "<1.21.11"
+   ],
+   "files": [
+    "gpu/LegacyTerrainShader.java"
+   ],
+   "summary": "1.20.1-1.21.1: builds a ShaderInstance from the cutout layer's JSON (rendertype_cutout, following the names the JSON gives), with the sway spliced into its vertex shader.",
+   "pitfalls": [
+    "Skipped while Sodium draws the chunks: no core-shader support mod reaches Sodium there."
+   ],
+   "fileInfo": {
+    "gpu/LegacyTerrainShader.java": {
+     "kind": "java",
+     "lines": 257,
+     "guard": "//? >=1.20.1 && <1.21.11 {"
+    }
+   }
+  },
+  {
+   "id": "terrain-slabs",
+   "label": "Terrain Slabs",
+   "group": "terrain",
+   "kind": "compat",
+   "files": [
+    "gpu/TerrainSlabsCompat.java"
+   ],
+   "summary": "Lowers plants on bottom slabs half a block, as Terrain Slabs does in its FRAPI wrapper, by the same rule (its OnTopHelper, found by MethodHandle). Soft: no mixin, missing or changed mod only logs a warning.",
+   "details": [
+    "No Terrain Slabs for 26.3 yet; expected to work unchanged if its helper keeps its name."
+   ],
+   "fileInfo": {
+    "gpu/TerrainSlabsCompat.java": {
+     "kind": "java",
+     "lines": 71,
+     "guard": ""
+    }
+   }
+  },
+  {
+   "id": "sodium-bridge",
+   "label": "SodiumBridge",
+   "group": "sodium",
+   "kind": "component",
+   "files": [
+    "gpu/SodiumBridge.java"
+   ],
+   "summary": "Everything the renderer asks of Sodium, by reflection (Sodium is never on the compile classpath for this): whether it draws the chunks, whether meshes can be split, rebuild requests, visibility, and upload results.",
+   "details": [
+    "Package me.jellysquid before Sodium 0.6 (1.20.1), net.caffeinemc after.",
+    "Forge 1.20.1: Embeddium, same Sodium 0.5 classes, mod ids embeddium/rubidium."
+   ],
+   "fileInfo": {
+    "gpu/SodiumBridge.java": {
+     "kind": "java",
+     "lines": 251,
+     "guard": "//? >=1.20.1 {"
+    }
+   }
+  },
+  {
+   "id": "sodium-upload",
+   "label": "Sodium upload hook",
+   "group": "sodium",
+   "kind": "hook",
+   "files": [
+    "mixin/SodiumMeshSwapMixin.java"
+   ],
+   "summary": "@Pseudo mixin on RenderRegionManager: where Sodium puts a finished build in place. The public overload is named with its descriptor (a private one of the same name reports each section twice).",
+   "details": [
+    "0.5 (1.20.1): uploadMeshes(CommandList, Collection)",
+    "0.8 (1.21.1, 1.21.11): uploadResults(CommandList, Collection)",
+    "0.9.2 on 26.1.2: uploadResults(CommandList, Collection, UniformBufferManager)",
+    "0.9 on 26.2/26.3: uploadResults(Collection, UniformBufferManager)",
+    "BuilderTaskOutput's section field: render (0.8), section (0.9)."
+   ],
+   "fileInfo": {
+    "mixin/SodiumMeshSwapMixin.java": {
+     "kind": "java",
+     "lines": 64,
+     "guard": "//? >=1.20.1 {"
+    }
+   }
+  },
+  {
+   "id": "sodium-shader",
+   "label": "SodiumFoliageShader",
+   "group": "sodium",
+   "kind": "component",
+   "versions": [
+    ">=1.21.11"
+   ],
+   "files": [
+    "gpu/SodiumFoliageShader.java"
+   ],
+   "summary": "Draws foliage with a copy of Sodium's own chunk shaders (sodium:blocks/block_layer_opaque, or a pack's), adapted to the mod's vertices and uniforms.",
+   "details": [
+    "1.21.11 (0.8): sources from ShaderLoader, #import expanded; packs need Sodium Core Shader Support.",
+    "26.1.2: hybrid: 0.8 loading, 0.9 content.",
+    "26.2+: vanilla ShaderManager, #moj_import / #include; u_SectionTimeInfo replaced, push_constant blocks stripped (VULKAN defined).",
+    "26.3: #include IMPORT pattern, BuiltSource, compiled via compilePipeline(...).finishCompile(), cached per SOLID_TERRAIN identity."
+   ],
+   "fileInfo": {
+    "gpu/SodiumFoliageShader.java": {
+     "kind": "java",
+     "lines": 591,
+     "guard": "//? >=1.21.11 {"
+    }
+   }
+  },
+  {
+   "id": "indium",
+   "label": "Indium",
+   "group": "external",
+   "kind": "mod",
+   "loaders": [
+    "fabric"
+   ],
+   "versions": [
+    "<1.21.1"
+   ],
+   "summary": "Fabric 1.20.1 with Sodium 0.5 needs Indium for FRAPI: without it neither Sway nor the mod's model run under Sodium, and the GPU mode stays off with a warning. Publish-only required dependency.",
+   "fileInfo": {}
+  },
+  {
+   "id": "embeddium",
+   "label": "Embeddium",
+   "group": "external",
+   "kind": "mod",
+   "loaders": [
+    "forge"
+   ],
+   "versions": [
+    "<1.21.1"
+   ],
+   "summary": "Forge 1.20.1's Sodium port (Sodium 0.5 classes). The renderer button is greyed out on GPU with it; far foliage stays still (accepted).",
+   "fileInfo": {}
+  },
+  {
+   "id": "sodium",
+   "label": "Sodium",
+   "group": "external",
+   "kind": "mod",
+   "summary": "Owns chunk meshing and drawing when installed. Versions: 0.5 (1.20.1), 0.8 (1.21.1, 1.21.11), 0.9.2 (26.1.2+).",
+   "details": [
+    "NeoForge's jar carries the mod as a jar-in-jar; on 26.3 its classes and shaders are byte-identical to Fabric's except three of its own mixins.",
+    "Its terrain setup runs inside LevelExtractor.extract (at consumeFrustumUpdate) on 26.3, before the end-of-extraction events."
+   ],
+   "fileInfo": {}
+  },
+  {
+   "id": "iris-compat",
+   "label": "IrisCompat",
+   "group": "iris",
+   "kind": "component",
+   "files": [
+    "gpu/IrisCompat.java"
+   ],
+   "summary": "The gate: answers the renderer's shader pack questions without loading Iris classes when Iris is absent. Where the support is not compiled (NeoForge 26.3), an installed Iris counts as a pack always loaded with no programs, so the chunk mesh keeps the foliage.",
+   "fileInfo": {
+    "gpu/IrisCompat.java": {
+     "kind": "java",
+     "lines": 195,
+     "guard": "//? >=1.20.1 {"
+    }
+   }
+  },
+  {
+   "id": "iris-shaders",
+   "label": "IrisFoliageShaders",
+   "group": "iris",
+   "kind": "component",
+   "files": [
+    "gpu/IrisFoliageShaders.java",
+    "mixin/iris/IrisRenderingPipelineAccessor.java",
+    "mixin/iris/ShaderCreatorMixin.java",
+    "mixin/iris/IrisMixinPlugin.java"
+   ],
+   "summary": "Per pack, builds two copies of the pack's programs (terrain cutout, shadow cutout) through Iris's own createShader/createShadowShader, with sway.glsl spliced into the translated vertex shader (iris_Position replaced).",
+   "details": [
+    "ShaderCreatorMixin redirects TransformPatcher.patchVanilla only while building (26.3 adds a Set<String> textureOverrides parameter).",
+    "Meshes with the block ids the pack expects (BlockSensitiveBufferBuilder.beginBlock) in Iris's terrain format plus the two sway values.",
+    "A new pack or none: deactivate and re-mesh."
+   ],
+   "pitfalls": [
+    "IrisMixinPlugin.getMixins must return nothing without Iris: Mixin never asks shouldApplyMixin for companion mixins (a laptop without Iris crashed on this)."
+   ],
+   "fileInfo": {
+    "gpu/IrisFoliageShaders.java": {
+     "kind": "java",
+     "lines": 656,
+     "guard": "//? iris {"
+    },
+    "mixin/iris/IrisRenderingPipelineAccessor.java": {
+     "kind": "java",
+     "lines": 91,
+     "guard": "//? iris {"
+    },
+    "mixin/iris/ShaderCreatorMixin.java": {
+     "kind": "java",
+     "lines": 73,
+     "guard": "//? iris {"
+    },
+    "mixin/iris/IrisMixinPlugin.java": {
+     "kind": "java",
+     "lines": 85,
+     "guard": "//? iris {"
+    }
+   }
+  },
+  {
+   "id": "iris-inject",
+   "label": "Pack program injection",
+   "group": "iris",
+   "kind": "hook",
+   "files": [
+    "mixin/iris/GlDeviceMixin.java",
+    "mixin/iris/ExtendedShaderMixin.java"
+   ],
+   "summary": "How the copy reaches the draw. <1.21.11: the ShaderInstance is used directly. 1.21.11-26.2: GlDeviceMixin returns a GlRenderPipeline around the copy; ExtendedShaderMixin adds the sway blocks. 26.3: IrisApi.assignPipeline + withFoliageProgram swaps the copy into Iris's own pipeline.",
+   "details": [
+    "1.21.1: Iris returns ShaderInstance (ExtendedShader, iris_-prefixed uniforms), sway uniforms set by raw GL, push block bound at index 12; Iris closes those programs itself.",
+    "26.3: Iris binds blocks only by known names (0-6), so the sway blocks go to the top two GL_MAX_UNIFORM_BUFFER_BINDINGS points, bound with glBindBufferBase before the draws (never hard-code points).",
+    "26.3: wrappers share one program; close their VertexArrays and the program once."
+   ],
+   "fileInfo": {
+    "mixin/iris/GlDeviceMixin.java": {
+     "kind": "java",
+     "lines": 34,
+     "guard": "//? >=1.21.11 && iris && <26.3 {"
+    },
+    "mixin/iris/ExtendedShaderMixin.java": {
+     "kind": "java",
+     "lines": 43,
+     "guard": "//? >=1.21.11 && iris && <26.3 {"
+    }
+   }
+  },
+  {
+   "id": "iris-shadow",
+   "label": "Pack shadow map",
+   "group": "iris",
+   "kind": "hook",
+   "files": [
+    "mixin/iris/ShadowRendererMixin.java",
+    "gpu/IrisFoliageShaders.java"
+   ],
+   "summary": "Plants cast swaying shadows. <26.1.2: ShadowRendererMixin at the point a callback would be. 26.1.2+: IrisApi.registerShadowRenderCallback. 26.3: plus assignPipelineShadow and drawIntoShadowMap in a pass of the mod's own.",
+   "details": [
+    "26.2: a pre-flipped depth pipeline (Iris only flips depth for pipelines it knows).",
+    "26.3: Iris flips depth and disables cull for every pipeline in the shadow pass; the callback runs with no pass open, before addMainPass; fog must be bound by hand."
+   ],
+   "fileInfo": {
+    "mixin/iris/ShadowRendererMixin.java": {
+     "kind": "java",
+     "lines": 36,
+     "guard": "//? iris && <26.1.2 {"
+    },
+    "gpu/IrisFoliageShaders.java": {
+     "kind": "java",
+     "lines": 656,
+     "guard": "//? iris {"
+    }
+   }
+  },
+  {
+   "id": "iris-vertex",
+   "label": "IrisVertexExtension",
+   "group": "iris",
+   "kind": "component",
+   "files": [
+    "gpu/IrisVertexExtension.java"
+   ],
+   "summary": "Keeps Iris from widening the mod's BLOCK-format meshing buffer when the mod meshes for its own pipeline (ImmediateState.skipExtension). 1.20.1's Iris/Oculus has no such switch.",
+   "fileInfo": {
+    "gpu/IrisVertexExtension.java": {
+     "kind": "java",
+     "lines": 88,
+     "guard": "//? >=1.20.1 {"
+    }
+   }
+  },
+  {
+   "id": "iris",
+   "label": "Iris",
+   "group": "external",
+   "kind": "mod",
+   "summary": "Fabric on every version; NeoForge from 1.21.1 to 26.2 (none for NeoForge 26.3 yet). OpenGL only.",
+   "details": [
+    "Debug: enableDebugOptions=true in run/config/iris.properties dumps translated programs to run/patched_shaders."
+   ],
+   "fileInfo": {}
+  },
+  {
+   "id": "oculus",
+   "label": "Oculus",
+   "group": "external",
+   "kind": "mod",
+   "loaders": [
+    "forge"
+   ],
+   "versions": [
+    "<1.21.1"
+   ],
+   "summary": "Iris on Forge 1.20.1, mod id oculus (Forge ignores the iris id it provides). Same code as Iris 1.7.",
+   "fileInfo": {}
+  },
+  {
+   "id": "polytone-shadow",
+   "label": "ShadowMapRendererMixin",
+   "group": "polytone",
+   "kind": "hook",
+   "versions": [
+    ">=1.21.1",
+    "<26.3"
+   ],
+   "files": [
+    "mixin/polytone/ShadowMapRendererMixin.java",
+    "mixin/polytone/PolytoneMixinPlugin.java"
+   ],
+   "summary": "Draws the GPU foliage into Polytone's shadow map once its terrain is in it, before the entities. Targets by name, not compiled against Polytone; the method is render or renderShadowMap depending on the release.",
+   "details": [
+    "Config is required:false and gated by PolytoneMixinPlugin; excluded from the jar on 1.20.1 and 26.3."
+   ],
+   "fileInfo": {
+    "mixin/polytone/ShadowMapRendererMixin.java": {
+     "kind": "java",
+     "lines": 50,
+     "guard": "//? >=1.21.1 && <26.3 {"
+    },
+    "mixin/polytone/PolytoneMixinPlugin.java": {
+     "kind": "java",
+     "lines": 60,
+     "guard": "//? >=1.21.1 {"
+    }
+   }
+  },
+  {
+   "id": "polytone",
+   "label": "Polytone",
+   "group": "external",
+   "kind": "mod",
+   "versions": [
+    ">=1.21.1"
+   ],
+   "summary": "Has a shadow map from 1.21.1 (not 1.20.1). No Polytone for 26.3 yet.",
+   "fileInfo": {}
+  },
+  {
+   "id": "fabric-hooks",
+   "label": "FabricFoliageHooks",
+   "group": "loader",
+   "kind": "hook",
+   "loaders": [
+    "fabric"
+   ],
+   "files": [
+    "platform/fabric/FabricFoliageHooks.java",
+    "platform/fabric/FabricEntrypoint.java",
+    "platform/fabric/FabricClientEntrypoint.java",
+    "platform/fabric/FabricPlatform.java"
+   ],
+   "summary": "Fabric: model wrapping, the frame event, chunk load/unload.",
+   "details": [
+    "1.20.1/1.21.1: WorldRenderEvents.BEFORE_ENTITIES (+ CoreShaderRegistrationCallback for the legacy shader)",
+    "1.21.11: WorldRenderEvents.BEFORE_TRANSLUCENT",
+    "26.1.2/26.2: LevelRenderEvents.AFTER_OPAQUE_TERRAIN",
+    "26.3: LevelExtractionEvents.END_EXTRACTION (prepare only)"
+   ],
+   "fileInfo": {
+    "platform/fabric/FabricFoliageHooks.java": {
+     "kind": "java",
+     "lines": 115,
+     "guard": "//? fabric {"
+    },
+    "platform/fabric/FabricEntrypoint.java": {
+     "kind": "java",
+     "lines": 18,
+     "guard": "//? fabric {"
+    },
+    "platform/fabric/FabricClientEntrypoint.java": {
+     "kind": "java",
+     "lines": 27,
+     "guard": "//? fabric {"
+    },
+    "platform/fabric/FabricPlatform.java": {
+     "kind": "java",
+     "lines": 26,
+     "guard": "//? fabric {"
+    }
+   }
+  },
+  {
+   "id": "neoforge-hooks",
+   "label": "NeoforgeFoliageHooks",
+   "group": "loader",
+   "kind": "hook",
+   "loaders": [
+    "neoforge"
+   ],
+   "files": [
+    "platform/neoforge/NeoforgeFoliageHooks.java",
+    "platform/neoforge/NeoforgeEntrypoint.java",
+    "platform/neoforge/NeoforgeClientEventSubscriber.java",
+    "platform/neoforge/NeoforgePlatform.java"
+   ],
+   "summary": "NeoForge: model wrapping at ModifyBakingResult, the frame event, chunk events.",
+   "details": [
+    "1.21.1: RenderLevelStageEvent, stage AFTER_CUTOUT_BLOCKS (+ RegisterShadersEvent)",
+    "1.21.11-26.2: RenderLevelStageEvent.AfterOpaqueBlocks",
+    "26.3: ExtractLevelRenderStateEvent (prepare only). AfterOpaqueBlocks now fires inside vanilla's pass and hands it over."
+   ],
+   "fileInfo": {
+    "platform/neoforge/NeoforgeFoliageHooks.java": {
+     "kind": "java",
+     "lines": 171,
+     "guard": "//? neoforge && >=1.21.1 {"
+    },
+    "platform/neoforge/NeoforgeEntrypoint.java": {
+     "kind": "java",
+     "lines": 61,
+     "guard": "//? neoforge {"
+    },
+    "platform/neoforge/NeoforgeClientEventSubscriber.java": {
+     "kind": "java",
+     "lines": 37,
+     "guard": "//? neoforge {"
+    },
+    "platform/neoforge/NeoforgePlatform.java": {
+     "kind": "java",
+     "lines": 26,
+     "guard": "//? neoforge {"
+    }
+   }
+  },
+  {
+   "id": "forge-hooks",
+   "label": "ForgeFoliageHooks",
+   "group": "loader",
+   "kind": "hook",
+   "loaders": [
+    "forge"
+   ],
+   "versions": [
+    "<1.21.1"
+   ],
+   "files": [
+    "platform/forge/ForgeFoliageHooks.java",
+    "platform/forge/ForgeEntrypoint.java",
+    "platform/forge/ForgeClientEventSubscriber.java",
+    "platform/forge/ForgePlatform.java"
+   ],
+   "summary": "Forge 1.20.1: RenderLevelStageEvent AFTER_CUTOUT_BLOCKS (Embeddium fires it per layer too), RegisterShadersEvent and ModifyBakingResult on the mod bus, ChunkEvent on the Forge bus.",
+   "pitfalls": [
+    "Forge needs the refmap key in every mixin config and all configs in the MixinConfigs manifest attribute (build-logic does both)."
+   ],
+   "fileInfo": {
+    "platform/forge/ForgeFoliageHooks.java": {
+     "kind": "java",
+     "lines": 141,
+     "guard": "//? forge {"
+    },
+    "platform/forge/ForgeEntrypoint.java": {
+     "kind": "java",
+     "lines": 63,
+     "guard": "//? forge {"
+    },
+    "platform/forge/ForgeClientEventSubscriber.java": {
+     "kind": "java",
+     "lines": 25,
+     "guard": "//? forge {"
+    },
+    "platform/forge/ForgePlatform.java": {
+     "kind": "java",
+     "lines": 26,
+     "guard": "//? forge {"
+    }
+   }
+  },
+  {
+   "id": "level-pass",
+   "label": "LevelPassMixin",
+   "group": "core",
+   "kind": "hook",
+   "versions": [
+    ">=26.3"
+   ],
+   "files": [
+    "mixin/LevelPassMixin.java"
+   ],
+   "summary": "26.3+, both loaders: writes the view uniforms at LevelRenderer.render HEAD and draws into vanilla's pass in executeSolid, before FeatureRenderDispatcher.PreparedFrame.executeSolid.",
+   "fileInfo": {
+    "mixin/LevelPassMixin.java": {
+     "kind": "java",
+     "lines": 50,
+     "guard": "//? >=26.3 {"
+    }
+   }
+  },
+  {
+   "id": "stonecutter",
+   "label": "Stonecutter",
+   "group": "build",
+   "kind": "rule",
+   "summary": "One source tree for every version: //? guards, commented branches /* */, nested /^ ^/. Constants: fabric/neoforge/forge and iris (shader pack support: >=1.20.1 except NeoForge 26.3).",
+   "details": [
+    "The newest version is vcsVersion and active (26.3-fabric): commit in its form, never switch back to commit.",
+    "Switch with ./gradlew \"Set active project to <v>\"."
+   ],
+   "pitfalls": [
+    "A branch whose whole body is // comments gets mangled when switching; put the explanation above the guard.",
+    "Scripts that edit sources must edit the exact current (active or commented) text."
+   ],
+   "fileInfo": {}
+  },
+  {
+   "id": "build-logic",
+   "label": "build-logic",
+   "group": "build",
+   "kind": "rule",
+   "summary": "Loader.kt writes fabric.mod.json / neoforge.mods.toml and their mixin lists per version; ModPlatformPlugin excludes resources per version (shader sets, iris/polytone/pass mixin configs); Context.shaderPackSupport mirrors the iris constant.",
+   "pitfalls": [
+    "The main mixins.json stays hand-written and empty: FletchingTable list generation once swept Iris/Polytone mixins into it. Check the built jar's mixin JSONs after touching mixin or build config."
+   ],
+   "fileInfo": {}
+  },
+  {
+   "id": "mixin-configs",
+   "label": "Mixin configs",
+   "group": "build",
+   "kind": "rule",
+   "summary": "mixins.json (empty), gpu.mixins.json (>=1.20.1), iris.mixins.json (where shader pack support is compiled; IrisMixinPlugin), polytone.mixins.json (1.21.1-26.2; required:false), pass.mixins.json (26.3+).",
+   "fileInfo": {}
+  },
+  {
+   "id": "access",
+   "label": "Access wideners",
+   "group": "build",
+   "kind": "rule",
+   "summary": "aw/<version>.accesswidener (Fabric) and aw/<version>.cfg (NeoForge/Forge AT). 26.3's widener opens GlRenderPipeline's constructor for the Iris path; its .cfg is empty.",
+   "fileInfo": {}
+  },
+  {
+   "id": "dev-runs",
+   "label": "Dev-run traps",
+   "group": "build",
+   "kind": "rule",
+   "summary": "Things that break runClient but not players.",
+   "details": [
+    "26.3 Fabric: Loom omits Mojang's -XX:StackShadowPages=32 and --add-exports java.base/jdk.internal.misc=ALL-UNNAMED: random native deaths (0xC0000005). Added as vmArgs.",
+    "26.3 NeoForge: ModDevGradle passes StackShadowPages but not the export (added); NeoForm runtime 2.0.31 needed to recompile 26.3.",
+    "NeoForge dev validates draws and crashes on Iris's one-element binding arrays: -Dneoforge.disableGlValidation=true.",
+    "Fabric 1.21.1 dev + Iris 1.8.14 crashes in the dev remapper: test in a launcher instance.",
+    "Test mods live in versions/<v>/run/mods; the user provides them in versions/<v> mods/<loader>."
+   ],
+   "fileInfo": {}
+  },
+  {
+   "id": "fabric-api",
+   "label": "Fabric API",
+   "group": "external",
+   "kind": "mod",
+   "loaders": [
+    "fabric"
+   ],
+   "summary": "Rendering API (FRAPI) for the model split and Sway, ModelLoadingPlugin, render and chunk events.",
+   "fileInfo": {}
+  },
+  {
+   "id": "v-1.20.1",
+   "label": "1.20.1",
+   "group": "version",
+   "kind": "version",
+   "versions": [
+    "<1.21.1"
+   ],
+   "summary": "Fabric and Forge. Legacy draw with foliage_legacy_1_20. Sodium 0.5 + Indium (Fabric) or Embeddium (Forge). Iris 1.7 / Oculus 1.8. No Polytone shadow map.",
+   "fileInfo": {}
+  },
+  {
+   "id": "v-1.21.1",
+   "label": "1.21.1",
+   "group": "version",
+   "kind": "version",
+   "versions": [
+    ">=1.21.1",
+    "<1.21.11"
+   ],
+   "summary": "Fabric and NeoForge. Legacy draw with foliage_legacy. Sodium 0.8. Iris with ShaderInstance programs. Polytone shadow map from here.",
+   "fileInfo": {}
+  },
+  {
+   "id": "v-1.21.11",
+   "label": "1.21.11",
+   "group": "version",
+   "kind": "version",
+   "versions": [
+    ">=1.21.11",
+    "<26.1.2"
+   ],
+   "summary": "Fabric and NeoForge. RenderPipelines, own pass after BEFORE_TRANSLUCENT / AfterOpaqueBlocks. Terrain and Sodium shader following start here.",
+   "fileInfo": {}
+  },
+  {
+   "id": "v-26.1.2",
+   "label": "26.1.2",
+   "group": "version",
+   "kind": "version",
+   "versions": [
+    ">=26.1.2",
+    "<26.2"
+   ],
+   "summary": "Fabric and NeoForge. Camera state carries the cull frustum. Sodium 0.9.2 hybrid. Iris shadow callback from here.",
+   "fileInfo": {}
+  },
+  {
+   "id": "v-26.2",
+   "label": "26.2",
+   "group": "version",
+   "kind": "version",
+   "versions": [
+    ">=26.2",
+    "<26.3"
+   ],
+   "summary": "Fabric and NeoForge. Reversed depth, bind group layouts, LevelExtractor marks sections dirty. Sodium 0.9 native shaders. Vulkan backend exists.",
+   "fileInfo": {}
+  },
+  {
+   "id": "v-26.3",
+   "label": "26.3",
+   "group": "version",
+   "kind": "version",
+   "versions": [
+    ">=26.3"
+   ],
+   "summary": "Fabric and NeoForge. com.mojang.renderpearl, one main pass, prepare/draw split, foliage_modern. Iris on Fabric only; no Polytone or Terrain Slabs yet.",
+   "fileInfo": {}
+  }
+ ],
+ "edges": [
+  {
+   "source": "renderer",
+   "target": "draw-legacy",
+   "label": "draws through"
+  },
+  {
+   "source": "renderer",
+   "target": "draw-pass",
+   "label": "draws through"
+  },
+  {
+   "source": "renderer",
+   "target": "draw-split",
+   "label": "draws through"
+  },
+  {
+   "source": "renderer",
+   "target": "near-area",
+   "label": "owns"
+  },
+  {
+   "source": "draw-split",
+   "target": "level-pass",
+   "label": "draws from"
+  },
+  {
+   "source": "renderer",
+   "target": "split",
+   "label": "is fed by"
+  },
+  {
+   "source": "split",
+   "target": "model-fabric",
+   "label": "wrapped as"
+  },
+  {
+   "source": "split",
+   "target": "model-neoforge",
+   "label": "wrapped as"
+  },
+  {
+   "source": "split",
+   "target": "model-forge",
+   "label": "wrapped as"
+  },
+  {
+   "source": "split",
+   "target": "handover",
+   "label": "swaps through"
+  },
+  {
+   "source": "handover",
+   "target": "sodium-upload",
+   "label": "with Sodium"
+  },
+  {
+   "source": "near-area",
+   "target": "dirty",
+   "label": "kept current by"
+  },
+  {
+   "source": "split",
+   "target": "sway-api",
+   "label": "asks isInteractive"
+  },
+  {
+   "source": "model-fabric",
+   "target": "fabric-api",
+   "label": "needs"
+  },
+  {
+   "source": "model-fabric",
+   "target": "fabric-hooks",
+   "label": "registered by"
+  },
+  {
+   "source": "model-neoforge",
+   "target": "neoforge-hooks",
+   "label": "registered by"
+  },
+  {
+   "source": "model-forge",
+   "target": "forge-hooks",
+   "label": "registered by"
+  },
+  {
+   "source": "fabric-hooks",
+   "target": "renderer",
+   "label": "calls draw"
+  },
+  {
+   "source": "neoforge-hooks",
+   "target": "renderer",
+   "label": "calls draw"
+  },
+  {
+   "source": "forge-hooks",
+   "target": "renderer",
+   "label": "calls draw"
+  },
+  {
+   "source": "interaction",
+   "target": "sway-api",
+   "label": "follows pushes of"
+  },
+  {
+   "source": "proximity",
+   "target": "sway-api",
+   "label": "mixes into"
+  },
+  {
+   "source": "renderer",
+   "target": "interaction",
+   "label": "uploads"
+  },
+  {
+   "source": "renderer",
+   "target": "wind",
+   "label": "bakes shelter from"
+  },
+  {
+   "source": "wind",
+   "target": "sway-glsl",
+   "label": "blows in"
+  },
+  {
+   "source": "interaction",
+   "target": "sway-glsl",
+   "label": "read by"
+  },
+  {
+   "source": "settings",
+   "target": "renderer",
+   "label": "configures"
+  },
+  {
+   "source": "modcompat",
+   "target": "sway-api",
+   "label": "registers blocks with"
+  },
+  {
+   "source": "draw-legacy",
+   "target": "sh-legacy",
+   "label": "uses"
+  },
+  {
+   "source": "draw-pass",
+   "target": "sh-pipeline",
+   "label": "uses"
+  },
+  {
+   "source": "draw-split",
+   "target": "sh-modern",
+   "label": "uses"
+  },
+  {
+   "source": "sh-legacy",
+   "target": "sway-glsl",
+   "label": "includes"
+  },
+  {
+   "source": "sh-pipeline",
+   "target": "sway-glsl",
+   "label": "includes"
+  },
+  {
+   "source": "sh-modern",
+   "target": "sway-glsl",
+   "label": "includes"
+  },
+  {
+   "source": "shader-sets",
+   "target": "sh-legacy",
+   "label": "ships"
+  },
+  {
+   "source": "shader-sets",
+   "target": "sh-pipeline",
+   "label": "ships"
+  },
+  {
+   "source": "shader-sets",
+   "target": "sh-modern",
+   "label": "ships"
+  },
+  {
+   "source": "shader-verify",
+   "target": "terrain-shader",
+   "label": "checks"
+  },
+  {
+   "source": "shader-verify",
+   "target": "sodium-shader",
+   "label": "checks"
+  },
+  {
+   "source": "draw-pass",
+   "target": "terrain-shader",
+   "label": "follows"
+  },
+  {
+   "source": "draw-split",
+   "target": "terrain-shader",
+   "label": "follows"
+  },
+  {
+   "source": "draw-legacy",
+   "target": "legacy-terrain",
+   "label": "follows"
+  },
+  {
+   "source": "terrain-shader",
+   "target": "sway-glsl",
+   "label": "splices"
+  },
+  {
+   "source": "legacy-terrain",
+   "target": "sway-glsl",
+   "label": "splices"
+  },
+  {
+   "source": "near-area",
+   "target": "terrain-slabs",
+   "label": "lowers plants for"
+  },
+  {
+   "source": "renderer",
+   "target": "sodium-bridge",
+   "label": "asks"
+  },
+  {
+   "source": "sodium-bridge",
+   "target": "sodium",
+   "label": "reflects into"
+  },
+  {
+   "source": "sodium-bridge",
+   "target": "embeddium",
+   "label": "reflects into"
+  },
+  {
+   "source": "sodium-upload",
+   "target": "sodium",
+   "label": "hooks"
+  },
+  {
+   "source": "sodium-shader",
+   "target": "sodium",
+   "label": "copies shaders of"
+  },
+  {
+   "source": "sodium-shader",
+   "target": "sway-glsl",
+   "label": "splices"
+  },
+  {
+   "source": "draw-pass",
+   "target": "sodium-shader",
+   "label": "follows"
+  },
+  {
+   "source": "draw-split",
+   "target": "sodium-shader",
+   "label": "follows"
+  },
+  {
+   "source": "indium",
+   "target": "sodium",
+   "label": "adds FRAPI to"
+  },
+  {
+   "source": "model-fabric",
+   "target": "indium",
+   "label": "needs on 1.20.1"
+  },
+  {
+   "source": "model-forge",
+   "target": "embeddium",
+   "label": "answers"
+  },
+  {
+   "source": "model-neoforge",
+   "target": "sodium",
+   "label": "answers"
+  },
+  {
+   "source": "renderer",
+   "target": "iris-compat",
+   "label": "asks"
+  },
+  {
+   "source": "iris-compat",
+   "target": "iris-shaders",
+   "label": "reaches"
+  },
+  {
+   "source": "iris-shaders",
+   "target": "iris-inject",
+   "label": "handed over by"
+  },
+  {
+   "source": "iris-shaders",
+   "target": "iris-shadow",
+   "label": "shadow copy drawn by"
+  },
+  {
+   "source": "iris-shaders",
+   "target": "iris-vertex",
+   "label": "meshes with"
+  },
+  {
+   "source": "iris-shaders",
+   "target": "sway-glsl",
+   "label": "splices"
+  },
+  {
+   "source": "iris-shaders",
+   "target": "iris",
+   "label": "builds through"
+  },
+  {
+   "source": "iris-shaders",
+   "target": "oculus",
+   "label": "builds through"
+  },
+  {
+   "source": "iris-inject",
+   "target": "draw-split",
+   "label": "on 26.3 via"
+  },
+  {
+   "source": "polytone-shadow",
+   "target": "renderer",
+   "label": "calls drawPolytoneShadow"
+  },
+  {
+   "source": "polytone-shadow",
+   "target": "polytone",
+   "label": "hooks"
+  },
+  {
+   "source": "level-pass",
+   "target": "iris",
+   "label": "view bobbing from"
+  },
+  {
+   "source": "stonecutter",
+   "target": "build-logic",
+   "label": "drives"
+  },
+  {
+   "source": "build-logic",
+   "target": "mixin-configs",
+   "label": "lists"
+  },
+  {
+   "source": "build-logic",
+   "target": "shader-sets",
+   "label": "applies"
+  },
+  {
+   "source": "build-logic",
+   "target": "access",
+   "label": "applies"
+  },
+  {
+   "source": "mixin-configs",
+   "target": "iris-shaders",
+   "label": "gates"
+  },
+  {
+   "source": "mixin-configs",
+   "target": "polytone-shadow",
+   "label": "gates"
+  },
+  {
+   "source": "mixin-configs",
+   "target": "level-pass",
+   "label": "lists"
+  },
+  {
+   "source": "dev-runs",
+   "target": "build-logic",
+   "label": "fixed in"
+  },
+  {
+   "source": "v-1.20.1",
+   "target": "draw-legacy",
+   "label": "draws with"
+  },
+  {
+   "source": "v-1.21.1",
+   "target": "draw-legacy",
+   "label": "draws with"
+  },
+  {
+   "source": "v-1.21.11",
+   "target": "draw-pass",
+   "label": "draws with"
+  },
+  {
+   "source": "v-26.1.2",
+   "target": "draw-pass",
+   "label": "draws with"
+  },
+  {
+   "source": "v-26.2",
+   "target": "draw-pass",
+   "label": "draws with"
+  },
+  {
+   "source": "v-26.3",
+   "target": "draw-split",
+   "label": "draws with"
+  },
+  {
+   "source": "v-1.20.1",
+   "target": "embeddium",
+   "label": "Sodium is"
+  },
+  {
+   "source": "v-1.20.1",
+   "target": "indium",
+   "label": "needs"
+  },
+  {
+   "source": "v-1.21.1",
+   "target": "polytone-shadow",
+   "label": "adds"
+  },
+  {
+   "source": "v-26.3",
+   "target": "level-pass",
+   "label": "adds"
+  }
+ ],
+ "matrix": {
+  "about": "One row per concern, one cell per version. Cells may split by loader with 'fabric:' / 'neoforge:' / 'forge:' prefixes.",
+  "rows": [
+   {
+    "label": "Loaders",
+    "cells": {
+     "1.20.1": "Fabric, Forge 47",
+     "1.21.1": "Fabric, NeoForge 21.1",
+     "1.21.11": "Fabric, NeoForge 21.11",
+     "26.1.2": "Fabric, NeoForge 26.1.2",
+     "26.2": "Fabric, NeoForge 26.2",
+     "26.3": "Fabric, NeoForge 26.3 (beta)"
+    }
+   },
+   {
+    "label": "Render API",
+    "cells": {
+     "1.20.1": "ShaderInstance + VertexBuffer",
+     "1.21.1": "ShaderInstance + VertexBuffer",
+     "1.21.11": "RenderPipeline + RenderPass",
+     "26.1.2": "RenderPipeline + RenderPass",
+     "26.2": "RenderPipeline, bind groups, reversed depth, Vulkan backend",
+     "26.3": "com.mojang.renderpearl, one main pass, SPIR-V via shaderc"
+    }
+   },
+   {
+    "label": "Draw path",
+    "cells": {
+     "1.20.1": "drawLegacy",
+     "1.21.1": "drawLegacy",
+     "1.21.11": "own pass",
+     "26.1.2": "own pass",
+     "26.2": "own pass",
+     "26.3": "prepare at end of extraction, draw in vanilla's pass"
+    }
+   },
+   {
+    "label": "Frame hook",
+    "cells": {
+     "1.20.1": "fabric: WorldRenderEvents.BEFORE_ENTITIES | forge: RenderLevelStageEvent AFTER_CUTOUT_BLOCKS",
+     "1.21.1": "fabric: WorldRenderEvents.BEFORE_ENTITIES | neoforge: RenderLevelStageEvent AFTER_CUTOUT_BLOCKS",
+     "1.21.11": "fabric: WorldRenderEvents.BEFORE_TRANSLUCENT | neoforge: RenderLevelStageEvent.AfterOpaqueBlocks",
+     "26.1.2": "fabric: LevelRenderEvents.AFTER_OPAQUE_TERRAIN | neoforge: RenderLevelStageEvent.AfterOpaqueBlocks",
+     "26.2": "fabric: LevelRenderEvents.AFTER_OPAQUE_TERRAIN | neoforge: RenderLevelStageEvent.AfterOpaqueBlocks",
+     "26.3": "fabric: LevelExtractionEvents.END_EXTRACTION | neoforge: ExtractLevelRenderStateEvent | both: LevelPassMixin draws"
+    }
+   },
+   {
+    "label": "Model split",
+    "cells": {
+     "1.20.1": "fabric: FRAPI (modifyModelAfterBake) | forge: getModelData",
+     "1.21.1": "fabric: FRAPI (modifyModelAfterBake) | neoforge: getModelData (BakedModelWrapper)",
+     "1.21.11": "fabric: FRAPI (modifyBlockModelAfterBake) | neoforge: collectParts",
+     "26.1.2": "fabric: FRAPI | neoforge: collectParts",
+     "26.2": "fabric: FRAPI | neoforge: collectParts",
+     "26.3": "fabric: FRAPI | neoforge: collectParts"
+    }
+   },
+   {
+    "label": "Vanilla mesh swap",
+    "cells": {
+     "1.20.1": "LevelRenderer.addRecentlyCompiledChunk",
+     "1.21.1": "RenderSection.setCompiled",
+     "1.21.11": "RenderSection.setSectionMesh",
+     "26.1.2": "setSectionMesh",
+     "26.2": "setSectionMesh",
+     "26.3": "setSectionMesh"
+    }
+   },
+   {
+    "label": "Sodium",
+    "cells": {
+     "1.20.1": "fabric: Sodium 0.5 + Indium, uploadMeshes | forge: Embeddium 0.3.31",
+     "1.21.1": "0.8, uploadResults(CommandList, Collection)",
+     "1.21.11": "0.8, uploadResults(CommandList, Collection)",
+     "26.1.2": "0.9.2, uploadResults(CommandList, Collection, UniformBufferManager)",
+     "26.2": "0.9, uploadResults(Collection, UniformBufferManager)",
+     "26.3": "0.9.2, uploadResults(Collection, UniformBufferManager)"
+    }
+   },
+   {
+    "label": "Mod shaders",
+    "cells": {
+     "1.20.1": "foliage_legacy_1_20",
+     "1.21.1": "foliage_legacy",
+     "1.21.11": "foliage.vsh/.fsh",
+     "26.1.2": "foliage.vsh/.fsh",
+     "26.2": "foliage.vsh/.fsh",
+     "26.3": "foliage_modern + foliage_uniforms.glsl"
+    }
+   },
+   {
+    "label": "Terrain / pack core shaders",
+    "cells": {
+     "1.20.1": "LegacyTerrainShader (not with Sodium)",
+     "1.21.1": "LegacyTerrainShader (not with Sodium)",
+     "1.21.11": "TerrainFoliageShader; SodiumFoliageShader via ShaderLoader (packs need SCSS)",
+     "26.1.2": "TerrainFoliageShader; SodiumFoliageShader hybrid",
+     "26.2": "TerrainFoliageShader; SodiumFoliageShader native 0.9",
+     "26.3": "TerrainFoliageShader (includes first); SodiumFoliageShader (#include)"
+    }
+   },
+   {
+    "label": "Shader packs",
+    "cells": {
+     "1.20.1": "fabric: Iris 1.7 | forge: Oculus 1.8; ShaderInstance programs",
+     "1.21.1": "Iris; ShaderInstance programs, raw GL uniforms",
+     "1.21.11": "Iris; GlDeviceMixin + ExtendedShaderMixin",
+     "26.1.2": "Iris; GlDeviceMixin + ExtendedShaderMixin",
+     "26.2": "Iris 1.11.4; GlDeviceMixin + ExtendedShaderMixin",
+     "26.3": "fabric: Iris 1.11.6, assignPipeline + withFoliageProgram | neoforge: no Iris yet, GPU steps aside"
+    }
+   },
+   {
+    "label": "Pack shadow map",
+    "cells": {
+     "1.20.1": "ShadowRendererMixin",
+     "1.21.1": "ShadowRendererMixin",
+     "1.21.11": "ShadowRendererMixin",
+     "26.1.2": "registerShadowRenderCallback",
+     "26.2": "callback + pre-flipped depth pipeline",
+     "26.3": "fabric: callback + assignPipelineShadow + drawIntoShadowMap"
+    }
+   },
+   {
+    "label": "Polytone shadow",
+    "cells": {
+     "1.20.1": "none (no shadow map)",
+     "1.21.1": "ShadowMapRendererMixin",
+     "1.21.11": "ShadowMapRendererMixin",
+     "26.1.2": "ShadowMapRendererMixin",
+     "26.2": "ShadowMapRendererMixin",
+     "26.3": "none yet (no Polytone)"
+    }
+   },
+   {
+    "label": "Dev-run notes",
+    "cells": {
+     "1.20.1": "Fabric client on Java 17",
+     "1.21.1": "fabric: Iris crashes the dev remapper, test in a launcher",
+     "1.21.11": "neoforge (every version): disableGlValidation",
+     "26.1.2": "",
+     "26.2": "",
+     "26.3": "JVM args from the manifest; neoforge: NeoForm runtime 2.0.31, beta 26.3.0.26 (TerraBlender needs <=.19)"
+    }
+   }
+  ]
+ },
+ "portRecipe": [
+  "Read Sodium's build for the new version before inventing an approach: it faces the same problems.",
+  "Research first, then one small step at a time with a user test between. Order: vanilla CPU, vanilla GPU (OpenGL and Vulkan), Sodium, Sodium's shaders, resource-pack core shaders (with and without Sodium), Iris (pack draws foliage, sway, shadows), Polytone, Terrain Slabs, then the other loader.",
+  "Diff the version manifest's JVM arguments against what the dev run passes before blaming any crash on code.",
+  "Find where the frame can be prepared with no render pass open, and where the foliage can be drawn; never write buffers or compile pipelines inside a pass.",
+  "Check every mixin target and every reflective name (Sodium upload overload, Iris methods) against the new jars; javap is enough.",
+  "Compile every spliced shader offline with the game's shaderc options, and show each shader integration in game with a visible test pack.",
+  "Write what the version taught into docs/<version>-render-notes.md and update docs/map/curated.json, then run docs/map/generate.py."
+ ],
+ "rules": [
+  "Local commits only; the user pushes. No Co-Authored-By or any attribution in commits.",
+  "The newest version is Stonecutter's vcsVersion and the active one; commit in its form.",
+  "Give the user one copyable launch command and a checklist, then wait. Never launch the game yourself.",
+  "Do not modify Sway or contact its author. User-facing text goes through translation keys.",
+  "Investigate before assuming; do not ask the user to test third-party mods alone; never tell players to change driver settings.",
+  "Talk to the user in Spanish; code, comments, commits and docs stay in English."
+ ],
+ "mixinConfigs": {
+  "mc2_interactivefoliage.gpu.mixins.json": {
+   "plugin": null,
+   "required": true,
+   "mixins": [
+    "ClientLevelMixin",
+    "LevelExtractorMixin",
+    "SectionMeshSwapMixin",
+    "SodiumMeshSwapMixin",
+    "SwayProximityForceMixin"
+   ]
+  },
+  "mc2_interactivefoliage.iris.mixins.json": {
+   "plugin": "net.karto.mc2.mc2_interactivefoliage.mixin.iris.IrisMixinPlugin",
+   "required": true,
+   "mixins": [
+    "IrisRenderingPipelineAccessor",
+    "ShaderCreatorMixin"
+   ]
+  },
+  "mc2_interactivefoliage.mixins.json": {
+   "plugin": null,
+   "required": true,
+   "mixins": []
+  },
+  "mc2_interactivefoliage.pass.mixins.json": {
+   "plugin": null,
+   "required": true,
+   "mixins": [
+    "LevelPassMixin"
+   ]
+  },
+  "mc2_interactivefoliage.polytone.mixins.json": {
+   "plugin": "net.karto.mc2.mc2_interactivefoliage.mixin.polytone.PolytoneMixinPlugin",
+   "required": false,
+   "mixins": [
+    "ShadowMapRendererMixin"
+   ]
+  }
+ },
+ "files": {
+  "FoliageConfigScreen.java": {
+   "kind": "java",
+   "lines": 683,
+   "guard": ""
+  },
+  "FoliageSettings.java": {
+   "kind": "java",
+   "lines": 322,
+   "guard": ""
+  },
+  "gpu/GpuFoliageInteraction.java": {
+   "kind": "java",
+   "lines": 389,
+   "guard": "//? >=1.20.1 {"
+  },
+  "gpu/GpuFoliageModel.java": {
+   "kind": "java",
+   "lines": 91,
+   "guard": "//? fabric {"
+  },
+  "gpu/GpuFoliageRenderer.java": {
+   "kind": "java",
+   "lines": 3315,
+   "guard": "//? >=1.20.1 {"
+  },
+  "gpu/GpuFoliageSplit.java": {
+   "kind": "java",
+   "lines": 441,
+   "guard": "//? >=1.20.1 {"
+  },
+  "gpu/IrisCompat.java": {
+   "kind": "java",
+   "lines": 195,
+   "guard": "//? >=1.20.1 {"
+  },
+  "gpu/IrisFoliageShaders.java": {
+   "kind": "java",
+   "lines": 656,
+   "guard": "//? iris {"
+  },
+  "gpu/IrisVertexExtension.java": {
+   "kind": "java",
+   "lines": 88,
+   "guard": "//? >=1.20.1 {"
+  },
+  "gpu/LegacyTerrainShader.java": {
+   "kind": "java",
+   "lines": 257,
+   "guard": "//? >=1.20.1 && <1.21.11 {"
+  },
+  "gpu/SodiumBridge.java": {
+   "kind": "java",
+   "lines": 251,
+   "guard": "//? >=1.20.1 {"
+  },
+  "gpu/SodiumFoliageShader.java": {
+   "kind": "java",
+   "lines": 591,
+   "guard": "//? >=1.21.11 {"
+  },
+  "gpu/TerrainFoliageShader.java": {
+   "kind": "java",
+   "lines": 252,
+   "guard": "//? >=1.21.11 {"
+  },
+  "gpu/TerrainSlabsCompat.java": {
+   "kind": "java",
+   "lines": 71,
+   "guard": ""
+  },
+  "gpu/WindShelter.java": {
+   "kind": "java",
+   "lines": 327,
+   "guard": "//? >=1.20.1 {"
+  },
+  "mixin/ClientLevelMixin.java": {
+   "kind": "java",
+   "lines": 30,
+   "guard": "//? >=1.20.1 {"
+  },
+  "mixin/iris/ExtendedShaderMixin.java": {
+   "kind": "java",
+   "lines": 43,
+   "guard": "//? >=1.21.11 && iris && <26.3 {"
+  },
+  "mixin/iris/GlDeviceMixin.java": {
+   "kind": "java",
+   "lines": 34,
+   "guard": "//? >=1.21.11 && iris && <26.3 {"
+  },
+  "mixin/iris/IrisMixinPlugin.java": {
+   "kind": "java",
+   "lines": 85,
+   "guard": "//? iris {"
+  },
+  "mixin/iris/IrisRenderingPipelineAccessor.java": {
+   "kind": "java",
+   "lines": 91,
+   "guard": "//? iris {"
+  },
+  "mixin/iris/ShaderCreatorMixin.java": {
+   "kind": "java",
+   "lines": 73,
+   "guard": "//? iris {"
+  },
+  "mixin/iris/ShadowRendererMixin.java": {
+   "kind": "java",
+   "lines": 36,
+   "guard": "//? iris && <26.1.2 {"
+  },
+  "mixin/LevelExtractorMixin.java": {
+   "kind": "java",
+   "lines": 63,
+   "guard": "//? >=1.20.1 {"
+  },
+  "mixin/LevelPassMixin.java": {
+   "kind": "java",
+   "lines": 50,
+   "guard": "//? >=26.3 {"
+  },
+  "mixin/polytone/PolytoneMixinPlugin.java": {
+   "kind": "java",
+   "lines": 60,
+   "guard": "//? >=1.21.1 {"
+  },
+  "mixin/polytone/ShadowMapRendererMixin.java": {
+   "kind": "java",
+   "lines": 50,
+   "guard": "//? >=1.21.1 && <26.3 {"
+  },
+  "mixin/SectionMeshSwapMixin.java": {
+   "kind": "java",
+   "lines": 84,
+   "guard": "//? >=1.20.1 {"
+  },
+  "mixin/SodiumMeshSwapMixin.java": {
+   "kind": "java",
+   "lines": 64,
+   "guard": "//? >=1.20.1 {"
+  },
+  "mixin/SwayProximityForceMixin.java": {
+   "kind": "java",
+   "lines": 40,
+   "guard": "//? >=1.20.1 {"
+  },
+  "ModCompatRegistry.java": {
+   "kind": "java",
+   "lines": 367,
+   "guard": ""
+  },
+  "ModTemplate.java": {
+   "kind": "java",
+   "lines": 64,
+   "guard": "//? fabric {"
+  },
+  "platform/fabric/datagen/FabricDataGeneratorEntrypoint.java": {
+   "kind": "java",
+   "lines": 16,
+   "guard": "//? fabric {"
+  },
+  "platform/fabric/FabricClientEntrypoint.java": {
+   "kind": "java",
+   "lines": 27,
+   "guard": "//? fabric {"
+  },
+  "platform/fabric/FabricEntrypoint.java": {
+   "kind": "java",
+   "lines": 18,
+   "guard": "//? fabric {"
+  },
+  "platform/fabric/FabricFoliageHooks.java": {
+   "kind": "java",
+   "lines": 115,
+   "guard": "//? fabric {"
+  },
+  "platform/fabric/FabricModMenuIntegration.java": {
+   "kind": "java",
+   "lines": 28,
+   "guard": "//? fabric {"
+  },
+  "platform/fabric/FabricPlatform.java": {
+   "kind": "java",
+   "lines": 26,
+   "guard": "//? fabric {"
+  },
+  "platform/fabric/FoliageKeyBindings.java": {
+   "kind": "java",
+   "lines": 89,
+   "guard": "//? fabric {"
+  },
+  "platform/forge/ForgeClientEventSubscriber.java": {
+   "kind": "java",
+   "lines": 25,
+   "guard": "//? forge {"
+  },
+  "platform/forge/ForgeEntrypoint.java": {
+   "kind": "java",
+   "lines": 63,
+   "guard": "//? forge {"
+  },
+  "platform/forge/ForgeFoliageHooks.java": {
+   "kind": "java",
+   "lines": 141,
+   "guard": "//? forge {"
+  },
+  "platform/forge/ForgeFoliageModel.java": {
+   "kind": "java",
+   "lines": 70,
+   "guard": "//? forge {"
+  },
+  "platform/forge/ForgeKeyBindings.java": {
+   "kind": "java",
+   "lines": 63,
+   "guard": "//? forge {"
+  },
+  "platform/forge/ForgePlatform.java": {
+   "kind": "java",
+   "lines": 26,
+   "guard": "//? forge {"
+  },
+  "platform/neoforge/NeoforgeClientEventSubscriber.java": {
+   "kind": "java",
+   "lines": 37,
+   "guard": "//? neoforge {"
+  },
+  "platform/neoforge/NeoforgeEntrypoint.java": {
+   "kind": "java",
+   "lines": 61,
+   "guard": "//? neoforge {"
+  },
+  "platform/neoforge/NeoforgeFoliageHooks.java": {
+   "kind": "java",
+   "lines": 171,
+   "guard": "//? neoforge && >=1.21.1 {"
+  },
+  "platform/neoforge/NeoforgeFoliageModel.java": {
+   "kind": "java",
+   "lines": 179,
+   "guard": "//? neoforge && >=1.21.1 {"
+  },
+  "platform/neoforge/NeoforgeKeyBindings.java": {
+   "kind": "java",
+   "lines": 94,
+   "guard": "//? neoforge {"
+  },
+  "platform/neoforge/NeoforgePlatform.java": {
+   "kind": "java",
+   "lines": 26,
+   "guard": "//? neoforge {"
+  },
+  "platform/Platform.java": {
+   "kind": "java",
+   "lines": 15,
+   "guard": ""
+  },
+  "shaders/core/foliage.fsh": {
+   "kind": "shader",
+   "lines": 26,
+   "guard": ""
+  },
+  "shaders/core/foliage.vsh": {
+   "kind": "shader",
+   "lines": 68,
+   "guard": ""
+  },
+  "shaders/core/foliage_legacy.fsh": {
+   "kind": "shader",
+   "lines": 27,
+   "guard": ""
+  },
+  "shaders/core/foliage_legacy.json": {
+   "kind": "shader",
+   "lines": 26,
+   "guard": ""
+  },
+  "shaders/core/foliage_legacy.vsh": {
+   "kind": "shader",
+   "lines": 153,
+   "guard": ""
+  },
+  "shaders/core/foliage_legacy_1_20.json": {
+   "kind": "shader",
+   "lines": 32,
+   "guard": ""
+  },
+  "shaders/core/foliage_legacy_1_20.vsh": {
+   "kind": "shader",
+   "lines": 152,
+   "guard": ""
+  },
+  "shaders/core/foliage_modern.fsh": {
+   "kind": "shader",
+   "lines": 28,
+   "guard": ""
+  },
+  "shaders/core/foliage_modern.vsh": {
+   "kind": "shader",
+   "lines": 48,
+   "guard": ""
+  },
+  "shaders/core/foliage_terrain.vsh": {
+   "kind": "shader",
+   "lines": 27,
+   "guard": ""
+  },
+  "shaders/include/foliage_uniforms.glsl": {
+   "kind": "shader",
+   "lines": 26,
+   "guard": ""
+  },
+  "shaders/include/sway.glsl": {
+   "kind": "shader",
+   "lines": 175,
+   "guard": ""
+  }
+ },
+ "unmapped": []
+}
