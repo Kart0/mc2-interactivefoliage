@@ -53,10 +53,25 @@ import net.irisshaders.iris.vertices.BlockSensitiveBufferBuilder;
 import net.irisshaders.iris.vertices.IrisVertexFormats;
 import net.karto.mc2.mc2_interactivefoliage.ModTemplate;
 //? >=26.3 {
+import com.mojang.renderpearl.api.buffers.GpuBuffer;
+import com.mojang.renderpearl.api.pipeline.CompiledRenderPipeline;
+import com.mojang.renderpearl.backend.api.BackendRenderPipeline;
+import com.mojang.renderpearl.backend.opengl.GlBuffer;
+import com.mojang.renderpearl.backend.opengl.GlRenderPipeline;
+import com.mojang.renderpearl.backend.opengl.VertexArray;
+import com.mojang.renderpearl.frontend.FrontendRenderPipeline;
 import net.irisshaders.iris.api.v0.IrisProgram;
-//?} else {
-/*import net.karto.mc2.mc2_interactivefoliage.mixin.iris.IrisRenderingPipelineAccessor;
-*///?}
+import net.irisshaders.iris.gl.IrisRenderSystem;
+import net.irisshaders.iris.mixinterface.GlRenderPipelineAccess;
+import org.lwjgl.opengl.GL;
+import org.lwjgl.opengl.GL31;
+import org.lwjgl.opengl.GL33C;
+
+import java.util.HashSet;
+import java.util.IdentityHashMap;
+import java.util.Map;
+//?}
+import net.karto.mc2.mc2_interactivefoliage.mixin.iris.IrisRenderingPipelineAccessor;
 import net.minecraft.world.level.block.state.BlockState;
 
 import java.io.IOException;
@@ -123,6 +138,20 @@ public final class IrisFoliageShaders {
 	//? >=26.3 {
 	/** Whether Iris has been told to draw the renderer's pipeline with the pack's program; see setUp. */
 	private static boolean assigned;
+	/**
+	 * The pipelines the renderer draws through the pack with: each of Iris's for the renderer's pipeline, with the
+	 * mod's program in place of the pack's, and the vertex arrays made for them. A pipeline deletes its program when
+	 * closed, and every one of these shares the one program, so they are never closed themselves: their vertex arrays
+	 * are, and the program once, in closePrograms.
+	 */
+	private static final Map<CompiledRenderPipeline, FrontendRenderPipeline> WITH_FOLIAGE_PROGRAM = new IdentityHashMap<>();
+	private static final List<VertexArray> VERTEX_ARRAYS = new ArrayList<>();
+	/**
+	 * Where the programs' sway blocks are bound: the last two points the driver has, left to the mod. Nothing registers
+	 * binding points, so none can be asked for free; vanilla's pipelines and Iris's programs count from the first.
+	 */
+	private static int swayBinding = -1;
+	private static int interactionBinding = -1;
 	//?}
 
 	private IrisFoliageShaders() {
@@ -161,8 +190,9 @@ public final class IrisFoliageShaders {
 		foliageShadowDraw = shadowDraw;
 		//? >=26.3 {
 		// On 26.3 Iris swaps the program of any pipeline it has been told about for the pack's own, as it does for the
-		// terrain's: the foliage is drawn with the pack's terrain cutout program, as the pack wrote it. Nothing is built by
-		// the mod, and nothing is drawn into the shadow map, yet. Iris refuses a pipeline told about twice.
+		// terrain's, and builds the pipeline that draws it; the renderer then puts its own program in the pack's place in
+		// that pipeline (see withFoliageProgram). Nothing is drawn into the shadow map yet. Iris refuses a pipeline told
+		// about twice.
 		if (!assigned) {
 			assigned = true;
 			IrisApi.getInstance().assignPipeline(foliagePipeline, IrisProgram.TERRAIN_CUTOUT);
@@ -213,16 +243,9 @@ public final class IrisFoliageShaders {
 			closePrograms();
 			owner = current;
 			generation++;
-			//? <26.3 {
-			/*build(current);
-			*///?}
+			build(current);
 		}
-		//? >=26.3 {
-		// Iris supplies the program itself; see setUp.
-		return true;
-		//?} else {
-		/*return main != null;
-		*///?}
+		return main != null;
 	}
 
 	static int generation() {
@@ -310,9 +333,7 @@ public final class IrisFoliageShaders {
 		}
 	}
 
-	// Not on 26.3 yet: Iris supplies the pack's own program there for now; see setUp.
-	//? <26.3 {
-	/*/^* Builds the mod's two programs for a pack; on any failure leaves none, and says why once. ^/
+	/** Builds the mod's two programs for a pack; on any failure leaves none, and says why once. */
 	private static void build(IrisRenderingPipeline created) {
 		IrisRenderingPipelineAccessor access = (IrisRenderingPipelineAccessor) created;
 		BUILDING.set(true);
@@ -332,14 +353,14 @@ public final class IrisFoliageShaders {
 					//?}
 			));
 			//?} elif >=1.21.1 {
-			/^main = finish(access.mc2$createShader("mc2_foliage", terrain.get(), ProgramId.TerrainCutout,
+			/*main = finish(access.mc2$createShader("mc2_foliage", terrain.get(), ProgramId.TerrainCutout,
 					ShaderKey.TERRAIN_CUTOUT.getAlphaTest(), FORMAT, ShaderKey.TERRAIN_CUTOUT.getFogMode(),
 					false, false, false, false, false));
-			^///?} else {
-			/^main = finish(access.mc2$createShader("mc2_foliage", terrain.get(), ProgramId.TerrainCutout,
+			*///?} else {
+			/*main = finish(access.mc2$createShader("mc2_foliage", terrain.get(), ProgramId.TerrainCutout,
 					ShaderKey.TERRAIN_CUTOUT.getAlphaTest(), FORMAT, ShaderKey.TERRAIN_CUTOUT.getFogMode(),
 					false, false, false, false));
-			^///?}
+			*///?}
 			if (access.mc2$shadowRenderTargets() != null) {
 				Optional<ProgramSource> shadowSource = access.mc2$resolver().resolve(ProgramId.ShadowCutout);
 				if (shadowSource.isPresent()) {
@@ -352,14 +373,14 @@ public final class IrisFoliageShaders {
 							//?}
 					));
 					//?} elif >=1.21.1 {
-					/^shadow = finish(access.mc2$createShadowShader("mc2_foliage_shadow", shadowSource.get(),
+					/*shadow = finish(access.mc2$createShadowShader("mc2_foliage_shadow", shadowSource.get(),
 							ProgramId.ShadowCutout, ShaderKey.SHADOW_TERRAIN_CUTOUT.getAlphaTest(), FORMAT,
 							false, false, false, false));
-					^///?} else {
-					/^shadow = finish(access.mc2$createShadowShader("mc2_foliage_shadow", shadowSource.get(),
+					*///?} else {
+					/*shadow = finish(access.mc2$createShadowShader("mc2_foliage_shadow", shadowSource.get(),
 							ProgramId.ShadowCutout, ShaderKey.SHADOW_TERRAIN_CUTOUT.getAlphaTest(), FORMAT,
 							false, false, false));
-					^///?}
+					*///?}
 				}
 			}
 		} catch (Throwable e) {
@@ -371,22 +392,107 @@ public final class IrisFoliageShaders {
 		}
 	}
 
-	*///?}
 
 	//? >=1.21.11 {
-	//? <26.3 {
-	/*/^* Links the program Iris compiled, or fails the same way Iris would for one of the pack's own. ^/
+	/** Links the program Iris compiled, or fails the same way Iris would for one of the pack's own. */
 	private static GlProgram finish(ShaderSupplier supplier) {
 		int program = supplier.id().program();
 		// 35714 is GL_LINK_STATUS.
 		if (GlStateManager.glGetProgrami(program, 35714) == 0) {
 			throw new IllegalStateException("Linking failed: " + GlStateManager.glGetProgramInfoLog(program, 32768));
 		}
+		//? >=26.3 {
+		// An Iris program binds only the blocks Iris knows by name, so the sway's are tied to points of the mod's own and
+		// bound there by the renderer as it draws; see bindSwayBlocks.
+		if (swayBinding < 0) {
+			int points = GL31.glGetInteger(GL31.GL_MAX_UNIFORM_BUFFER_BINDINGS);
+			swayBinding = points - 1;
+			interactionBinding = points - 2;
+		}
+		bindBlock(program, "iris_FoliageSway", swayBinding);
+		bindBlock(program, "iris_FoliageInteraction", interactionBinding);
+		//?}
 		return supplier.shader().get();
 	}
-	*///?}
+
+	//? >=26.3 {
+	private static void bindBlock(int program, String name, int binding) {
+		int index = GL31.glGetUniformBlockIndex(program, name);
+		if (index != GL31.GL_INVALID_INDEX) {
+			GL31.glUniformBlockBinding(program, index, binding);
+		}
+	}
+
+	/**
+	 * The pipeline to draw the foliage with through the pack: the one Iris built around the pack's program for the
+	 * renderer's pipeline, with the mod's program in its place and the attributes tied to it, as Iris ties them -- by
+	 * name, Iris's prefixed first. Everything else is Iris's: the uniforms, their slots, the state. Built inside the pass
+	 * the first time, as Iris builds its own, and kept until the program goes. Where the mod has no program, the pack's
+	 * own is drawn with, unswayed.
+	 */
+	static CompiledRenderPipeline withFoliageProgram(CompiledRenderPipeline iris) {
+		if (main == null || !(iris instanceof FrontendRenderPipeline frontend)
+				|| !(frontend.backendRenderPipeline() instanceof GlRenderPipeline irisPipeline)) {
+			return iris;
+		}
+		FrontendRenderPipeline built = WITH_FOLIAGE_PROGRAM.get(iris);
+		if (built != null) {
+			return built;
+		}
+		BackendRenderPipeline.CreateInfo original = ((GlRenderPipelineAccess) (Object) irisPipeline).getCreateInfo();
+		List<BackendRenderPipeline.CreateInfo.VertexBuffer> vertexBuffers = new ArrayList<>();
+		List<BackendRenderPipeline.CreateInfo.AttribBinding> attributes = new ArrayList<>();
+		List<VertexFormat> formats = frontend.vertexFormats();
+		for (int slot = 0; slot < formats.size(); slot++) {
+			VertexFormat format = formats.get(slot);
+			if (format == null) {
+				continue;
+			}
+			vertexBuffers.add(new BackendRenderPipeline.CreateInfo.VertexBuffer(slot, format.getVertexSize(),
+					format.getStepRate()));
+			for (VertexFormatElement element : format.getElements()) {
+				int location = GL33C.glGetAttribLocation(main.getProgramId(), "iris_" + element.name());
+				if (location == -1) {
+					location = GL33C.glGetAttribLocation(main.getProgramId(), element.name());
+				}
+				if (location != -1) {
+					attributes.add(new BackendRenderPipeline.CreateInfo.AttribBinding(slot, location, element.offset(),
+							element.format()));
+				}
+			}
+		}
+		BackendRenderPipeline.CreateInfo createInfo = new BackendRenderPipeline.CreateInfo(original.name(),
+				original.shaders(), vertexBuffers, attributes, original.uniforms(), original.pushConstantsSize(),
+				original.depthStencilState(), original.polygonMode(), original.cull(), original.colorTargetStates(),
+				original.primitiveTopology());
+		VertexArray vertexArray = VertexArray.createSource(GL.getCapabilities(), new HashSet<>()).apply(main, createInfo);
+		VERTEX_ARRAYS.add(vertexArray);
+		built = new FrontendRenderPipeline(frontend.name(),
+				new GlRenderPipeline(IrisRenderSystem.getGlDevice(), createInfo, main, vertexArray),
+				formats, frontend.uniformIndices(), frontend.uniforms(), frontend.colorTargetStates(),
+				frontend.wantsDepthTexture(), frontend.pushConstantSize());
+		WITH_FOLIAGE_PROGRAM.put(iris, built);
+		return built;
+	}
+
+	/** Binds the sway settings and the plant pushes where the mod's programs read them; see finish. */
+	static void bindSwayBlocks(GpuBuffer settings, GpuBuffer interaction) {
+		if (swayBinding < 0) {
+			return;
+		}
+		GL31.glBindBufferBase(GL31.GL_UNIFORM_BUFFER, swayBinding, ((GlBuffer) settings).handle());
+		GL31.glBindBufferBase(GL31.GL_UNIFORM_BUFFER, interactionBinding, ((GlBuffer) interaction).handle());
+	}
+	//?}
 
 	private static void closePrograms() {
+		//? >=26.3 {
+		// The pipelines built around the program are let go of without closing them, which would delete the program once
+		// for each; their vertex arrays are closed here, and the program below.
+		WITH_FOLIAGE_PROGRAM.clear();
+		VERTEX_ARRAYS.forEach(VertexArray::close);
+		VERTEX_ARRAYS.clear();
+		//?}
 		if (main != null) {
 			main.close();
 			main = null;

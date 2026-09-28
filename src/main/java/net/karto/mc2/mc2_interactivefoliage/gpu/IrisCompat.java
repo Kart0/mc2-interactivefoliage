@@ -141,6 +141,22 @@ final class IrisCompat {
 		}
 	}
 
+	//? >=26.3 {
+	/** The pipeline to draw the foliage with through the pack: Iris's, with the mod's swaying program in it. */
+	static com.mojang.renderpearl.api.pipeline.CompiledRenderPipeline withFoliageProgram(
+			com.mojang.renderpearl.api.pipeline.CompiledRenderPipeline iris) {
+		return IRIS ? IrisFoliageShaders.withFoliageProgram(iris) : iris;
+	}
+
+	/** Binds the sway settings and the plant pushes where the mod's programs for the pack read them. */
+	static void bindSwayBlocks(com.mojang.renderpearl.api.buffers.GpuBuffer settings,
+			com.mojang.renderpearl.api.buffers.GpuBuffer interaction) {
+		if (IRIS) {
+			IrisFoliageShaders.bindSwayBlocks(settings, interaction);
+		}
+	}
+	//?}
+
 	/** Runs a draw as terrain cutout for the pack. */
 	static void inTerrainPhase(Runnable draw) {
 		if (!IRIS) {

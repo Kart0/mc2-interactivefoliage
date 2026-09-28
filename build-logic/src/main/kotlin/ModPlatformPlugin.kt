@@ -151,9 +151,9 @@ abstract class ModPlatformPlugin @Inject constructor() : Plugin<Project> {
 			if (!ctx.stonecutter.eval(ctx.currentMcVersion, ">=1.21.1")) {
 				exclude("*.polytone.mixins.json")
 			}
-			// Nor is there shader pack or Polytone support on 26.3 yet.
+			// Nor is there Polytone support on 26.3 yet.
 			if (ctx.stonecutter.eval(ctx.currentMcVersion, ">=26.3")) {
-				exclude("*.iris.mixins.json", "*.polytone.mixins.json")
+				exclude("*.polytone.mixins.json")
 			}
 			// Vanilla's render pass is only handed to the foliage from 26.3.
 			if (!ctx.stonecutter.eval(ctx.currentMcVersion, ">=26.3")) {

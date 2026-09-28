@@ -1829,8 +1829,10 @@ public final class GpuFoliageRenderer {
 				// Not drawn where the level's uniforms were not written this frame.
 				return;
 			}
-			// Asked for again here, as the level is drawn, which is when Iris hands back the pack's program in its place.
-			pass.setPipeline(shaderPack ? RenderSystem.getCompiledPipeline(shaderPackPipeline) : pipeline);
+			// Asked for again here, as the level is drawn, which is when Iris hands back the pack's program in its place;
+			// the mod's swaying copy of that program then takes its place in turn.
+			pass.setPipeline(shaderPack
+					? IrisCompat.withFoliageProgram(RenderSystem.getCompiledPipeline(shaderPackPipeline)) : pipeline);
 			// Projection, fog and the globals are bound by vanilla as it opens the pass. The chunk shaders pick mip levels
 			// themselves, so they sample the atlas as the chunk mesh does: smoothly, between mip levels. The mod's own shader
 			// reads it as the atlas is set to be read.
@@ -1845,6 +1847,10 @@ public final class GpuFoliageRenderer {
 			pass.setUniform(SWAY_SETTINGS_UNIFORM, settings);
 			pass.setUniform(GpuFoliageInteraction.UNIFORM, interaction);
 			pass.setIndexBuffer(indexBuffer, indices.type());
+			if (shaderPack) {
+				// The pack's program binds only the blocks Iris knows, so the sway's are bound where the copy reads them.
+				IrisCompat.bindSwayBlocks(settings, interaction);
+			}
 			int boundRegion = -1;
 			for (int i = 0; i < drawList.length; i += 3) {
 				int regionIndex = drawList[i];
