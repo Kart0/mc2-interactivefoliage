@@ -37,8 +37,11 @@ import java.util.Set;
  ^/
 public final class SwayVariantModels {
 
-	/^* Snow! Real Magic's map from a model to its snowy variant, read by name: the mod is not compiled against. ^/
-	private static final String SNOW_CLIENT = "snownee.snow.client.SnowClient";
+	/^*
+	 * Where Snow! Real Magic keeps its map from a model to its snowy variant, read by name: the mod is not compiled
+	 * against. SnowClient up to 10.x (1.20.1), ClientHooks from 12.x (1.21.1).
+	 ^/
+	private static final String[] SNOW_CLIENTS = {"snownee.snow.client.SnowClient", "snownee.snow.client.ClientHooks"};
 	private static final String SNOW_VARIANTS = "snowVariantMapping";
 	private static final String VARIANT_MODEL = "model";
 
@@ -133,7 +136,7 @@ public final class SwayVariantModels {
 		Set<ResourceLocation> found = new HashSet<>();
 		if (ModTemplate.xplat().isModLoaded("snowrealmagic")) {
 			try {
-				Field mapping = Class.forName(SNOW_CLIENT).getField(SNOW_VARIANTS);
+				Field mapping = snowVariantMapping();
 				for (Map.Entry<?, ?> entry : ((Map<?, ?>) mapping.get(null)).entrySet()) {
 					if (!(entry.getKey() instanceof ResourceLocation plant)
 							|| !(PLANT_MODELS.contains(plant) || swayWrapsByName(plant))) {
@@ -154,6 +157,19 @@ public final class SwayVariantModels {
 		}
 		snowyVariants = found;
 		return found;
+	}
+
+	/^* The field Snow! Real Magic keeps its snowy variants in, in whichever class this version has it. ^/
+	private static Field snowVariantMapping() throws ReflectiveOperationException {
+		ReflectiveOperationException missing = null;
+		for (String name : SNOW_CLIENTS) {
+			try {
+				return Class.forName(name).getField(SNOW_VARIANTS);
+			} catch (ReflectiveOperationException e) {
+				missing = e;
+			}
+		}
+		throw missing;
 	}
 }
 *///?}

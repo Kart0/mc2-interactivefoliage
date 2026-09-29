@@ -22,6 +22,9 @@ import java.util.WeakHashMap;
 import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.MethodType;
+import java.util.Collections;
+import java.util.IdentityHashMap;
+import java.util.Set;
 
 /**
  * Snow! Real Magic lets snow settle on plants: the plant's block becomes its snow layer block, and the plant lives on
@@ -36,8 +39,12 @@ import java.lang.invoke.MethodType;
 public final class SnowRealMagicCompat {
 
 	private static final String MOD_ID = "snowrealmagic";
-	/** The one block of the mod that holds a plant; its fences, stairs and walls hold what they were made from. */
-	private static final String SNOW_BLOCK = "snownee.snow.block.EntitySnowLayerBlock";
+	/**
+	 * The classes of the mod's snow blocks that hold a plant; its fences, stairs and walls hold what they were made
+	 * from. Up to 10.x (1.20.1) one block, snowrealmagic:snow; from 12.x (1.21.1) several of one class: snow,
+	 * snow_extra_collision, snowy_plant, and a tall plant's two halves, snowy_double_plant_lower and _upper.
+	 */
+	private static final String[] SNOW_BLOCKS = {"snownee.snow.block.EntitySnowLayerBlock", "snownee.snow.block.SRMSnowLayerBlock"};
 	private static final String SNOW_BLOCK_ENTITY = "snownee.snow.block.entity.SnowBlockEntity";
 	private static final String CORE_MODULE = "snownee.snow.CoreModule";
 	/** How far the mod raises the plants it names in its offset_y tag, above the snow. */
@@ -48,11 +55,11 @@ public final class SnowRealMagicCompat {
 	private static final MethodHandle CONTAINED = LOADED ? findContained() : null;
 	private static final TagKey<?> RAISED = LOADED ? findRaisedTag() : null;
 	/**
-	 * The snow block itself, found once by its class and compared by identity from then on: the renderer asks about
-	 * every block of every section it scans. Null until it is looked for, and when there is none.
+	 * The snow blocks themselves, found once by their class and looked up by identity from then on: the renderer asks
+	 * about every block of every section it scans. Empty until they are looked for, and when there are none.
 	 */
-	private static Block snowBlock;
-	private static boolean snowBlockSought;
+	private static final Set<Block> SNOW_BLOCK_SET = Collections.newSetFromMap(new IdentityHashMap<>());
+	private static boolean snowBlocksSought;
 	private static boolean warned;
 
 	private SnowRealMagicCompat() {
@@ -84,22 +91,29 @@ public final class SnowRealMagicCompat {
 		return CONTAINED != null;
 	}
 
-	/** Whether this is the snow block that can hold a plant. */
+	/** Whether this is one of the snow blocks that can hold a plant. */
 	static boolean isSnowBlock(BlockState state) {
 		if (CONTAINED == null) {
 			return false;
 		}
-		if (!snowBlockSought) {
+		if (!snowBlocksSought) {
 			// Asked only once the world is drawn, when every block is registered.
-			snowBlockSought = true;
-			for (Block block : BuiltInRegistries.BLOCK) {
-				if (block.getClass().getName().equals(SNOW_BLOCK)) {
-					snowBlock = block;
-					break;
+			snowBlocksSought = true;
+			for (String name : SNOW_BLOCKS) {
+				Class<?> type;
+				try {
+					type = Class.forName(name, false, SnowRealMagicCompat.class.getClassLoader());
+				} catch (ClassNotFoundException | LinkageError e) {
+					continue;
+				}
+				for (Block block : BuiltInRegistries.BLOCK) {
+					if (type.isInstance(block)) {
+						SNOW_BLOCK_SET.add(block);
+					}
 				}
 			}
 		}
-		return snowBlock != null && state.getBlock() == snowBlock;
+		return SNOW_BLOCK_SET.contains(state.getBlock());
 	}
 
 	/**

@@ -313,13 +313,23 @@ public class ModCompatRegistry {
 	 * pushed, not to be bent. The plant drawn inside it is still wrapped by Sway, which bends it by its own pipeline
 	 * from the push at that position; the snow is drawn with vanilla's model, which Sway leaves alone. A pipeline
 	 * with a deformation would bend the snow too, and the plant twice.
+	 * <p>
+	 * Up to 10.x (1.20.1) one block holds plants, snowrealmagic:snow; from 12.x (1.21.1) the others below do too, a
+	 * tall plant's two halves each in its own.
 	 */
 	private static void registerSnowRealMagic() {
-		lookup("snowrealmagic:snow").ifPresent(block -> SwayAPI.setBlockPipeline(block, List.of(
-				BuiltinBehaviors.ENTITY_COLLISION_KEY,
-				BuiltinBehaviors.PROXIMITY_FORCE_KEY,
-				BuiltinBehaviors.multiplierKey(1.0F)
-		)));
+		for (String id : new String[] {
+				"snowrealmagic:snow",
+				"snowrealmagic:snow_extra_collision",
+				"snowrealmagic:snowy_plant",
+				"snowrealmagic:snowy_double_plant_lower",
+				"snowrealmagic:snowy_double_plant_upper"}) {
+			lookup(id).ifPresent(block -> SwayAPI.setBlockPipeline(block, List.of(
+					BuiltinBehaviors.ENTITY_COLLISION_KEY,
+					BuiltinBehaviors.PROXIMITY_FORCE_KEY,
+					BuiltinBehaviors.multiplierKey(1.0F)
+			)));
+		}
 	}
 
 	// ------------------------------------------------------------------

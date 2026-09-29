@@ -544,7 +544,7 @@
    "fileInfo": {
     "ModCompatRegistry.java": {
      "kind": "java",
-     "lines": 388,
+     "lines": 398,
      "guard": ""
     }
    }
@@ -1079,11 +1079,13 @@
    "label": "Snow! Real Magic",
    "group": "external",
    "kind": "mod",
-   "summary": "Lets snow settle on plants: the plant's block becomes its snow block (snowrealmagic:snow, an EntitySnowLayerBlock), which keeps the plant in its block entity (SnowBlockEntity.getContainedState) and draws it through the plant's own model, at the same position, before the snow. Grass, ferns, tall grass, large ferns and berry bushes get a snowy variant model (declared in .mcmeta files, kept in its SnowVariantModel wrapper).",
+   "summary": "Lets snow settle on plants: the plant's block becomes one of its snow blocks, which keeps the plant in its block entity (SnowBlockEntity.getContainedState) and draws it through the plant's own model, at the same position, before the snow. Grass, ferns, tall grass, large ferns and berry bushes get a snowy variant model (declared in .mcmeta files, kept in its SnowVariantModel wrapper).",
    "details": [
     "Fabric: draws through Fabric's rendering API (SnowCoveredModel.emitBlockQuads).",
     "Forge: carries its own copy of Fabric's rendering API and Indigo (jar-in-jar); SnowVariantModel only picks the variant through emitBlockQuads, never getQuads.",
-    "Plants it raises onto the snow are tagged snowrealmagic:offset_y (+0.101)."
+    "Plants it raises onto the snow are tagged snowrealmagic:offset_y (+0.101).",
+    "10.x (1.20.1): one snow block holds plants, snowrealmagic:snow (EntitySnowLayerBlock); the snowy variants are mapped in SnowClient.snowVariantMapping.",
+    "12.x (1.21.1): five SRMSnowLayerBlock blocks with the same SnowBlockEntity -- snow, snow_extra_collision, snowy_plant, and snowy_double_plant_lower/_upper, one per half of a tall plant; the snowy variants are mapped in ClientHooks.snowVariantMapping."
    ],
    "fileInfo": {}
   },
@@ -1096,9 +1098,10 @@
     "gpu/SnowRealMagicCompat.java",
     "ModCompatRegistry.java"
    ],
-   "summary": "Read by name, never compiled against. Finds the plant a snow block holds, the snowy variant of a plant's model (walking the wrappers' wrapped/parent/originalModel fields), whether a model is drawn inside the snow (Forge: the snow's OPTIONS model property) and whether a tall plant's top half stands on it. Tested on 1.20.1 Fabric and Forge (vanilla and Embeddium).",
+   "summary": "Read by name, never compiled against. Finds the plant a snow block holds, the snowy variant of a plant's model (walking the wrappers' wrapped/parent/originalModel fields), whether a model is drawn inside the snow (Forge: the snow's OPTIONS model property) and whether a tall plant's top half stands on it. Tested on 1.20.1 Fabric and Forge (vanilla and Embeddium) and 1.21.1 Fabric (vanilla and Iris).",
    "details": [
-    "Sway: ModCompatRegistry gives snowrealmagic:snow a pipeline that only pushes (collision, proximity force, multiplier), no deformation: Sway pushes a position by its block, and the plant drawn there bends by its own pipeline. A deforming pipeline would bend the snow and the plant twice.",
+    "Snow blocks are found by class (EntitySnowLayerBlock up to 10.x, SRMSnowLayerBlock from 12.x) once, then looked up by identity.",
+    "Sway: ModCompatRegistry gives every snow block that holds plants a pipeline that only pushes (collision, proximity force, multiplier), no deformation: Sway pushes a position by its block, and the plant drawn there bends by its own pipeline. A deforming pipeline would bend the snow and the plant twice.",
     "GpuFoliageSplit.bends: foliage is what Sway bends, so the snow block is never wrapped, meshed or given a forced render layer; the plant inside it is.",
     "GPU mesher: a snow block holding a Sway plant meshes the plant (raised as offset_y says, not at 8 layers), with its snowy variant; the anchor and a tall plant's length read the plant inside the snow.",
     "The plant inside changes through its block entity: ClientLevelMixin follows ClientLevel.sendBlockUpdated for the snow block.",
@@ -1109,17 +1112,18 @@
     "Forge and NeoForge force cutoutMipped on the blocks the mod registers (Sway's wrapper loses the render layer); only on blocks Sway bends: on the snow block it hid the snow (solid) and the plant (its own layer) entirely.",
     "Forge: Sway wraps every interactive block's state model, the push-only snow too, and its wrapper tells Indigo the model is plain; ForgeFoliageHooks unwraps blocks Sway only pushes. Each mod has its own mod event bus, so EventPriority only orders listeners within the mod's own bus.",
     "Forge dev: third-party mods must come through modRuntimeOnly (remapped), never raw jars in run/mods (their SRG mixins fail); Snow! Real Magic 10.7.0 is maven.modrinth:iJNje1E8:aQw97T9l, Kiwi 11.10.3 is ufdDoWPd:NSxwah05.",
-    "Not yet written or tested on NeoForge, nor on versions after 1.20.1 (the snowy variant walk is BakedModel-only, before 1.21.11)."
+    "Fabric 1.21.1 dev: Iris 1.8.14-beta.1 fails its mixins in the dev client; test Iris with the built jar in a launcher instance.",
+    "Not yet written or tested on NeoForge, nor on versions after 1.21.1 (the snowy variant walk is BakedModel-only, before 1.21.11)."
    ],
    "fileInfo": {
     "gpu/SnowRealMagicCompat.java": {
      "kind": "java",
-     "lines": 268,
+     "lines": 282,
      "guard": "//? <1.21.11 {"
     },
     "ModCompatRegistry.java": {
      "kind": "java",
-     "lines": 388,
+     "lines": 398,
      "guard": ""
     }
    }
@@ -1176,14 +1180,14 @@
    "files": [
     "platform/fabric/SwayVariantModels.java"
    ],
-   "summary": "Fabric 1.20.1 and 1.21.1: Sway wraps model files by name (block/<name> taken for block <name>), so a model a plant's block state names otherwise -- a resource pack's extra variants, Snow! Real Magic's snowy variants -- never bends. Wraps them with Sway's own SwayModel, leaving the ones Sway reaches alone.",
+   "summary": "Fabric 1.20.1 and 1.21.1: Sway wraps model files by name (block/<name> taken for block <name>), so a model a plant's block state names otherwise -- a resource pack's extra variants, Snow! Real Magic's snowy variants -- never bends. Wraps them with Sway's own SwayModel, leaving the ones Sway reaches alone. Snow! Real Magic's variant map is read from SnowClient (10.x) or ClientHooks (12.x).",
    "details": [
     "From 1.21.11 (and on Forge 1.20.1) Sway wraps each block state's whole model, and every variant bends already."
    ],
    "fileInfo": {
     "platform/fabric/SwayVariantModels.java": {
      "kind": "java",
-     "lines": 160,
+     "lines": 176,
      "guard": "//? fabric && <1.21.11 {"
     }
    }
@@ -2148,7 +2152,7 @@
     "label": "Snow! Real Magic",
     "cells": {
      "1.20.1": "fabric: done (SwayVariantModels, GPU plant + snowy variant, particles) | forge: done (Indigo mixins, vanilla and Embeddium, particles)",
-     "1.21.1": "fabric: code shared with 1.20.1, untested | neoforge: not written",
+     "1.21.1": "fabric: done (SRM 12.x snow blocks, CPU, GPU, Iris, particles) | neoforge: not written",
      "1.21.11": "not written (BlockStateModel era)",
      "26.1.2": "not written",
      "26.2": "not written",
@@ -2286,7 +2290,7 @@
   },
   "gpu/SnowRealMagicCompat.java": {
    "kind": "java",
-   "lines": 268,
+   "lines": 282,
    "guard": "//? <1.21.11 {"
   },
   "gpu/SnowShakeParticles.java": {
@@ -2401,7 +2405,7 @@
   },
   "ModCompatRegistry.java": {
    "kind": "java",
-   "lines": 388,
+   "lines": 398,
    "guard": ""
   },
   "ModTemplate.java": {
@@ -2446,7 +2450,7 @@
   },
   "platform/fabric/SwayVariantModels.java": {
    "kind": "java",
-   "lines": 160,
+   "lines": 176,
    "guard": "//? fabric && <1.21.11 {"
   },
   "platform/forge/ForgeClientEventSubscriber.java": {
