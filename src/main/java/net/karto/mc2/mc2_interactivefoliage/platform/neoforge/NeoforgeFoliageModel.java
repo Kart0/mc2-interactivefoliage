@@ -4,7 +4,9 @@ package net.karto.mc2.mc2_interactivefoliage.platform.neoforge;
 
 /*import net.karto.mc2.mc2_interactivefoliage.gpu.GpuFoliageSplit;
 //? <1.21.11 {
-/^import net.minecraft.client.renderer.RenderType;
+/^import com.github.razorplay01.sway.platform.neoforge.util.SwayModel;
+import net.karto.mc2.mc2_interactivefoliage.gpu.SnowRealMagicCompat;
+import net.minecraft.client.renderer.RenderType;
 import net.minecraft.client.renderer.block.model.BakedQuad;
 import net.minecraft.client.resources.model.BakedModel;
 import net.minecraft.core.Direction;
@@ -142,17 +144,29 @@ public final class NeoforgeFoliageModel extends BakedModelWrapper<BakedModel> {
 
 	// Set in the model data of a block whose foliage the GPU renderer draws.
 	private static final ModelProperty<Boolean> LEFT_TO_GPU = new ModelProperty<>();
+	// Set in the model data of a plant Snow! Real Magic draws snowy: held in its snow, or a tall plant's top half on it.
+	private static final ModelProperty<Boolean> SNOWY = new ModelProperty<>();
+
+	// The snowy variant last drawn, and Sway's wrapper around it, which bends it as it bends the plant.
+	private BakedModel snowyVariant;
+	private BakedModel swayedSnowyVariant;
 
 	public NeoforgeFoliageModel(BakedModel swayModel) {
 		super(swayModel);
 	}
 
+	// Asked for a plant of its own by the chunk compiler, and for a plant held in Snow! Real Magic's snow as the snow
+	// draws it (see SnowRenderApiMixin), at the snow's position either way.
 	@Override
 	public ModelData getModelData(BlockAndTintGetter level, BlockPos pos, BlockState state, ModelData modelData) {
 		if (GpuFoliageSplit.leaveToGpu(level, pos)) {
 			return modelData.derive().with(LEFT_TO_GPU, Boolean.TRUE).build();
 		}
-		return super.getModelData(level, pos, state, modelData);
+		ModelData data = super.getModelData(level, pos, state, modelData);
+		if (SnowRealMagicCompat.drawnSnowy(level, pos, state)) {
+			data = data.derive().with(SNOWY, Boolean.TRUE).build();
+		}
+		return data;
 	}
 
 	// No layer at all for a block left to the GPU renderer, so a mesher skips it outright.
@@ -170,6 +184,19 @@ public final class NeoforgeFoliageModel extends BakedModelWrapper<BakedModel> {
 			RenderType renderType) {
 		if (extraData.has(LEFT_TO_GPU)) {
 			return List.of();
+		}
+		// Where Snow! Real Magic draws the plant snowy. It picks its snowy variant only when asked through Fabric's
+		// rendering API, which Sway's wrapper and this one do not pass on, so the variant is drawn from here -- through
+		// Sway's own wrapper, so it bends as the plant would.
+		if (state != null && extraData.has(SNOWY)) {
+			BakedModel variant = SnowRealMagicCompat.snowyVariantOf(this);
+			if (variant != null) {
+				if (variant != snowyVariant) {
+					swayedSnowyVariant = new SwayModel(variant);
+					snowyVariant = variant;
+				}
+				return swayedSnowyVariant.getQuads(state, side, rand, extraData, renderType);
+			}
 		}
 		return super.getQuads(state, side, rand, extraData, renderType);
 	}

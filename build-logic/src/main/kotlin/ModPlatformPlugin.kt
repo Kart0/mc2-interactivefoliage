@@ -163,6 +163,10 @@ abstract class ModPlatformPlugin @Inject constructor() : Plugin<Project> {
 			if (ctx.loader !is Loader.Forge) {
 				exclude("*.snowrealmagic.mixins.json")
 			}
+			// And through the one it carries on NeoForge, where Sway bends by model data, before 1.21.11.
+			if (ctx.loader !is Loader.NeoForge || ctx.stonecutter.eval(ctx.currentMcVersion, ">=1.21.11")) {
+				exclude("*.snowrealmagic_neoforge.mixins.json")
+			}
 			// Vanilla's render pass is only handed to the foliage from 26.3.
 			if (!ctx.stonecutter.eval(ctx.currentMcVersion, ">=26.3")) {
 				exclude("*.pass.mixins.json")

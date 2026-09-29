@@ -163,6 +163,10 @@ sealed class Loader(val id: String) {
 					if (ctx.loader is Loader.Forge) {
 						add(ForgeMixin("${ctx.modId}.snowrealmagic.mixins.json"))
 					}
+					// And on NeoForge, where Sway bends by model data, before 1.21.11.
+					if (ctx.loader is Loader.NeoForge && !ctx.stonecutter.eval(ctx.currentMcVersion, ">=1.21.11")) {
+						add(ForgeMixin("${ctx.modId}.snowrealmagic_neoforge.mixins.json"))
+					}
 				}
 			)
 

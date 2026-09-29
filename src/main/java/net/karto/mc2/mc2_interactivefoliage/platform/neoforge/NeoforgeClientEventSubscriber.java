@@ -3,6 +3,7 @@ package net.karto.mc2.mc2_interactivefoliage.platform.neoforge;
 //? neoforge {
 
 /*import net.karto.mc2.mc2_interactivefoliage.ModTemplate;
+import net.karto.mc2.mc2_interactivefoliage.gpu.SnowShakeParticles;
 import net.minecraft.client.Minecraft;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.SubscribeEvent;
@@ -32,6 +33,8 @@ public class NeoforgeClientEventSubscriber {
         NeoforgeKeyBindings.tick(
                 Minecraft.getInstance()
         );
+        // Once per tick, as Fabric's end of tick.
+        SnowShakeParticles.tick();
     }
 }
 *///?}

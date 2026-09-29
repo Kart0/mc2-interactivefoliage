@@ -268,6 +268,16 @@ public final class SnowRealMagicCompat {
 	^///?}
 	*///?}
 
+	/**
+	 * Whether Snow! Real Magic draws the plant at this position snowy, as the chunk mesh shows it: a plant held in its
+	 * snow (the level has the snow there, the plant being drawn from inside it), or the top half of a tall plant
+	 * standing on it.
+	 */
+	public static boolean drawnSnowy(BlockGetter level, BlockPos pos, BlockState plant) {
+		return CONTAINED != null && (isSnowBlock(level.getBlockState(pos)) && !isSnowBlock(plant)
+				|| standsOnSnow(level, pos, plant));
+	}
+
 	/** Whether this is the top half of a tall plant whose lower half is held in Snow! Real Magic's snow. */
 	public static boolean standsOnSnow(BlockGetter level, BlockPos pos, BlockState state) {
 		return CONTAINED != null && state.hasProperty(DoublePlantBlock.HALF) && isSnowBlock(level.getBlockState(pos.below()));

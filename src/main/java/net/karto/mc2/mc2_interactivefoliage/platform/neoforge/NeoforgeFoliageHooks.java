@@ -11,7 +11,9 @@ import net.minecraft.client.renderer.block.dispatch.BlockStateModel;
 //?} elif >=1.21.11 {
 /^import net.minecraft.client.renderer.block.model.BlockStateModel;
 ^///?} else {
-/^import net.minecraft.client.renderer.block.BlockModelShaper;
+/^import com.github.razorplay01.sway.api.SwayAPI;
+import com.github.razorplay01.sway.platform.neoforge.util.SwayModel;
+import net.minecraft.client.renderer.block.BlockModelShaper;
 import net.minecraft.client.resources.model.BakedModel;
 import net.minecraft.client.resources.model.ModelResourceLocation;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -20,6 +22,7 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.level.block.Block;
 import net.neoforged.neoforge.client.event.RegisterShadersEvent;
 import java.io.IOException;
+import java.lang.reflect.Field;
 import java.util.HashMap;
 ^///?}
 import net.minecraft.world.level.block.state.BlockState;
@@ -145,6 +148,49 @@ public final class NeoforgeFoliageHooks {
 			}
 		}
 		PLAIN_MODELS.clear();
+		// Sway wraps the model of every block it knows, the ones it only pushes and never bends as well: Snow! Real
+		// Magic's snow, whose plant inside bends on its own. Its wrapper says the model is a plain one, so the snow's
+		// own drawing -- the snow and the plant in it -- is skipped and only the snow is drawn. Those models are
+		// handed back as they were.
+		for (Map.Entry<ModelResourceLocation, BakedModel> entry : models.entrySet()) {
+			if (entry.getValue() instanceof SwayModel sway && isPushedOnlyBlockModel(entry.getKey())) {
+				BakedModel inside = insideSway(sway);
+				if (inside != null) {
+					entry.setValue(inside);
+				}
+			}
+		}
+	}
+
+	private static Field swayParent;
+	private static boolean swayParentMissing;
+
+	// The model Sway wrapped, or null if its wrapper is not one this knows.
+	private static BakedModel insideSway(SwayModel sway) {
+		if (swayParentMissing) {
+			return null;
+		}
+		try {
+			if (swayParent == null) {
+				swayParent = SwayModel.class.getDeclaredField("parent");
+				swayParent.setAccessible(true);
+			}
+			return (BakedModel) swayParent.get(sway);
+		} catch (ReflectiveOperationException | RuntimeException e) {
+			swayParentMissing = true;
+			ModTemplate.LOGGER.warn("Could not unwrap Sway's model of a block it only pushes; Snow! Real Magic's snow "
+					+ "may not be drawn", e);
+			return null;
+		}
+	}
+
+	// A block state's model, of a block Sway pushes but does not bend.
+	private static boolean isPushedOnlyBlockModel(ModelResourceLocation id) {
+		if (ModelResourceLocation.INVENTORY_VARIANT.equals(id.variant())) {
+			return false;
+		}
+		return BuiltInRegistries.BLOCK.getOptional(id.id())
+				.map(block -> SwayAPI.isInteractive(block) && !GpuFoliageSplit.bends(block)).orElse(false);
 	}
 
 	// The foliage shader is loaded with the game's own core shaders, and again on every resource reload.
