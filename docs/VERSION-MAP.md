@@ -255,6 +255,7 @@ Plants held inside Snow! Real Magic's snow: pushed by Sway, bent, drawn snowy on
   - GpuFoliageSplit.bends: foliage is what Sway bends, so the snow block is never wrapped, meshed or given a forced render layer; the plant inside it is.
   - GPU mesher: a snow block holding a Sway plant meshes the plant (raised as offset_y says, not at 8 layers), with its snowy variant; the anchor and a tall plant's length read the plant inside the snow.
   - The plant inside changes through its block entity: ClientLevelMixin follows ClientLevel.sendBlockUpdated for the snow block.
+  - GPU: a plant under the snow (held in it, or a tall plant's top half on it) keeps SNOW_LADEN_SWAY (20%) of its sway, wind included, scaled into its wave weight as it is meshed (GpuFoliageRenderer); pushes are untouched. No shader changes.
   - snowVariants off in its client config: the plain model everywhere, as the chunk mesh.
   - Pitfall: Forge and NeoForge force cutoutMipped on the blocks the mod registers (Sway's wrapper loses the render layer); only on blocks Sway bends: on the snow block it hid the snow (solid) and the plant (its own layer) entirely.
   - Pitfall: Forge: Sway wraps every interactive block's state model, the push-only snow too, and its wrapper tells Indigo the model is plain; ForgeFoliageHooks unwraps blocks Sway only pushes. Each mod has its own mod event bus, so EventPriority only orders listeners within the mod's own bus.

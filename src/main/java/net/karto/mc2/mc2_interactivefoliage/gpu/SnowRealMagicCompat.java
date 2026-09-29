@@ -6,13 +6,13 @@ import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.tags.TagKey;
 import net.minecraft.world.level.BlockGetter;
 import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.DoublePlantBlock;
 import net.minecraft.world.level.block.SnowLayerBlock;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 
 //? <1.21.11 {
 /*import net.minecraft.client.resources.model.BakedModel;
-import net.minecraft.world.level.block.DoublePlantBlock;
 
 import java.lang.reflect.Field;
 import java.util.Map;
@@ -166,11 +166,6 @@ public final class SnowRealMagicCompat {
 		return variant != null ? variant : model;
 	}
 
-	/^* Whether this is the top half of a tall plant whose lower half is held in Snow! Real Magic's snow. ^/
-	public static boolean standsOnSnow(BlockGetter level, BlockPos pos, BlockState state) {
-		return CONTAINED != null && state.hasProperty(DoublePlantBlock.HALF) && isSnowBlock(level.getBlockState(pos.below()));
-	}
-
 	/^*
 	 * The snowy variant of a plant's model, or null where it has none or the player has switched them off. Snow! Real
 	 * Magic keeps it in a wrapper of its own around the plant's model, found among the wrappers around it -- the mod's,
@@ -258,6 +253,11 @@ public final class SnowRealMagicCompat {
 	}
 	^///?}
 	*///?}
+
+	/** Whether this is the top half of a tall plant whose lower half is held in Snow! Real Magic's snow. */
+	public static boolean standsOnSnow(BlockGetter level, BlockPos pos, BlockState state) {
+		return CONTAINED != null && state.hasProperty(DoublePlantBlock.HALF) && isSnowBlock(level.getBlockState(pos.below()));
+	}
 
 	/** How far the mod raises a plant it holds, which the chunk mesh shows: some small plants sit on the snow. */
 	@SuppressWarnings("unchecked")

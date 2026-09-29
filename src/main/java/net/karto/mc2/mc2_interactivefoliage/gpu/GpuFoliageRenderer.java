@@ -667,6 +667,12 @@ public final class GpuFoliageRenderer {
 	private static final Set<Region> DIRTY_REGIONS = new LinkedHashSet<>();
 
 	private static final Predicate<BlockState> FOLIAGE = GpuFoliageSplit::mayHoldFoliage;
+	/**
+	 * How much of its sway a plant under Snow! Real Magic's snow keeps, as if the snow weighed it down: a little less
+	 * than a plant keeps while an entity pushes it (MC2_PUSHED_SWAY in sway.glsl). Its wind is scaled with it; a push
+	 * moves it as far as any other.
+	 */
+	private static final float SNOW_LADEN_SWAY = 0.20F;
 
 	private static ModelBlockRenderer modelRenderer;
 	/** Whether the renderer is in charge of the near foliage, following the waving foliage setting. */
@@ -1034,6 +1040,11 @@ public final class GpuFoliageRenderer {
 		private int length = 1;
 		/** How much of rain's wind reaches the plant; see WindShelter. Set once the anchor is prepared. */
 		private float exposure = 1.0F;
+		/**
+		 * How much of its sway the plant keeps, wind included: all of it, or SNOW_LADEN_SWAY for a plant weighed down by
+		 * Snow! Real Magic's snow. A push moves it as far as any other.
+		 */
+		private float waving = 1.0F;
 		/** Sway's own deformation for this plant, which decides how far a push moves each vertex. */
 		private DeformationContributor deformation;
 		private float deformationScale;
@@ -2847,7 +2858,7 @@ public final class GpuFoliageRenderer {
 			weightScratch.putFloat(packCell(anchor.cellX - regionOrigin.getX(),
 					anchor.cellY - regionOrigin.getY(),
 					anchor.cellZ - regionOrigin.getZ()));
-			weightScratch.putFloat(packWeights(anchor.weightAt(regionOrigin.getY() + y),
+			weightScratch.putFloat(packWeights(anchor.weightAt(regionOrigin.getY() + y) * anchor.waving,
 					anchor.pushWeightAt(localY), anchor.exposure));
 			return this;
 		}
@@ -2928,7 +2939,7 @@ public final class GpuFoliageRenderer {
 			weightScratch.putFloat(packCell(anchor.cellX - regionOrigin.getX(),
 					anchor.cellY - regionOrigin.getY(),
 					anchor.cellZ - regionOrigin.getZ()));
-			weightScratch.putFloat(packWeights(anchor.weightAt(regionOrigin.getY() + y),
+			weightScratch.putFloat(packWeights(anchor.weightAt(regionOrigin.getY() + y) * anchor.waving,
 					anchor.pushWeightAt(localY), anchor.exposure));
 		}
 
@@ -3142,7 +3153,7 @@ public final class GpuFoliageRenderer {
 				float localY = quad.position(vertex).y();
 				float worldY = regionOrigin.getY() + y + localY;
 				weightScratch.putFloat(cell);
-				weightScratch.putFloat(packWeights(anchor.weightAt(worldY), anchor.pushWeightAt(localY),
+				weightScratch.putFloat(packWeights(anchor.weightAt(worldY) * anchor.waving, anchor.pushWeightAt(localY),
 						anchor.exposure));
 			}
 		};
@@ -3187,6 +3198,8 @@ public final class GpuFoliageRenderer {
 					// so the anchor shares the block's.
 					anchor.exposure = shelter == null ? 1.0F
 							: shelter.exposureAt(pos.getX(), anchor.cellY, pos.getZ(), anchor.length);
+					// A plant under Snow! Real Magic's snow -- held in it, or the top half of one that is -- is weighed down.
+					anchor.waving = inSnow || SnowRealMagicCompat.standsOnSnow(level, pos, state) ? SNOW_LADEN_SWAY : 1.0F;
 					// Another mod may draw the plant lower than its block, as the chunk mesh shows it.
 					float lift = TerrainSlabsCompat.offsetY(level, pos, state) + raised;
 					//? iris {
