@@ -666,7 +666,7 @@ public final class GpuFoliageRenderer {
 	/** Regions whose buffers no longer match their sections. */
 	private static final Set<Region> DIRTY_REGIONS = new LinkedHashSet<>();
 
-	private static final Predicate<BlockState> FOLIAGE = GpuFoliageSplit::isFoliage;
+	private static final Predicate<BlockState> FOLIAGE = GpuFoliageSplit::mayHoldFoliage;
 
 	private static ModelBlockRenderer modelRenderer;
 	/** Whether the renderer is in charge of the near foliage, following the waving foliage setting. */
@@ -1070,7 +1070,7 @@ public final class GpuFoliageRenderer {
 			// plant where it stands on a slab.
 			anchorY = hanging ? anchor.getY() + 1
 					: anchor.getY() + TerrainSlabsCompat.offsetY(level, anchor,
-							anchor.equals(pos) ? state : level.getBlockState(anchor));
+							anchor.equals(pos) ? state : SnowRealMagicCompat.plantAt(level, anchor));
 			cellX = anchor.getX();
 			cellY = anchor.getY();
 			cellZ = anchor.getZ();
@@ -1091,7 +1091,8 @@ public final class GpuFoliageRenderer {
 			if (cached != null) {
 				return cached;
 			}
-			BlockState anchorState = level.getBlockState(anchor);
+			// A tall plant's lower half may stand inside Snow! Real Magic's snow, its upper half above it.
+			BlockState anchorState = SnowRealMagicCompat.plantAt(level, anchor);
 			int value = multiblock.getLinkedBlocks(anchor, anchorState, level).size() + 1;
 			lengthByAnchor.put(anchor.immutable(), value);
 			return value;
@@ -1136,6 +1137,17 @@ public final class GpuFoliageRenderer {
 		Region region = REGIONS.get(regionKeyOf(key));
 		if (region != null && region.sections[slotOf(key)] != null) {
 			DIRTY.add(key);
+		}
+	}
+
+	/**
+	 * A block's data changed without the block itself changing. Only Snow! Real Magic's snow cares: the plant it holds
+	 * lives in its block entity, which arrives after the block and changes on its own -- when the snow is placed on a
+	 * plant, or a plant is put into or taken out of it.
+	 */
+	public static void onBlockUpdated(BlockPos pos, BlockState state) {
+		if (SnowRealMagicCompat.isSnowBlock(state)) {
+			onBlockChanged(pos);
 		}
 	}
 
@@ -2076,11 +2088,11 @@ public final class GpuFoliageRenderer {
 		List<Region> drawn = DRAWN;
 		boolean shadowPass = shadowModelView != null;
 		//? iris {
-		/^RenderPipeline pipeline = !meshedForShaderPack ? ownPipeline()
+		RenderPipeline pipeline = !meshedForShaderPack ? ownPipeline()
 				: shadowPass ? shaderPackShadowPipeline : shaderPackPipeline;
-		^///?} else {
-		RenderPipeline pipeline = ownPipeline();
-		//?}
+		//?} else {
+		/^RenderPipeline pipeline = ownPipeline();
+		^///?}
 		// The terrain's shaders read where each region is from the chunk section block, the mod's own from the transform.
 		boolean terrainShaders = pipeline == TERRAIN_PIPELINE;
 		// Every region's offset is written in one mapping of the uniform ring buffer. The singular
@@ -2213,11 +2225,11 @@ public final class GpuFoliageRenderer {
 		}
 		};
 		//? iris {
-		/^if (meshedForShaderPack) {
+		if (meshedForShaderPack) {
 			IrisCompat.inTerrainPhase(draw);
 			return;
 		}
-		^///?}
+		//?}
 		draw.run();
 	}
 	*///?}
@@ -3153,8 +3165,21 @@ public final class GpuFoliageRenderer {
 			for (int dy = 0; dy < SECTION_SIZE; dy++) {
 				for (int dz = 0; dz < SECTION_SIZE; dz++) {
 					BlockState state = blocks.getBlockState(dx, dy, dz);
+					// Snow! Real Magic's snow holding a plant: the plant is meshed, the snow stays with the chunk mesh.
+					float raised = 0.0F;
+					boolean inSnow = false;
 					if (!GpuFoliageSplit.isFoliage(state)) {
-						continue;
+						if (!SnowRealMagicCompat.isSnowBlock(state)) {
+							continue;
+						}
+						pos.set(origin.getX() + dx, origin.getY() + dy, origin.getZ() + dz);
+						BlockState plant = SnowRealMagicCompat.plantIn(level, pos, state);
+						if (plant == null || !GpuFoliageSplit.isFoliage(plant)) {
+							continue;
+						}
+						state = plant;
+						raised = SnowRealMagicCompat.liftOf(plant);
+						inSnow = true;
 					}
 					pos.set(origin.getX() + dx, origin.getY() + dy, origin.getZ() + dz);
 					anchor.prepare(state, pos, level);
@@ -3163,7 +3188,7 @@ public final class GpuFoliageRenderer {
 					anchor.exposure = shelter == null ? 1.0F
 							: shelter.exposureAt(pos.getX(), anchor.cellY, pos.getZ(), anchor.length);
 					// Another mod may draw the plant lower than its block, as the chunk mesh shows it.
-					float lift = TerrainSlabsCompat.offsetY(level, pos, state);
+					float lift = TerrainSlabsCompat.offsetY(level, pos, state) + raised;
 					//? iris {
 					if (meshedForShaderPack) {
 						// The pack reads which block each vertex belongs to, and where its centre is, as it does on the
@@ -3194,8 +3219,8 @@ public final class GpuFoliageRenderer {
 					/^poseStack.pushPose();
 					poseStack.translate(offsetX + dx, offsetY + dy + lift, offsetZ + dz);
 					output.beginBlock(offsetY + dy + lift);
-					tesselate(level, GpuFoliageSplit.modelFor(state, models.getBlockModel(state)),
-							state, pos, poseStack, output, random);
+					tesselate(level, SnowRealMagicCompat.snowyVariant(GpuFoliageSplit.modelFor(state,
+							models.getBlockModel(state)), state, level, pos, inSnow), state, pos, poseStack, output, random);
 					poseStack.popPose();
 					^///?}
 					*///?}

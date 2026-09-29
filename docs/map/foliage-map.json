@@ -80,6 +80,11 @@
    "about": "The foliage in Polytone's shadow map."
   },
   {
+   "id": "snowrealmagic",
+   "label": "Snow! Real Magic",
+   "about": "Plants held inside Snow! Real Magic's snow: pushed by Sway, bent, drawn snowy on the CPU and the GPU, shaking snow off when touched."
+  },
+  {
    "id": "loader",
    "label": "Loaders",
    "about": "Where the mod meets Fabric, NeoForge and Forge."
@@ -123,7 +128,7 @@
    "fileInfo": {
     "gpu/GpuFoliageRenderer.java": {
      "kind": "java",
-     "lines": 3315,
+     "lines": 3340,
      "guard": "//? >=1.20.1 {"
     }
    }
@@ -147,7 +152,7 @@
    "fileInfo": {
     "gpu/GpuFoliageRenderer.java": {
      "kind": "java",
-     "lines": 3315,
+     "lines": 3340,
      "guard": "//? >=1.20.1 {"
     }
    }
@@ -172,7 +177,7 @@
    "fileInfo": {
     "gpu/GpuFoliageRenderer.java": {
      "kind": "java",
-     "lines": 3315,
+     "lines": 3340,
      "guard": "//? >=1.20.1 {"
     }
    }
@@ -206,7 +211,7 @@
    "fileInfo": {
     "gpu/GpuFoliageRenderer.java": {
      "kind": "java",
-     "lines": 3315,
+     "lines": 3340,
      "guard": "//? >=1.20.1 {"
     },
     "mixin/LevelPassMixin.java": {
@@ -232,7 +237,7 @@
    "fileInfo": {
     "gpu/GpuFoliageRenderer.java": {
      "kind": "java",
-     "lines": 3315,
+     "lines": 3340,
      "guard": "//? >=1.20.1 {"
     }
    }
@@ -254,7 +259,7 @@
    "fileInfo": {
     "gpu/GpuFoliageSplit.java": {
      "kind": "java",
-     "lines": 441,
+     "lines": 490,
      "guard": "//? >=1.20.1 {"
     }
    }
@@ -312,7 +317,7 @@
     },
     "platform/neoforge/NeoforgeFoliageHooks.java": {
      "kind": "java",
-     "lines": 171,
+     "lines": 170,
      "guard": "//? neoforge && >=1.21.1 {"
     }
    }
@@ -339,12 +344,12 @@
    "fileInfo": {
     "platform/forge/ForgeFoliageModel.java": {
      "kind": "java",
-     "lines": 70,
+     "lines": 104,
      "guard": "//? forge {"
     },
     "platform/forge/ForgeFoliageHooks.java": {
      "kind": "java",
-     "lines": 141,
+     "lines": 186,
      "guard": "//? forge {"
     }
    }
@@ -372,7 +377,7 @@
     },
     "gpu/GpuFoliageSplit.java": {
      "kind": "java",
-     "lines": 441,
+     "lines": 490,
      "guard": "//? >=1.20.1 {"
     }
    }
@@ -394,7 +399,7 @@
    "fileInfo": {
     "mixin/ClientLevelMixin.java": {
      "kind": "java",
-     "lines": 30,
+     "lines": 36,
      "guard": "//? >=1.20.1 {"
     },
     "mixin/LevelExtractorMixin.java": {
@@ -434,7 +439,7 @@
    "fileInfo": {
     "gpu/GpuFoliageInteraction.java": {
      "kind": "java",
-     "lines": 389,
+     "lines": 394,
      "guard": "//? >=1.20.1 {"
     }
    }
@@ -539,7 +544,7 @@
    "fileInfo": {
     "ModCompatRegistry.java": {
      "kind": "java",
-     "lines": 367,
+     "lines": 388,
      "guard": ""
     }
    }
@@ -1070,6 +1075,136 @@
    "fileInfo": {}
   },
   {
+   "id": "srm",
+   "label": "Snow! Real Magic",
+   "group": "external",
+   "kind": "mod",
+   "summary": "Lets snow settle on plants: the plant's block becomes its snow block (snowrealmagic:snow, an EntitySnowLayerBlock), which keeps the plant in its block entity (SnowBlockEntity.getContainedState) and draws it through the plant's own model, at the same position, before the snow. Grass, ferns, tall grass, large ferns and berry bushes get a snowy variant model (declared in .mcmeta files, kept in its SnowVariantModel wrapper).",
+   "details": [
+    "Fabric: draws through Fabric's rendering API (SnowCoveredModel.emitBlockQuads).",
+    "Forge: carries its own copy of Fabric's rendering API and Indigo (jar-in-jar); SnowVariantModel only picks the variant through emitBlockQuads, never getQuads.",
+    "Plants it raises onto the snow are tagged snowrealmagic:offset_y (+0.101)."
+   ],
+   "fileInfo": {}
+  },
+  {
+   "id": "srm-compat",
+   "label": "SnowRealMagicCompat",
+   "group": "snowrealmagic",
+   "kind": "compat",
+   "files": [
+    "gpu/SnowRealMagicCompat.java",
+    "ModCompatRegistry.java"
+   ],
+   "summary": "Read by name, never compiled against. Finds the plant a snow block holds, the snowy variant of a plant's model (walking the wrappers' wrapped/parent/originalModel fields), whether a model is drawn inside the snow (Forge: the snow's OPTIONS model property) and whether a tall plant's top half stands on it. Tested on 1.20.1 Fabric and Forge (vanilla and Embeddium).",
+   "details": [
+    "Sway: ModCompatRegistry gives snowrealmagic:snow a pipeline that only pushes (collision, proximity force, multiplier), no deformation: Sway pushes a position by its block, and the plant drawn there bends by its own pipeline. A deforming pipeline would bend the snow and the plant twice.",
+    "GpuFoliageSplit.bends: foliage is what Sway bends, so the snow block is never wrapped, meshed or given a forced render layer; the plant inside it is.",
+    "GPU mesher: a snow block holding a Sway plant meshes the plant (raised as offset_y says, not at 8 layers), with its snowy variant; the anchor and a tall plant's length read the plant inside the snow.",
+    "The plant inside changes through its block entity: ClientLevelMixin follows ClientLevel.sendBlockUpdated for the snow block.",
+    "snowVariants off in its client config: the plain model everywhere, as the chunk mesh."
+   ],
+   "pitfalls": [
+    "Forge and NeoForge force cutoutMipped on the blocks the mod registers (Sway's wrapper loses the render layer); only on blocks Sway bends: on the snow block it hid the snow (solid) and the plant (its own layer) entirely.",
+    "Forge: Sway wraps every interactive block's state model, the push-only snow too, and its wrapper tells Indigo the model is plain; ForgeFoliageHooks unwraps blocks Sway only pushes. Each mod has its own mod event bus, so EventPriority only orders listeners within the mod's own bus.",
+    "Forge dev: third-party mods must come through modRuntimeOnly (remapped), never raw jars in run/mods (their SRG mixins fail); Snow! Real Magic 10.7.0 is maven.modrinth:iJNje1E8:aQw97T9l, Kiwi 11.10.3 is ufdDoWPd:NSxwah05.",
+    "Not yet written or tested on NeoForge, nor on versions after 1.20.1 (the snowy variant walk is BakedModel-only, before 1.21.11)."
+   ],
+   "fileInfo": {
+    "gpu/SnowRealMagicCompat.java": {
+     "kind": "java",
+     "lines": 268,
+     "guard": "//? <1.21.11 {"
+    },
+    "ModCompatRegistry.java": {
+     "kind": "java",
+     "lines": 388,
+     "guard": ""
+    }
+   }
+  },
+  {
+   "id": "srm-forge-indigo",
+   "label": "Indigo mixins (Forge)",
+   "group": "snowrealmagic",
+   "kind": "hook",
+   "loaders": [
+    "forge"
+   ],
+   "versions": [
+    "<1.21.1"
+   ],
+   "files": [
+    "mixin/snowrealmagic/IndigoBlockPositionMixin.java",
+    "mixin/snowrealmagic/IndigoBlockRenderMixin.java",
+    "platform/forge/ForgeFoliageModel.java"
+   ],
+   "summary": "@Pseudo mixins into the Indigo Snow! Real Magic carries, in their own optional config (mc2_interactivefoliage.snowrealmagic.mixins.json, Forge only). TerrainRenderContext.tessellateBlock (vanilla chunk builds) tells Sway the block's position (SwayRenderContext), which Sway otherwise only learns from ModelBlockRenderer.tesselateBlock, and makes the GPU decision for the plant in the snow; BlockRenderContext.render (Embeddium draws Fabric models through it) makes that decision in chunk builds only.",
+   "details": [
+    "ForgeFoliageModel: withholds a plant drawn inside the snow when the decision says GPU (GpuFoliageSplit.snowPlantLeftToGpu), and draws the snowy variant, wrapped in Sway's own SwayModel so it bends, where Snow! Real Magic would (inside the snow, or a tall plant's top half on it, marked ON_SNOW in getModelData)."
+   ],
+   "fileInfo": {
+    "mixin/snowrealmagic/IndigoBlockPositionMixin.java": {
+     "kind": "java",
+     "lines": 53,
+     "guard": "//? forge {"
+    },
+    "mixin/snowrealmagic/IndigoBlockRenderMixin.java": {
+     "kind": "java",
+     "lines": 53,
+     "guard": "//? forge {"
+    },
+    "platform/forge/ForgeFoliageModel.java": {
+     "kind": "java",
+     "lines": 104,
+     "guard": "//? forge {"
+    }
+   }
+  },
+  {
+   "id": "sway-variants",
+   "label": "SwayVariantModels",
+   "group": "snowrealmagic",
+   "kind": "compat",
+   "loaders": [
+    "fabric"
+   ],
+   "versions": [
+    "<1.21.11"
+   ],
+   "files": [
+    "platform/fabric/SwayVariantModels.java"
+   ],
+   "summary": "Fabric 1.20.1 and 1.21.1: Sway wraps model files by name (block/<name> taken for block <name>), so a model a plant's block state names otherwise -- a resource pack's extra variants, Snow! Real Magic's snowy variants -- never bends. Wraps them with Sway's own SwayModel, leaving the ones Sway reaches alone.",
+   "details": [
+    "From 1.21.11 (and on Forge 1.20.1) Sway wraps each block state's whole model, and every variant bends already."
+   ],
+   "fileInfo": {
+    "platform/fabric/SwayVariantModels.java": {
+     "kind": "java",
+     "lines": 160,
+     "guard": "//? fabric && <1.21.11 {"
+    }
+   }
+  },
+  {
+   "id": "snow-shake",
+   "label": "SnowShakeParticles",
+   "group": "snowrealmagic",
+   "kind": "component",
+   "files": [
+    "gpu/SnowShakeParticles.java"
+   ],
+   "summary": "Shakes snow off a plant in Snow! Real Magic's snow the moment a push starts (from Sway's engine, any entity, CPU or GPU): up to 5 particles by the push's strength, a quarter crumbs of snow and the rest snowflakes, drifting the way it was pushed, from the plant's top (a tall plant: where its top half begins). One second per plant between shakes; the game's particle setting applies. Ticked from Fabric's END_CLIENT_TICK and Forge's ClientTickEvent END.",
+   "fileInfo": {
+    "gpu/SnowShakeParticles.java": {
+     "kind": "java",
+     "lines": 138,
+     "guard": "//? >=1.20.1 {"
+    }
+   }
+  },
+  {
    "id": "fabric-hooks",
    "label": "FabricFoliageHooks",
    "group": "loader",
@@ -1103,7 +1238,7 @@
     },
     "platform/fabric/FabricClientEntrypoint.java": {
      "kind": "java",
-     "lines": 27,
+     "lines": 32,
      "guard": "//? fabric {"
     },
     "platform/fabric/FabricPlatform.java": {
@@ -1136,12 +1271,12 @@
    "fileInfo": {
     "platform/neoforge/NeoforgeFoliageHooks.java": {
      "kind": "java",
-     "lines": 171,
+     "lines": 170,
      "guard": "//? neoforge && >=1.21.1 {"
     },
     "platform/neoforge/NeoforgeEntrypoint.java": {
      "kind": "java",
-     "lines": 61,
+     "lines": 66,
      "guard": "//? neoforge {"
     },
     "platform/neoforge/NeoforgeClientEventSubscriber.java": {
@@ -1180,17 +1315,17 @@
    "fileInfo": {
     "platform/forge/ForgeFoliageHooks.java": {
      "kind": "java",
-     "lines": 141,
+     "lines": 186,
      "guard": "//? forge {"
     },
     "platform/forge/ForgeEntrypoint.java": {
      "kind": "java",
-     "lines": 63,
+     "lines": 68,
      "guard": "//? forge {"
     },
     "platform/forge/ForgeClientEventSubscriber.java": {
      "kind": "java",
-     "lines": 25,
+     "lines": 30,
      "guard": "//? forge {"
     },
     "platform/forge/ForgePlatform.java": {
@@ -1274,7 +1409,8 @@
     "26.3 NeoForge: ModDevGradle passes StackShadowPages but not the export (added); NeoForm runtime 2.0.31 needed to recompile 26.3.",
     "NeoForge dev validates draws and crashes on Iris's one-element binding arrays: -Dneoforge.disableGlValidation=true.",
     "Fabric 1.21.1 dev + Iris 1.8.14 crashes in the dev remapper: test in a launcher instance.",
-    "Test mods live in versions/<v>/run/mods; the user provides them in versions/<v> mods/<loader>."
+    "Test mods live in versions/<v>/run/mods; the user provides them in versions/<v> mods/<loader>.",
+    "Forge 1.20.1 dev runs on named mappings: third-party mods go through modRuntimeOnly in build.forge.gradle.kts (remapped), their raw jars in run/mods renamed .disabled."
    ],
    "fileInfo": {}
   },
@@ -1795,6 +1931,81 @@
    "source": "v-26.3",
    "target": "level-pass",
    "label": "adds"
+  },
+  {
+   "source": "srm-compat",
+   "target": "srm",
+   "label": "reads"
+  },
+  {
+   "source": "srm-compat",
+   "target": "sway-api",
+   "label": "registers the snow with"
+  },
+  {
+   "source": "renderer",
+   "target": "srm-compat",
+   "label": "meshes the plant in the snow through"
+  },
+  {
+   "source": "srm-compat",
+   "target": "split",
+   "label": "decides through"
+  },
+  {
+   "source": "srm-forge-indigo",
+   "target": "srm",
+   "label": "hooks the Indigo of"
+  },
+  {
+   "source": "srm-forge-indigo",
+   "target": "sway-api",
+   "label": "tells the position to"
+  },
+  {
+   "source": "srm-forge-indigo",
+   "target": "model-forge",
+   "label": "decides for"
+  },
+  {
+   "source": "srm-forge-indigo",
+   "target": "embeddium",
+   "label": "also covers"
+  },
+  {
+   "source": "sway-variants",
+   "target": "sway-api",
+   "label": "wraps with SwayModel of"
+  },
+  {
+   "source": "sway-variants",
+   "target": "srm",
+   "label": "bends the snowy variants of"
+  },
+  {
+   "source": "model-fabric",
+   "target": "sway-variants",
+   "label": "sits beside"
+  },
+  {
+   "source": "snow-shake",
+   "target": "interaction",
+   "label": "reads pushes from"
+  },
+  {
+   "source": "snow-shake",
+   "target": "srm-compat",
+   "label": "finds plants through"
+  },
+  {
+   "source": "mixin-configs",
+   "target": "srm-forge-indigo",
+   "label": "lists (Forge)"
+  },
+  {
+   "source": "dirty",
+   "target": "srm-compat",
+   "label": "follows block entity updates for"
   }
  ],
  "matrix": {
@@ -1933,6 +2144,17 @@
     }
    },
    {
+    "label": "Snow! Real Magic",
+    "cells": {
+     "1.20.1": "fabric: done (SwayVariantModels, GPU plant + snowy variant, particles) | forge: done (Indigo mixins, vanilla and Embeddium, particles)",
+     "1.21.1": "fabric: code shared with 1.20.1, untested | neoforge: not written",
+     "1.21.11": "not written (BlockStateModel era)",
+     "26.1.2": "not written",
+     "26.2": "not written",
+     "26.3": "not written"
+    }
+   },
+   {
     "label": "Dev-run notes",
     "cells": {
      "1.20.1": "Fabric client on Java 17",
@@ -2000,6 +2222,14 @@
    "mixins": [
     "ShadowMapRendererMixin"
    ]
+  },
+  "mc2_interactivefoliage.snowrealmagic.mixins.json": {
+   "plugin": null,
+   "required": false,
+   "mixins": [
+    "IndigoBlockPositionMixin",
+    "IndigoBlockRenderMixin"
+   ]
   }
  },
  "files": {
@@ -2015,7 +2245,7 @@
   },
   "gpu/GpuFoliageInteraction.java": {
    "kind": "java",
-   "lines": 389,
+   "lines": 394,
    "guard": "//? >=1.20.1 {"
   },
   "gpu/GpuFoliageModel.java": {
@@ -2025,12 +2255,12 @@
   },
   "gpu/GpuFoliageRenderer.java": {
    "kind": "java",
-   "lines": 3315,
+   "lines": 3340,
    "guard": "//? >=1.20.1 {"
   },
   "gpu/GpuFoliageSplit.java": {
    "kind": "java",
-   "lines": 441,
+   "lines": 490,
    "guard": "//? >=1.20.1 {"
   },
   "gpu/IrisCompat.java": {
@@ -2052,6 +2282,16 @@
    "kind": "java",
    "lines": 257,
    "guard": "//? >=1.20.1 && <1.21.11 {"
+  },
+  "gpu/SnowRealMagicCompat.java": {
+   "kind": "java",
+   "lines": 268,
+   "guard": "//? <1.21.11 {"
+  },
+  "gpu/SnowShakeParticles.java": {
+   "kind": "java",
+   "lines": 138,
+   "guard": "//? >=1.20.1 {"
   },
   "gpu/SodiumBridge.java": {
    "kind": "java",
@@ -2080,7 +2320,7 @@
   },
   "mixin/ClientLevelMixin.java": {
    "kind": "java",
-   "lines": 30,
+   "lines": 36,
    "guard": "//? >=1.20.1 {"
   },
   "mixin/iris/ExtendedShaderMixin.java": {
@@ -2138,6 +2378,16 @@
    "lines": 84,
    "guard": "//? >=1.20.1 {"
   },
+  "mixin/snowrealmagic/IndigoBlockPositionMixin.java": {
+   "kind": "java",
+   "lines": 53,
+   "guard": "//? forge {"
+  },
+  "mixin/snowrealmagic/IndigoBlockRenderMixin.java": {
+   "kind": "java",
+   "lines": 53,
+   "guard": "//? forge {"
+  },
   "mixin/SodiumMeshSwapMixin.java": {
    "kind": "java",
    "lines": 64,
@@ -2150,7 +2400,7 @@
   },
   "ModCompatRegistry.java": {
    "kind": "java",
-   "lines": 367,
+   "lines": 388,
    "guard": ""
   },
   "ModTemplate.java": {
@@ -2165,7 +2415,7 @@
   },
   "platform/fabric/FabricClientEntrypoint.java": {
    "kind": "java",
-   "lines": 27,
+   "lines": 32,
    "guard": "//? fabric {"
   },
   "platform/fabric/FabricEntrypoint.java": {
@@ -2193,24 +2443,29 @@
    "lines": 89,
    "guard": "//? fabric {"
   },
+  "platform/fabric/SwayVariantModels.java": {
+   "kind": "java",
+   "lines": 160,
+   "guard": "//? fabric && <1.21.11 {"
+  },
   "platform/forge/ForgeClientEventSubscriber.java": {
    "kind": "java",
-   "lines": 25,
+   "lines": 30,
    "guard": "//? forge {"
   },
   "platform/forge/ForgeEntrypoint.java": {
    "kind": "java",
-   "lines": 63,
+   "lines": 68,
    "guard": "//? forge {"
   },
   "platform/forge/ForgeFoliageHooks.java": {
    "kind": "java",
-   "lines": 141,
+   "lines": 186,
    "guard": "//? forge {"
   },
   "platform/forge/ForgeFoliageModel.java": {
    "kind": "java",
-   "lines": 70,
+   "lines": 104,
    "guard": "//? forge {"
   },
   "platform/forge/ForgeKeyBindings.java": {
@@ -2230,12 +2485,12 @@
   },
   "platform/neoforge/NeoforgeEntrypoint.java": {
    "kind": "java",
-   "lines": 61,
+   "lines": 66,
    "guard": "//? neoforge {"
   },
   "platform/neoforge/NeoforgeFoliageHooks.java": {
    "kind": "java",
-   "lines": 171,
+   "lines": 170,
    "guard": "//? neoforge && >=1.21.1 {"
   },
   "platform/neoforge/NeoforgeFoliageModel.java": {

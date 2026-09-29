@@ -31,6 +31,7 @@ The interactive map is `docs/map/index.html` (open it in a browser). Per-version
 | **Shader packs** | fabric: Iris 1.7 <br> forge: Oculus 1.8; ShaderInstance programs | Iris; ShaderInstance programs, raw GL uniforms | Iris; GlDeviceMixin + ExtendedShaderMixin | Iris; GlDeviceMixin + ExtendedShaderMixin | Iris 1.11.4; GlDeviceMixin + ExtendedShaderMixin | fabric: Iris 1.11.6, assignPipeline + withFoliageProgram <br> neoforge: no Iris yet, GPU steps aside |
 | **Pack shadow map** | ShadowRendererMixin | ShadowRendererMixin | ShadowRendererMixin | registerShadowRenderCallback | callback + pre-flipped depth pipeline | fabric: callback + assignPipelineShadow + drawIntoShadowMap |
 | **Polytone shadow** | none (no shadow map) | ShadowMapRendererMixin | ShadowMapRendererMixin | ShadowMapRendererMixin | ShadowMapRendererMixin | none yet (no Polytone) |
+| **Snow! Real Magic** | fabric: done (SwayVariantModels, GPU plant + snowy variant, particles) <br> forge: done (Indigo mixins, vanilla and Embeddium, particles) | fabric: code shared with 1.20.1, untested <br> neoforge: not written | not written (BlockStateModel era) | not written | not written | not written |
 | **Dev-run notes** | Fabric client on Java 17 | fabric: Iris crashes the dev remapper, test in a launcher | neoforge (every version): disableGlValidation |  |  | JVM args from the manifest; neoforge: NeoForm runtime 2.0.31, beta 26.3.0.26 (TerraBlender needs <=.19) |
 
 ## Porting to a new version
@@ -57,7 +58,7 @@ Meshes the foliage near the player on its own and draws it with the sway on the 
   - Three draw paths by version: drawLegacy (<1.21.11), a pass of its own (1.21.11-26.2), prepare/draw split into vanilla's pass (26.3+).
   - Pitfall: It is one 3300-line file guarded per version; read the branch for the version you work on, not the first one you find.
   - Files: `gpu/GpuFoliageRenderer.java`
-  - Links: draws through draw-legacy; draws through draw-pass; draws through draw-split; owns near-area; is fed by split; uploads interaction; bakes shelter from wind; asks sodium-bridge; asks iris-compat
+  - Links: draws through draw-legacy; draws through draw-pass; draws through draw-split; owns near-area; is fed by split; uploads interaction; bakes shelter from wind; asks sodium-bridge; asks iris-compat; meshes the plant in the snow through srm-compat
 - **Legacy draw** (<1.21.11): Before 1.21.11: a ShaderInstance loaded from JSON and VertexBuffers per region, drawn right away from the loader's render event.
   - Shader registered through CoreShaderRegistrationCallback (Fabric) or RegisterShadersEvent (NeoForge/Forge).
   - The frame hook hands over camera, frustum, model view and projection (legacy draw(Vec3, Frustum, Matrix4f, Matrix4f)).
@@ -102,7 +103,7 @@ Takes the near foliage out of the chunk mesh, and hands it back and forth withou
 - **GpuFoliageModel (FRAPI)** (fabric): Fabric: wraps foliage models with ModelLoadingPlugin, outside Sway's wrapper, and withholds quads in emitQuads.
   - modifyModelAfterBake before 1.21.11 (block read from the model id), modifyBlockModelAfterBake from 1.21.11 (the state is handed over).
   - Files: `gpu/GpuFoliageModel.java`, `platform/fabric/FabricFoliageHooks.java`
-  - Links: needs fabric-api; registered by fabric-hooks; needs on 1.20.1 indium
+  - Links: needs fabric-api; registered by fabric-hooks; needs on 1.20.1 indium; sits beside sway-variants
 - **NeoforgeFoliageModel** (neoforge): NeoForge: wraps inside Sway's wrapper at ModelEvent.ModifyBakingResult. 1.21.1: BakedModelWrapper deciding in getModelData. 1.21.11+: answers the collectParts(level, pos, state, random, parts) extension.
   - Sodium on NeoForge asks through collectParts too (NeoForgeModelAccess.collectPartsOf) with its LevelSlice.
   - Files: `platform/neoforge/NeoforgeFoliageModel.java`, `platform/neoforge/NeoforgeFoliageHooks.java`
@@ -121,6 +122,7 @@ Takes the near foliage out of the chunk mesh, and hands it back and forth withou
   - The class that marks sections dirty is LevelRenderer before 26.2 and LevelExtractor from 26.2.
   - 1.21.11-26.1: also catches the cull frustum at prepareCullFrustum (from 26.1.2 the camera state carries it).
   - Files: `mixin/ClientLevelMixin.java`, `mixin/LevelExtractorMixin.java`
+  - Links: follows block entity updates for srm-compat
 
 ### Motion
 
@@ -244,6 +246,34 @@ The foliage in Polytone's shadow map.
   - Files: `mixin/polytone/ShadowMapRendererMixin.java`, `mixin/polytone/PolytoneMixinPlugin.java`
   - Links: calls drawPolytoneShadow renderer; hooks polytone
 
+### Snow! Real Magic
+
+Plants held inside Snow! Real Magic's snow: pushed by Sway, bent, drawn snowy on the CPU and the GPU, shaking snow off when touched.
+
+- **SnowRealMagicCompat**: Read by name, never compiled against. Finds the plant a snow block holds, the snowy variant of a plant's model (walking the wrappers' wrapped/parent/originalModel fields), whether a model is drawn inside the snow (Forge: the snow's OPTIONS model property) and whether a tall plant's top half stands on it. Tested on 1.20.1 Fabric and Forge (vanilla and Embeddium).
+  - Sway: ModCompatRegistry gives snowrealmagic:snow a pipeline that only pushes (collision, proximity force, multiplier), no deformation: Sway pushes a position by its block, and the plant drawn there bends by its own pipeline. A deforming pipeline would bend the snow and the plant twice.
+  - GpuFoliageSplit.bends: foliage is what Sway bends, so the snow block is never wrapped, meshed or given a forced render layer; the plant inside it is.
+  - GPU mesher: a snow block holding a Sway plant meshes the plant (raised as offset_y says, not at 8 layers), with its snowy variant; the anchor and a tall plant's length read the plant inside the snow.
+  - The plant inside changes through its block entity: ClientLevelMixin follows ClientLevel.sendBlockUpdated for the snow block.
+  - snowVariants off in its client config: the plain model everywhere, as the chunk mesh.
+  - Pitfall: Forge and NeoForge force cutoutMipped on the blocks the mod registers (Sway's wrapper loses the render layer); only on blocks Sway bends: on the snow block it hid the snow (solid) and the plant (its own layer) entirely.
+  - Pitfall: Forge: Sway wraps every interactive block's state model, the push-only snow too, and its wrapper tells Indigo the model is plain; ForgeFoliageHooks unwraps blocks Sway only pushes. Each mod has its own mod event bus, so EventPriority only orders listeners within the mod's own bus.
+  - Pitfall: Forge dev: third-party mods must come through modRuntimeOnly (remapped), never raw jars in run/mods (their SRG mixins fail); Snow! Real Magic 10.7.0 is maven.modrinth:iJNje1E8:aQw97T9l, Kiwi 11.10.3 is ufdDoWPd:NSxwah05.
+  - Pitfall: Not yet written or tested on NeoForge, nor on versions after 1.20.1 (the snowy variant walk is BakedModel-only, before 1.21.11).
+  - Files: `gpu/SnowRealMagicCompat.java`, `ModCompatRegistry.java`
+  - Links: reads srm; registers the snow with sway-api; decides through split
+- **Indigo mixins (Forge)** (<1.21.1, forge): @Pseudo mixins into the Indigo Snow! Real Magic carries, in their own optional config (mc2_interactivefoliage.snowrealmagic.mixins.json, Forge only). TerrainRenderContext.tessellateBlock (vanilla chunk builds) tells Sway the block's position (SwayRenderContext), which Sway otherwise only learns from ModelBlockRenderer.tesselateBlock, and makes the GPU decision for the plant in the snow; BlockRenderContext.render (Embeddium draws Fabric models through it) makes that decision in chunk builds only.
+  - ForgeFoliageModel: withholds a plant drawn inside the snow when the decision says GPU (GpuFoliageSplit.snowPlantLeftToGpu), and draws the snowy variant, wrapped in Sway's own SwayModel so it bends, where Snow! Real Magic would (inside the snow, or a tall plant's top half on it, marked ON_SNOW in getModelData).
+  - Files: `mixin/snowrealmagic/IndigoBlockPositionMixin.java`, `mixin/snowrealmagic/IndigoBlockRenderMixin.java`, `platform/forge/ForgeFoliageModel.java`
+  - Links: hooks the Indigo of srm; tells the position to sway-api; decides for model-forge; also covers embeddium
+- **SwayVariantModels** (<1.21.11, fabric): Fabric 1.20.1 and 1.21.1: Sway wraps model files by name (block/<name> taken for block <name>), so a model a plant's block state names otherwise -- a resource pack's extra variants, Snow! Real Magic's snowy variants -- never bends. Wraps them with Sway's own SwayModel, leaving the ones Sway reaches alone.
+  - From 1.21.11 (and on Forge 1.20.1) Sway wraps each block state's whole model, and every variant bends already.
+  - Files: `platform/fabric/SwayVariantModels.java`
+  - Links: wraps with SwayModel of sway-api; bends the snowy variants of srm
+- **SnowShakeParticles**: Shakes snow off a plant in Snow! Real Magic's snow the moment a push starts (from Sway's engine, any entity, CPU or GPU): up to 5 particles by the push's strength, a quarter crumbs of snow and the rest snowflakes, drifting the way it was pushed, from the plant's top (a tall plant: where its top half begins). One second per plant between shakes; the game's particle setting applies. Ticked from Fabric's END_CLIENT_TICK and Forge's ClientTickEvent END.
+  - Files: `gpu/SnowShakeParticles.java`
+  - Links: reads pushes from interaction; finds plants through srm-compat
+
 ### Loaders
 
 Where the mod meets Fabric, NeoForge and Forge.
@@ -282,7 +312,7 @@ Stonecutter, build-logic, access wideners, mixin configs and the dev-run traps.
   - Pitfall: The main mixins.json stays hand-written and empty: FletchingTable list generation once swept Iris/Polytone mixins into it. Check the built jar's mixin JSONs after touching mixin or build config.
   - Links: lists mixin-configs; applies shader-sets; applies access
 - **Mixin configs**: mixins.json (empty), gpu.mixins.json (>=1.20.1), iris.mixins.json (where shader pack support is compiled; IrisMixinPlugin), polytone.mixins.json (1.21.1-26.2; required:false), pass.mixins.json (26.3+).
-  - Links: gates iris-shaders; gates polytone-shadow; lists level-pass
+  - Links: gates iris-shaders; gates polytone-shadow; lists level-pass; lists (Forge) srm-forge-indigo
 - **Access wideners**: aw/<version>.accesswidener (Fabric) and aw/<version>.cfg (NeoForge/Forge AT). 26.3's widener opens GlRenderPipeline's constructor for the Iris path; its .cfg is empty.
 - **Dev-run traps**: Things that break runClient but not players.
   - 26.3 Fabric: Loom omits Mojang's -XX:StackShadowPages=32 and --add-exports java.base/jdk.internal.misc=ALL-UNNAMED: random native deaths (0xC0000005). Added as vmArgs.
@@ -290,6 +320,7 @@ Stonecutter, build-logic, access wideners, mixin configs and the dev-run traps.
   - NeoForge dev validates draws and crashes on Iris's one-element binding arrays: -Dneoforge.disableGlValidation=true.
   - Fabric 1.21.1 dev + Iris 1.8.14 crashes in the dev remapper: test in a launcher instance.
   - Test mods live in versions/<v>/run/mods; the user provides them in versions/<v> mods/<loader>.
+  - Forge 1.20.1 dev runs on named mappings: third-party mods go through modRuntimeOnly in build.forge.gradle.kts (remapped), their raw jars in run/mods renamed .disabled.
   - Links: fixed in build-logic
 
 ### Other mods
@@ -310,6 +341,10 @@ Mods the renderer depends on or works with.
   - Debug: enableDebugOptions=true in run/config/iris.properties dumps translated programs to run/patched_shaders.
 - **Oculus** (<1.21.1, forge): Iris on Forge 1.20.1, mod id oculus (Forge ignores the iris id it provides). Same code as Iris 1.7.
 - **Polytone** (>=1.21.1): Has a shadow map from 1.21.1 (not 1.20.1). No Polytone for 26.3 yet.
+- **Snow! Real Magic**: Lets snow settle on plants: the plant's block becomes its snow block (snowrealmagic:snow, an EntitySnowLayerBlock), which keeps the plant in its block entity (SnowBlockEntity.getContainedState) and draws it through the plant's own model, at the same position, before the snow. Grass, ferns, tall grass, large ferns and berry bushes get a snowy variant model (declared in .mcmeta files, kept in its SnowVariantModel wrapper).
+  - Fabric: draws through Fabric's rendering API (SnowCoveredModel.emitBlockQuads).
+  - Forge: carries its own copy of Fabric's rendering API and Indigo (jar-in-jar); SnowVariantModel only picks the variant through emitBlockQuads, never getQuads.
+  - Plants it raises onto the snow are tagged snowrealmagic:offset_y (+0.101).
 - **Fabric API** (fabric): Rendering API (FRAPI) for the model split and Sway, ModelLoadingPlugin, render and chunk events.
 
 ### Versions
@@ -331,12 +366,12 @@ The Minecraft versions the mod is built for.
 
 ## What each version carries
 
-- **1.20.1** (fabric, forge): GpuFoliageRenderer, Legacy draw, Near area & regions, GpuFoliageSplit, GpuFoliageModel (FRAPI), ForgeFoliageModel, Mesh swap handover, Change tracking, Sway, GpuFoliageInteraction, SwayProximityForceMixin, Rain wind & shelter, Settings & screen, ModCompatRegistry, sway.glsl, foliage_legacy*, Shader set per jar, Offline shader check, LegacyTerrainShader, Terrain Slabs, SodiumBridge, Sodium upload hook, Indium, Embeddium, Sodium, IrisCompat, IrisFoliageShaders, Pack program injection, Pack shadow map, IrisVertexExtension, Iris, Oculus, FabricFoliageHooks, ForgeFoliageHooks, Stonecutter, build-logic, Mixin configs, Access wideners, Dev-run traps, Fabric API
-- **1.21.1** (fabric, neoforge): GpuFoliageRenderer, Legacy draw, Near area & regions, GpuFoliageSplit, GpuFoliageModel (FRAPI), NeoforgeFoliageModel, Mesh swap handover, Change tracking, Sway, GpuFoliageInteraction, SwayProximityForceMixin, Rain wind & shelter, Settings & screen, ModCompatRegistry, sway.glsl, foliage_legacy*, Shader set per jar, Offline shader check, LegacyTerrainShader, Terrain Slabs, SodiumBridge, Sodium upload hook, Sodium, IrisCompat, IrisFoliageShaders, Pack program injection, Pack shadow map, IrisVertexExtension, Iris, ShadowMapRendererMixin, Polytone, FabricFoliageHooks, NeoforgeFoliageHooks, Stonecutter, build-logic, Mixin configs, Access wideners, Dev-run traps, Fabric API
-- **1.21.11** (fabric, neoforge): GpuFoliageRenderer, Own render pass, Near area & regions, GpuFoliageSplit, GpuFoliageModel (FRAPI), NeoforgeFoliageModel, Mesh swap handover, Change tracking, Sway, GpuFoliageInteraction, SwayProximityForceMixin, Rain wind & shelter, Settings & screen, ModCompatRegistry, sway.glsl, foliage.vsh/.fsh, Shader set per jar, Offline shader check, TerrainFoliageShader, Terrain Slabs, SodiumBridge, Sodium upload hook, SodiumFoliageShader, Sodium, IrisCompat, IrisFoliageShaders, Pack program injection, Pack shadow map, IrisVertexExtension, Iris, ShadowMapRendererMixin, Polytone, FabricFoliageHooks, NeoforgeFoliageHooks, Stonecutter, build-logic, Mixin configs, Access wideners, Dev-run traps, Fabric API
-- **26.1.2** (fabric, neoforge): GpuFoliageRenderer, Own render pass, Near area & regions, GpuFoliageSplit, GpuFoliageModel (FRAPI), NeoforgeFoliageModel, Mesh swap handover, Change tracking, Sway, GpuFoliageInteraction, SwayProximityForceMixin, Rain wind & shelter, Settings & screen, ModCompatRegistry, sway.glsl, foliage.vsh/.fsh, Shader set per jar, Offline shader check, TerrainFoliageShader, Terrain Slabs, SodiumBridge, Sodium upload hook, SodiumFoliageShader, Sodium, IrisCompat, IrisFoliageShaders, Pack program injection, Pack shadow map, IrisVertexExtension, Iris, ShadowMapRendererMixin, Polytone, FabricFoliageHooks, NeoforgeFoliageHooks, Stonecutter, build-logic, Mixin configs, Access wideners, Dev-run traps, Fabric API
-- **26.2** (fabric, neoforge): GpuFoliageRenderer, Own render pass, Near area & regions, GpuFoliageSplit, GpuFoliageModel (FRAPI), NeoforgeFoliageModel, Mesh swap handover, Change tracking, Sway, GpuFoliageInteraction, SwayProximityForceMixin, Rain wind & shelter, Settings & screen, ModCompatRegistry, sway.glsl, foliage.vsh/.fsh, Shader set per jar, Offline shader check, TerrainFoliageShader, Terrain Slabs, SodiumBridge, Sodium upload hook, SodiumFoliageShader, Sodium, IrisCompat, IrisFoliageShaders, Pack program injection, Pack shadow map, IrisVertexExtension, Iris, ShadowMapRendererMixin, Polytone, FabricFoliageHooks, NeoforgeFoliageHooks, Stonecutter, build-logic, Mixin configs, Access wideners, Dev-run traps, Fabric API
-- **26.3** (fabric, neoforge): GpuFoliageRenderer, Prepare / draw split, Near area & regions, GpuFoliageSplit, GpuFoliageModel (FRAPI), NeoforgeFoliageModel, Mesh swap handover, Change tracking, Sway, GpuFoliageInteraction, SwayProximityForceMixin, Rain wind & shelter, Settings & screen, ModCompatRegistry, sway.glsl, foliage_modern, Shader set per jar, Offline shader check, TerrainFoliageShader, Terrain Slabs, SodiumBridge, Sodium upload hook, SodiumFoliageShader, Sodium, IrisCompat, IrisFoliageShaders, Pack program injection, Pack shadow map, IrisVertexExtension, Iris, Polytone, FabricFoliageHooks, NeoforgeFoliageHooks, LevelPassMixin, Stonecutter, build-logic, Mixin configs, Access wideners, Dev-run traps, Fabric API
+- **1.20.1** (fabric, forge): GpuFoliageRenderer, Legacy draw, Near area & regions, GpuFoliageSplit, GpuFoliageModel (FRAPI), ForgeFoliageModel, Mesh swap handover, Change tracking, Sway, GpuFoliageInteraction, SwayProximityForceMixin, Rain wind & shelter, Settings & screen, ModCompatRegistry, sway.glsl, foliage_legacy*, Shader set per jar, Offline shader check, LegacyTerrainShader, Terrain Slabs, SodiumBridge, Sodium upload hook, Indium, Embeddium, Sodium, IrisCompat, IrisFoliageShaders, Pack program injection, Pack shadow map, IrisVertexExtension, Iris, Oculus, Snow! Real Magic, SnowRealMagicCompat, Indigo mixins (Forge), SwayVariantModels, SnowShakeParticles, FabricFoliageHooks, ForgeFoliageHooks, Stonecutter, build-logic, Mixin configs, Access wideners, Dev-run traps, Fabric API
+- **1.21.1** (fabric, neoforge): GpuFoliageRenderer, Legacy draw, Near area & regions, GpuFoliageSplit, GpuFoliageModel (FRAPI), NeoforgeFoliageModel, Mesh swap handover, Change tracking, Sway, GpuFoliageInteraction, SwayProximityForceMixin, Rain wind & shelter, Settings & screen, ModCompatRegistry, sway.glsl, foliage_legacy*, Shader set per jar, Offline shader check, LegacyTerrainShader, Terrain Slabs, SodiumBridge, Sodium upload hook, Sodium, IrisCompat, IrisFoliageShaders, Pack program injection, Pack shadow map, IrisVertexExtension, Iris, ShadowMapRendererMixin, Polytone, Snow! Real Magic, SnowRealMagicCompat, SwayVariantModels, SnowShakeParticles, FabricFoliageHooks, NeoforgeFoliageHooks, Stonecutter, build-logic, Mixin configs, Access wideners, Dev-run traps, Fabric API
+- **1.21.11** (fabric, neoforge): GpuFoliageRenderer, Own render pass, Near area & regions, GpuFoliageSplit, GpuFoliageModel (FRAPI), NeoforgeFoliageModel, Mesh swap handover, Change tracking, Sway, GpuFoliageInteraction, SwayProximityForceMixin, Rain wind & shelter, Settings & screen, ModCompatRegistry, sway.glsl, foliage.vsh/.fsh, Shader set per jar, Offline shader check, TerrainFoliageShader, Terrain Slabs, SodiumBridge, Sodium upload hook, SodiumFoliageShader, Sodium, IrisCompat, IrisFoliageShaders, Pack program injection, Pack shadow map, IrisVertexExtension, Iris, ShadowMapRendererMixin, Polytone, Snow! Real Magic, SnowRealMagicCompat, SnowShakeParticles, FabricFoliageHooks, NeoforgeFoliageHooks, Stonecutter, build-logic, Mixin configs, Access wideners, Dev-run traps, Fabric API
+- **26.1.2** (fabric, neoforge): GpuFoliageRenderer, Own render pass, Near area & regions, GpuFoliageSplit, GpuFoliageModel (FRAPI), NeoforgeFoliageModel, Mesh swap handover, Change tracking, Sway, GpuFoliageInteraction, SwayProximityForceMixin, Rain wind & shelter, Settings & screen, ModCompatRegistry, sway.glsl, foliage.vsh/.fsh, Shader set per jar, Offline shader check, TerrainFoliageShader, Terrain Slabs, SodiumBridge, Sodium upload hook, SodiumFoliageShader, Sodium, IrisCompat, IrisFoliageShaders, Pack program injection, Pack shadow map, IrisVertexExtension, Iris, ShadowMapRendererMixin, Polytone, Snow! Real Magic, SnowRealMagicCompat, SnowShakeParticles, FabricFoliageHooks, NeoforgeFoliageHooks, Stonecutter, build-logic, Mixin configs, Access wideners, Dev-run traps, Fabric API
+- **26.2** (fabric, neoforge): GpuFoliageRenderer, Own render pass, Near area & regions, GpuFoliageSplit, GpuFoliageModel (FRAPI), NeoforgeFoliageModel, Mesh swap handover, Change tracking, Sway, GpuFoliageInteraction, SwayProximityForceMixin, Rain wind & shelter, Settings & screen, ModCompatRegistry, sway.glsl, foliage.vsh/.fsh, Shader set per jar, Offline shader check, TerrainFoliageShader, Terrain Slabs, SodiumBridge, Sodium upload hook, SodiumFoliageShader, Sodium, IrisCompat, IrisFoliageShaders, Pack program injection, Pack shadow map, IrisVertexExtension, Iris, ShadowMapRendererMixin, Polytone, Snow! Real Magic, SnowRealMagicCompat, SnowShakeParticles, FabricFoliageHooks, NeoforgeFoliageHooks, Stonecutter, build-logic, Mixin configs, Access wideners, Dev-run traps, Fabric API
+- **26.3** (fabric, neoforge): GpuFoliageRenderer, Prepare / draw split, Near area & regions, GpuFoliageSplit, GpuFoliageModel (FRAPI), NeoforgeFoliageModel, Mesh swap handover, Change tracking, Sway, GpuFoliageInteraction, SwayProximityForceMixin, Rain wind & shelter, Settings & screen, ModCompatRegistry, sway.glsl, foliage_modern, Shader set per jar, Offline shader check, TerrainFoliageShader, Terrain Slabs, SodiumBridge, Sodium upload hook, SodiumFoliageShader, Sodium, IrisCompat, IrisFoliageShaders, Pack program injection, Pack shadow map, IrisVertexExtension, Iris, Polytone, Snow! Real Magic, SnowRealMagicCompat, SnowShakeParticles, FabricFoliageHooks, NeoforgeFoliageHooks, LevelPassMixin, Stonecutter, build-logic, Mixin configs, Access wideners, Dev-run traps, Fabric API
 
 ## Mixin configs (read from the source tree)
 
@@ -345,3 +380,4 @@ The Minecraft versions the mod is built for.
 - `mc2_interactivefoliage.mixins.json`: empty
 - `mc2_interactivefoliage.pass.mixins.json`: LevelPassMixin
 - `mc2_interactivefoliage.polytone.mixins.json` (plugin PolytoneMixinPlugin, not required): ShadowMapRendererMixin
+- `mc2_interactivefoliage.snowrealmagic.mixins.json` (not required): IndigoBlockPositionMixin, IndigoBlockRenderMixin

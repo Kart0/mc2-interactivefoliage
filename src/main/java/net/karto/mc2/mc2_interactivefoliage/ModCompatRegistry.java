@@ -42,6 +42,7 @@ public class ModCompatRegistry {
 		registerSereneShrubbery();
 		registerNoMansLand();
 		registerExtraVanilla();
+		registerSnowRealMagic();
 
 		ModTemplate.LOGGER.info("Foliage compat: {} blocks registered, {} not present", found, missing);
 	}
@@ -299,6 +300,26 @@ public class ModCompatRegistry {
 				"minecraft:pale_hanging_moss",
 				"minecraft:hanging_roots"
 		);
+	}
+
+	// ------------------------------------------------------------------
+	// Snow! Real Magic
+	// ------------------------------------------------------------------
+
+	/**
+	 * Snow! Real Magic lets snow settle on plants: the plant's block becomes its snow layer block, which keeps the
+	 * plant inside its block entity and draws it through the plant's own model, at the same position, before the snow.
+	 * Sway pushes a position only when the block there has a pipeline, so the snow block gets one -- to be found and
+	 * pushed, not to be bent. The plant drawn inside it is still wrapped by Sway, which bends it by its own pipeline
+	 * from the push at that position; the snow is drawn with vanilla's model, which Sway leaves alone. A pipeline
+	 * with a deformation would bend the snow too, and the plant twice.
+	 */
+	private static void registerSnowRealMagic() {
+		lookup("snowrealmagic:snow").ifPresent(block -> SwayAPI.setBlockPipeline(block, List.of(
+				BuiltinBehaviors.ENTITY_COLLISION_KEY,
+				BuiltinBehaviors.PROXIMITY_FORCE_KEY,
+				BuiltinBehaviors.multiplierKey(1.0F)
+		)));
 	}
 
 	// ------------------------------------------------------------------

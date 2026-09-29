@@ -23,6 +23,7 @@
     {"id": "sodium", "label": "Sodium & kin", "about": "Sodium, Embeddium and Indium: who meshes and draws the chunks when they are installed."},
     {"id": "iris", "label": "Shader packs", "about": "Iris and Oculus: the foliage drawn through a shader pack's own programs, swaying, into its shadow map too."},
     {"id": "polytone", "label": "Polytone", "about": "The foliage in Polytone's shadow map."},
+    {"id": "snowrealmagic", "label": "Snow! Real Magic", "about": "Plants held inside Snow! Real Magic's snow: pushed by Sway, bent, drawn snowy on the CPU and the GPU, shaking snow off when touched."},
     {"id": "loader", "label": "Loaders", "about": "Where the mod meets Fabric, NeoForge and Forge."},
     {"id": "build", "label": "Build & dev", "about": "Stonecutter, build-logic, access wideners, mixin configs and the dev-run traps."},
     {"id": "external", "label": "Other mods", "about": "Mods the renderer depends on or works with."},
@@ -266,6 +267,47 @@
     {"id": "polytone", "label": "Polytone", "group": "external", "kind": "mod", "versions": [">=1.21.1"],
      "summary": "Has a shadow map from 1.21.1 (not 1.20.1). No Polytone for 26.3 yet."},
 
+    {"id": "srm", "label": "Snow! Real Magic", "group": "external", "kind": "mod",
+     "summary": "Lets snow settle on plants: the plant's block becomes its snow block (snowrealmagic:snow, an EntitySnowLayerBlock), which keeps the plant in its block entity (SnowBlockEntity.getContainedState) and draws it through the plant's own model, at the same position, before the snow. Grass, ferns, tall grass, large ferns and berry bushes get a snowy variant model (declared in .mcmeta files, kept in its SnowVariantModel wrapper).",
+     "details": [
+       "Fabric: draws through Fabric's rendering API (SnowCoveredModel.emitBlockQuads).",
+       "Forge: carries its own copy of Fabric's rendering API and Indigo (jar-in-jar); SnowVariantModel only picks the variant through emitBlockQuads, never getQuads.",
+       "Plants it raises onto the snow are tagged snowrealmagic:offset_y (+0.101)."
+     ]},
+
+    {"id": "srm-compat", "label": "SnowRealMagicCompat", "group": "snowrealmagic", "kind": "compat",
+     "files": ["gpu/SnowRealMagicCompat.java", "ModCompatRegistry.java"],
+     "summary": "Read by name, never compiled against. Finds the plant a snow block holds, the snowy variant of a plant's model (walking the wrappers' wrapped/parent/originalModel fields), whether a model is drawn inside the snow (Forge: the snow's OPTIONS model property) and whether a tall plant's top half stands on it. Tested on 1.20.1 Fabric and Forge (vanilla and Embeddium).",
+     "details": [
+       "Sway: ModCompatRegistry gives snowrealmagic:snow a pipeline that only pushes (collision, proximity force, multiplier), no deformation: Sway pushes a position by its block, and the plant drawn there bends by its own pipeline. A deforming pipeline would bend the snow and the plant twice.",
+       "GpuFoliageSplit.bends: foliage is what Sway bends, so the snow block is never wrapped, meshed or given a forced render layer; the plant inside it is.",
+       "GPU mesher: a snow block holding a Sway plant meshes the plant (raised as offset_y says, not at 8 layers), with its snowy variant; the anchor and a tall plant's length read the plant inside the snow.",
+       "The plant inside changes through its block entity: ClientLevelMixin follows ClientLevel.sendBlockUpdated for the snow block.",
+       "snowVariants off in its client config: the plain model everywhere, as the chunk mesh."
+     ],
+     "pitfalls": [
+       "Forge and NeoForge force cutoutMipped on the blocks the mod registers (Sway's wrapper loses the render layer); only on blocks Sway bends: on the snow block it hid the snow (solid) and the plant (its own layer) entirely.",
+       "Forge: Sway wraps every interactive block's state model, the push-only snow too, and its wrapper tells Indigo the model is plain; ForgeFoliageHooks unwraps blocks Sway only pushes. Each mod has its own mod event bus, so EventPriority only orders listeners within the mod's own bus.",
+       "Forge dev: third-party mods must come through modRuntimeOnly (remapped), never raw jars in run/mods (their SRG mixins fail); Snow! Real Magic 10.7.0 is maven.modrinth:iJNje1E8:aQw97T9l, Kiwi 11.10.3 is ufdDoWPd:NSxwah05.",
+       "Not yet written or tested on NeoForge, nor on versions after 1.20.1 (the snowy variant walk is BakedModel-only, before 1.21.11)."
+     ]},
+
+    {"id": "srm-forge-indigo", "label": "Indigo mixins (Forge)", "group": "snowrealmagic", "kind": "hook", "loaders": ["forge"], "versions": ["<1.21.1"],
+     "files": ["mixin/snowrealmagic/IndigoBlockPositionMixin.java", "mixin/snowrealmagic/IndigoBlockRenderMixin.java", "platform/forge/ForgeFoliageModel.java"],
+     "summary": "@Pseudo mixins into the Indigo Snow! Real Magic carries, in their own optional config (mc2_interactivefoliage.snowrealmagic.mixins.json, Forge only). TerrainRenderContext.tessellateBlock (vanilla chunk builds) tells Sway the block's position (SwayRenderContext), which Sway otherwise only learns from ModelBlockRenderer.tesselateBlock, and makes the GPU decision for the plant in the snow; BlockRenderContext.render (Embeddium draws Fabric models through it) makes that decision in chunk builds only.",
+     "details": [
+       "ForgeFoliageModel: withholds a plant drawn inside the snow when the decision says GPU (GpuFoliageSplit.snowPlantLeftToGpu), and draws the snowy variant, wrapped in Sway's own SwayModel so it bends, where Snow! Real Magic would (inside the snow, or a tall plant's top half on it, marked ON_SNOW in getModelData)."
+     ]},
+
+    {"id": "sway-variants", "label": "SwayVariantModels", "group": "snowrealmagic", "kind": "compat", "loaders": ["fabric"], "versions": ["<1.21.11"],
+     "files": ["platform/fabric/SwayVariantModels.java"],
+     "summary": "Fabric 1.20.1 and 1.21.1: Sway wraps model files by name (block/<name> taken for block <name>), so a model a plant's block state names otherwise -- a resource pack's extra variants, Snow! Real Magic's snowy variants -- never bends. Wraps them with Sway's own SwayModel, leaving the ones Sway reaches alone.",
+     "details": ["From 1.21.11 (and on Forge 1.20.1) Sway wraps each block state's whole model, and every variant bends already."]},
+
+    {"id": "snow-shake", "label": "SnowShakeParticles", "group": "snowrealmagic", "kind": "component",
+     "files": ["gpu/SnowShakeParticles.java"],
+     "summary": "Shakes snow off a plant in Snow! Real Magic's snow the moment a push starts (from Sway's engine, any entity, CPU or GPU): up to 5 particles by the push's strength, a quarter crumbs of snow and the rest snowflakes, drifting the way it was pushed, from the plant's top (a tall plant: where its top half begins). One second per plant between shakes; the game's particle setting applies. Ticked from Fabric's END_CLIENT_TICK and Forge's ClientTickEvent END."},
+
     {"id": "fabric-hooks", "label": "FabricFoliageHooks", "group": "loader", "kind": "hook", "loaders": ["fabric"],
      "files": ["platform/fabric/FabricFoliageHooks.java", "platform/fabric/FabricEntrypoint.java", "platform/fabric/FabricClientEntrypoint.java", "platform/fabric/FabricPlatform.java"],
      "summary": "Fabric: model wrapping, the frame event, chunk load/unload.",
@@ -316,7 +358,8 @@
        "26.3 NeoForge: ModDevGradle passes StackShadowPages but not the export (added); NeoForm runtime 2.0.31 needed to recompile 26.3.",
        "NeoForge dev validates draws and crashes on Iris's one-element binding arrays: -Dneoforge.disableGlValidation=true.",
        "Fabric 1.21.1 dev + Iris 1.8.14 crashes in the dev remapper: test in a launcher instance.",
-       "Test mods live in versions/<v>/run/mods; the user provides them in versions/<v> mods/<loader>."
+       "Test mods live in versions/<v>/run/mods; the user provides them in versions/<v> mods/<loader>.",
+       "Forge 1.20.1 dev runs on named mappings: third-party mods go through modRuntimeOnly in build.forge.gradle.kts (remapped), their raw jars in run/mods renamed .disabled."
      ]},
 
     {"id": "fabric-api", "label": "Fabric API", "group": "external", "kind": "mod", "loaders": ["fabric"],
@@ -423,7 +466,22 @@
     ["v-1.20.1", "embeddium", "Sodium is"],
     ["v-1.20.1", "indium", "needs"],
     ["v-1.21.1", "polytone-shadow", "adds"],
-    ["v-26.3", "level-pass", "adds"]
+    ["v-26.3", "level-pass", "adds"],
+    ["srm-compat", "srm", "reads"],
+    ["srm-compat", "sway-api", "registers the snow with"],
+    ["renderer", "srm-compat", "meshes the plant in the snow through"],
+    ["srm-compat", "split", "decides through"],
+    ["srm-forge-indigo", "srm", "hooks the Indigo of"],
+    ["srm-forge-indigo", "sway-api", "tells the position to"],
+    ["srm-forge-indigo", "model-forge", "decides for"],
+    ["srm-forge-indigo", "embeddium", "also covers"],
+    ["sway-variants", "sway-api", "wraps with SwayModel of"],
+    ["sway-variants", "srm", "bends the snowy variants of"],
+    ["model-fabric", "sway-variants", "sits beside"],
+    ["snow-shake", "interaction", "reads pushes from"],
+    ["snow-shake", "srm-compat", "finds plants through"],
+    ["mixin-configs", "srm-forge-indigo", "lists (Forge)"],
+    ["dirty", "srm-compat", "follows block entity updates for"]
   ],
 
   "matrix": {
@@ -484,6 +542,10 @@
       {"label": "Polytone shadow", "cells": {
         "1.20.1": "none (no shadow map)", "1.21.1": "ShadowMapRendererMixin", "1.21.11": "ShadowMapRendererMixin",
         "26.1.2": "ShadowMapRendererMixin", "26.2": "ShadowMapRendererMixin", "26.3": "none yet (no Polytone)"}},
+      {"label": "Snow! Real Magic", "cells": {
+        "1.20.1": "fabric: done (SwayVariantModels, GPU plant + snowy variant, particles) | forge: done (Indigo mixins, vanilla and Embeddium, particles)",
+        "1.21.1": "fabric: code shared with 1.20.1, untested | neoforge: not written",
+        "1.21.11": "not written (BlockStateModel era)", "26.1.2": "not written", "26.2": "not written", "26.3": "not written"}},
       {"label": "Dev-run notes", "cells": {
         "1.20.1": "Fabric client on Java 17", "1.21.1": "fabric: Iris crashes the dev remapper, test in a launcher",
         "1.21.11": "neoforge (every version): disableGlValidation", "26.1.2": "", "26.2": "",

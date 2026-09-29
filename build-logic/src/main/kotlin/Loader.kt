@@ -159,6 +159,10 @@ sealed class Loader(val id: String) {
 					if (ctx.stonecutter.eval(ctx.currentMcVersion, ">=26.3")) {
 						add(ForgeMixin("${ctx.modId}.pass.mixins.json"))
 					}
+					// Snow! Real Magic, which draws through its own copy of Indigo on Forge.
+					if (ctx.loader is Loader.Forge) {
+						add(ForgeMixin("${ctx.modId}.snowrealmagic.mixins.json"))
+					}
 				}
 			)
 

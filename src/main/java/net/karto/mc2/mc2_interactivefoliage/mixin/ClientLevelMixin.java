@@ -25,5 +25,11 @@ public abstract class ClientLevelMixin {
 	private void mc2$foliageBlockChanged(BlockPos pos, BlockState oldState, BlockState newState, CallbackInfo ci) {
 		GpuFoliageRenderer.onBlockChanged(pos);
 	}
+
+	/** A block entity's data reaching the client, or changing there, is told this way, and not through setBlocksDirty. */
+	@Inject(method = "sendBlockUpdated", at = @At("HEAD"))
+	private void mc2$foliageBlockUpdated(BlockPos pos, BlockState oldState, BlockState newState, int flags, CallbackInfo ci) {
+		GpuFoliageRenderer.onBlockUpdated(pos, newState);
+	}
 }
 //?}

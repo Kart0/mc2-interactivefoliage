@@ -117,6 +117,11 @@ public final class GpuFoliageInteraction {
 	 */
 	private static final Map<BlockPos, SwayData> SWAY_FORCES = findSwayForces();
 
+	/** Sway's forces by block, read-only; see SWAY_FORCES. */
+	static Map<BlockPos, SwayData> swayForces() {
+		return SWAY_FORCES;
+	}
+
 	/** A plant Sway is pushing, or recently was, with its spring. */
 	private static final class Cell {
 		final BlockPos pos;

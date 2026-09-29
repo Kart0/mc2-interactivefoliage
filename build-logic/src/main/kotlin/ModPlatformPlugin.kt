@@ -159,6 +159,10 @@ abstract class ModPlatformPlugin @Inject constructor() : Plugin<Project> {
 			if (!ctx.shaderPackSupport) {
 				exclude("*.iris.mixins.json")
 			}
+			// Snow! Real Magic draws through its own copy of Indigo only on Forge.
+			if (ctx.loader !is Loader.Forge) {
+				exclude("*.snowrealmagic.mixins.json")
+			}
 			// Vanilla's render pass is only handed to the foliage from 26.3.
 			if (!ctx.stonecutter.eval(ctx.currentMcVersion, ">=26.3")) {
 				exclude("*.pass.mixins.json")
@@ -193,7 +197,8 @@ abstract class ModPlatformPlugin @Inject constructor() : Plugin<Project> {
 			if (ctx.loader is Loader.Forge) {
 				// Forge reads a jar's mixin configs from its manifest, not from mods.toml.
 				manifest.attributes(ctx.loader.mixinConfigAttribute to
-						"${ctx.modId}.mixins.json,${ctx.modId}.gpu.mixins.json,${ctx.modId}.iris.mixins.json")
+						"${ctx.modId}.mixins.json,${ctx.modId}.gpu.mixins.json,${ctx.modId}.iris.mixins.json,"
+								+ "${ctx.modId}.snowrealmagic.mixins.json")
 			}
 		}
 	}

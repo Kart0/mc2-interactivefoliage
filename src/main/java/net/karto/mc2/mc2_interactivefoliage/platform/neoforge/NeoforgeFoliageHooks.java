@@ -2,8 +2,7 @@ package net.karto.mc2.mc2_interactivefoliage.platform.neoforge;
 
 //? neoforge && >=1.21.1 {
 
-/*import com.github.razorplay01.sway.api.SwayAPI;
-import net.karto.mc2.mc2_interactivefoliage.ModTemplate;
+/*import net.karto.mc2.mc2_interactivefoliage.ModTemplate;
 import net.karto.mc2.mc2_interactivefoliage.gpu.GpuFoliageRenderer;
 import net.karto.mc2.mc2_interactivefoliage.gpu.GpuFoliageSplit;
 import net.minecraft.client.multiplayer.ClientLevel;
@@ -98,7 +97,7 @@ public final class NeoforgeFoliageHooks {
 	public static void onModifyBakingResult(ModelEvent.ModifyBakingResult event) {
 		Map<BlockState, BlockStateModel> models = event.getBakingResult().blockStateModels();
 		for (Map.Entry<BlockState, BlockStateModel> entry : new ArrayList<>(models.entrySet())) {
-			if (!SwayAPI.isInteractive(entry.getKey().getBlock())) {
+			if (!GpuFoliageSplit.bends(entry.getKey().getBlock())) {
 				continue;
 			}
 			NeoforgeFoliageModel wrapped = new NeoforgeFoliageModel(entry.getValue());
@@ -135,7 +134,7 @@ public final class NeoforgeFoliageHooks {
 		}
 		// The renderer looks models up by block state, so each state is matched to the id its model has.
 		for (Block block : BuiltInRegistries.BLOCK) {
-			if (!SwayAPI.isInteractive(block)) {
+			if (!GpuFoliageSplit.bends(block)) {
 				continue;
 			}
 			for (BlockState state : block.getStateDefinition().getPossibleStates()) {
@@ -163,7 +162,7 @@ public final class NeoforgeFoliageHooks {
 		if (ModelResourceLocation.INVENTORY_VARIANT.equals(id.variant())) {
 			return false;
 		}
-		return BuiltInRegistries.BLOCK.getOptional(id.id()).map(SwayAPI::isInteractive).orElse(false);
+		return BuiltInRegistries.BLOCK.getOptional(id.id()).map(GpuFoliageSplit::bends).orElse(false);
 	}
 	^///?}
 }

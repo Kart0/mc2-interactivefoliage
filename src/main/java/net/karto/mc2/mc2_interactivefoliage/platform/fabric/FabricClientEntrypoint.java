@@ -4,6 +4,7 @@ package net.karto.mc2.mc2_interactivefoliage.platform.fabric;
 
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.karto.mc2.mc2_interactivefoliage.ModTemplate;
+import net.karto.mc2.mc2_interactivefoliage.gpu.SnowShakeParticles;
 import dev.kikugie.fletching_table.annotation.fabric.Entrypoint;
 import net.fabricmc.api.ClientModInitializer;
 
@@ -18,8 +19,12 @@ public class FabricClientEntrypoint implements ClientModInitializer {
 		// load order and silently miss mods that initialize after this one.
 		ModTemplate.onRegistriesReady();
 		FabricFoliageHooks.register();
+		//? <1.21.11 {
+		/*SwayVariantModels.register();
+		*///?}
 		FoliageKeyBindings.register();
 		ClientTickEvents.END_CLIENT_TICK.register(FoliageKeyBindings::tick);
+		ClientTickEvents.END_CLIENT_TICK.register(client -> SnowShakeParticles.tick());
 	}
 
 }

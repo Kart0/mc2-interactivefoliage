@@ -1,0 +1,14 @@
+{
+  "package": "net.karto.mc2.mc2_interactivefoliage.mixin.snowrealmagic",
+  "required": false,
+  "minVersion": "0.8",
+  "compatibilityLevel": "${java}",
+  "injectors": {
+    "defaultRequire": 0
+  },
+  "mixins": [],
+  "client": [
+    "IndigoBlockPositionMixin",
+    "IndigoBlockRenderMixin"
+  ]
+}

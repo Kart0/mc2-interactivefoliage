@@ -3,6 +3,7 @@ package net.karto.mc2.mc2_interactivefoliage.platform.forge;
 //? forge {
 
 /*import net.karto.mc2.mc2_interactivefoliage.ModTemplate;
+import net.karto.mc2.mc2_interactivefoliage.gpu.SnowShakeParticles;
 import net.minecraft.client.Minecraft;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.event.TickEvent;
@@ -19,6 +20,10 @@ public class ForgeClientEventSubscriber {
 	@SubscribeEvent
 	public static void onClientTick(TickEvent.ClientTickEvent event) {
 		ForgeKeyBindings.tick(Minecraft.getInstance());
+		// Once per tick, as Fabric's end of tick: the event comes at both ends.
+		if (event.phase == TickEvent.Phase.END) {
+			SnowShakeParticles.tick();
+		}
 	}
 }
 *///?}

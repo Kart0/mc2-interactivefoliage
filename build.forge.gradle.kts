@@ -56,6 +56,7 @@ mixin {
 	config("${prop("mod.id")}.mixins.json")
 	config("${prop("mod.id")}.gpu.mixins.json")
 	config("${prop("mod.id")}.iris.mixins.json")
+	config("${prop("mod.id")}.snowrealmagic.mixins.json")
 }
 
 repositories {
@@ -86,6 +87,9 @@ dependencies {
 	modRuntimeOnly("maven.modrinth:biomes-o-plenty:jxUqRzSD") // 19.0.0.96
 	modRuntimeOnly("maven.modrinth:glitchcore:pYPZ5MNI") // 0.0.1.1
 	modRuntimeOnly("maven.modrinth:terrablender:zGconCHG") // 3.0.1.10
+	// Snow! Real Magic and the library it needs, for plants held in its snow.
+	modRuntimeOnly("maven.modrinth:iJNje1E8:aQw97T9l") // Snow! Real Magic 10.7.0
+	modRuntimeOnly("maven.modrinth:ufdDoWPd:NSxwah05") // Kiwi 11.10.3
 	// Embeddium, the chunk mesher Forge players use instead of Sodium. Left out with -PwithoutEmbeddium, to
 	// compare against vanilla's own. The name has no dot in it: PowerShell splits a bare argument at one.
 	if (!hasProperty("withoutEmbeddium")) {

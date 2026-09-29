@@ -5,6 +5,7 @@ package net.karto.mc2.mc2_interactivefoliage.platform.forge;
 /*import net.karto.mc2.mc2_interactivefoliage.FoliageConfigScreen;
 import net.karto.mc2.mc2_interactivefoliage.ModCompatRegistry;
 import net.karto.mc2.mc2_interactivefoliage.ModTemplate;
+import net.karto.mc2.mc2_interactivefoliage.gpu.GpuFoliageSplit;
 import net.minecraft.client.renderer.ItemBlockRenderTypes;
 import net.minecraft.client.renderer.RenderType;
 import net.minecraft.world.level.block.Block;
@@ -49,8 +50,12 @@ public class ForgeEntrypoint {
 			// Past the registry events and client-only, same reasoning as NeoForge.
 			ModTemplate.onRegistriesReady();
 
+			// Only the plants Sway bends: a block it only pushes keeps its own layers -- Snow! Real Magic's snow draws
+			// its snow in the solid layer and the plant inside in the plant's own, and on cutout alone it draws nothing.
 			for (Block block : ModCompatRegistry.registeredBlocks()) {
-				ItemBlockRenderTypes.setRenderLayer(block, RenderType.cutoutMipped());
+				if (GpuFoliageSplit.bends(block)) {
+					ItemBlockRenderTypes.setRenderLayer(block, RenderType.cutoutMipped());
+				}
 			}
 		});
 	}

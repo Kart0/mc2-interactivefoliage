@@ -4,6 +4,7 @@ package net.karto.mc2.mc2_interactivefoliage.platform.neoforge;
 
 /*import net.karto.mc2.mc2_interactivefoliage.FoliageConfigScreen;
 import net.karto.mc2.mc2_interactivefoliage.ModTemplate;
+import net.karto.mc2.mc2_interactivefoliage.gpu.GpuFoliageSplit;
 //? <= 1.21.1 {
 /^import net.karto.mc2.mc2_interactivefoliage.ModCompatRegistry;
 import net.minecraft.client.renderer.ItemBlockRenderTypes;
@@ -50,8 +51,12 @@ public class NeoforgeEntrypoint {
 			// 1.21.11+ replaced BakedModel with BlockStateModel, where the render layer travels
 			// inside each BlockStateModelPart instead of a model-level method, so Sway's wrapper
 			// cannot drop it there and no workaround is needed.
+			// Only the plants Sway bends: a block it only pushes keeps its own layers -- Snow! Real Magic's snow draws
+			// its snow in the solid layer and the plant inside in the plant's own, and on cutout alone it draws nothing.
 			for (Block block : ModCompatRegistry.registeredBlocks()) {
-				ItemBlockRenderTypes.setRenderLayer(block, RenderType.cutoutMipped());
+				if (GpuFoliageSplit.bends(block)) {
+					ItemBlockRenderTypes.setRenderLayer(block, RenderType.cutoutMipped());
+				}
 			}
 			^///?}
 		});

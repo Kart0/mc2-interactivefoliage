@@ -188,6 +188,11 @@ public final class GpuFoliageSplit {
 		if (!chunkBuild &&(SODIUM_LEVEL_SLICE == null || !SODIUM_LEVEL_SLICE.isInstance(level))) {
 			return false;
 		}
+		return decide(pos);
+	}
+
+	/** Whether a chunk build leaves the foliage at this position to the GPU renderer, decided once per section. */
+	private static boolean decide(BlockPos pos) {
 		int sectionX = SectionPos.blockToSectionCoord(pos.getX());
 		int sectionZ = SectionPos.blockToSectionCoord(pos.getZ());
 		long sectionKey = SectionPos.asLong(sectionX, SectionPos.blockToSectionCoord(pos.getY()), sectionZ);
@@ -205,6 +210,36 @@ public final class GpuFoliageSplit {
 		last.generation = currentGeneration;
 		DECISIONS.add(new MeshDecision(sectionKey, leave));
 		return leave;
+	}
+
+	/** Whether the plant inside the Snow! Real Magic snow Indigo is drawing now is left to the GPU renderer. */
+	private static final ThreadLocal<Boolean> SNOW_PLANT_LEFT = ThreadLocal.withInitial(() -> Boolean.FALSE);
+
+	/**
+	 * Called as Indigo starts drawing a block in a chunk build, on Forge, where Snow! Real Magic draws through its own
+	 * copy of it. Its snow draws the plant inside through the plant's own model, but hands it the snow's model data, so
+	 * the plant's model never decides for itself; the decision is made here instead, the same way, at the snow.
+	 */
+	public static void beginIndigoBlock(BlockState state, BlockPos pos) {
+		SNOW_PLANT_LEFT.set(SnowRealMagicCompat.isSnowBlock(state) && decide(pos));
+	}
+
+	/**
+	 * The same, from Indigo's block context, which Embeddium draws Fabric's models through and Indigo also draws blocks
+	 * outside chunk builds with -- falling or moved ones, which always keep their plant.
+	 */
+	public static void beginIndigoBlock(BlockAndTintGetter level, BlockState state, BlockPos pos) {
+		SNOW_PLANT_LEFT.set(SnowRealMagicCompat.isSnowBlock(state) && leaveToGpu(level, pos));
+	}
+
+	/** Indigo is done with the block. */
+	public static void endIndigoBlock() {
+		SNOW_PLANT_LEFT.set(Boolean.FALSE);
+	}
+
+	/** Whether the plant being drawn inside Snow! Real Magic's snow is the GPU renderer's to draw; see beginIndigoBlock. */
+	public static boolean snowPlantLeftToGpu() {
+		return SNOW_PLANT_LEFT.get();
 	}
 
 	/** Render thread: applies the decisions and chunk mesh swaps reported since the last frame, in order. */
@@ -420,13 +455,27 @@ public final class GpuFoliageSplit {
 		if (foliage == null) {
 			Set<Block> found = Collections.newSetFromMap(new IdentityHashMap<>());
 			for (Block block : BuiltInRegistries.BLOCK) {
-				if (SwayAPI.isInteractive(block)) {
+				if (bends(block)) {
 					found.add(block);
 				}
 			}
 			foliage = found;
 		}
 		return foliage.contains(state.getBlock());
+	}
+
+	/**
+	 * Whether Sway bends this block, which makes it foliage: its models are wrapped and the GPU renderer draws it. A
+	 * block Sway only pushes, with no deformation of its own -- Snow! Real Magic's snow, whose plant inside bends by its
+	 * own pipeline -- is not foliage; the plant inside it is.
+	 */
+	public static boolean bends(Block block) {
+		return SwayAPI.isInteractive(block) && !SwayAPI.getBehaviorPipeline(block).getDeformationContributors().isEmpty();
+	}
+
+	/** Whether the GPU renderer has anything to draw at a block like this: foliage, or snow holding a plant. */
+	static boolean mayHoldFoliage(BlockState state) {
+		return isFoliage(state) || SnowRealMagicCompat.isSnowBlock(state);
 	}
 
 	private static Class<?> findClass(String name) {

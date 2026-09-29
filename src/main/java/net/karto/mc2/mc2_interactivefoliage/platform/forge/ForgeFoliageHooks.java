@@ -3,6 +3,7 @@ package net.karto.mc2.mc2_interactivefoliage.platform.forge;
 //? forge {
 
 /*import com.github.razorplay01.sway.api.SwayAPI;
+import com.github.razorplay01.sway.platform.forge.util.SwayModel;
 import net.karto.mc2.mc2_interactivefoliage.ModTemplate;
 import net.karto.mc2.mc2_interactivefoliage.gpu.GpuFoliageRenderer;
 import net.karto.mc2.mc2_interactivefoliage.gpu.GpuFoliageSplit;
@@ -26,6 +27,7 @@ import net.minecraftforge.eventbus.api.IEventBus;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
+import java.lang.reflect.Field;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -99,7 +101,7 @@ public final class ForgeFoliageHooks {
 		}
 		// The renderer looks models up by block state, so each state is matched to the id its model has.
 		for (Block block : BuiltInRegistries.BLOCK) {
-			if (!SwayAPI.isInteractive(block)) {
+			if (!GpuFoliageSplit.bends(block)) {
 				continue;
 			}
 			for (BlockState state : block.getStateDefinition().getPossibleStates()) {
@@ -110,6 +112,49 @@ public final class ForgeFoliageHooks {
 			}
 		}
 		PLAIN_MODELS.clear();
+		// Sway wraps the model of every block it knows, the ones it only pushes and never bends as well: Snow! Real
+		// Magic's snow, whose plant inside bends on its own. Its wrapper says the model is a plain one, so the snow's
+		// own drawing -- the snow and the plant in it -- is skipped and the block is drawn as nothing. Those models
+		// are handed back as they were.
+		for (Map.Entry<ResourceLocation, BakedModel> entry : models.entrySet()) {
+			if (entry.getValue() instanceof SwayModel sway && isPushedOnlyBlockModel(entry.getKey())) {
+				BakedModel inside = insideSway(sway);
+				if (inside != null) {
+					entry.setValue(inside);
+				}
+			}
+		}
+	}
+
+	private static Field swayParent;
+	private static boolean swayParentMissing;
+
+	/^* The model Sway wrapped, or null if its wrapper is not one this knows. ^/
+	private static BakedModel insideSway(SwayModel sway) {
+		if (swayParentMissing) {
+			return null;
+		}
+		try {
+			if (swayParent == null) {
+				swayParent = SwayModel.class.getDeclaredField("parent");
+				swayParent.setAccessible(true);
+			}
+			return (BakedModel) swayParent.get(sway);
+		} catch (ReflectiveOperationException | RuntimeException e) {
+			swayParentMissing = true;
+			ModTemplate.LOGGER.warn("Could not unwrap Sway's model of a block it only pushes; Snow! Real Magic's snow "
+					+ "may not be drawn", e);
+			return null;
+		}
+	}
+
+	/^* A block state's model, of a block Sway pushes but does not bend. ^/
+	private static boolean isPushedOnlyBlockModel(ResourceLocation id) {
+		if (!(id instanceof ModelResourceLocation location) || "inventory".equals(location.getVariant())) {
+			return false;
+		}
+		return BuiltInRegistries.BLOCK.getOptional(new ResourceLocation(location.getNamespace(), location.getPath()))
+				.map(block -> SwayAPI.isInteractive(block) && !GpuFoliageSplit.bends(block)).orElse(false);
 	}
 
 	/^*
@@ -134,7 +179,7 @@ public final class ForgeFoliageHooks {
 			return false;
 		}
 		return BuiltInRegistries.BLOCK.getOptional(new ResourceLocation(location.getNamespace(), location.getPath()))
-				.map(SwayAPI::isInteractive).orElse(false);
+				.map(GpuFoliageSplit::bends).orElse(false);
 	}
 }
 *///?}
