@@ -97,6 +97,7 @@ import com.mojang.blaze3d.vertex.VertexFormatElement;
 *///?}
 import net.karto.mc2.mc2_interactivefoliage.FoliageSettings;
 import net.karto.mc2.mc2_interactivefoliage.ModTemplate;
+import net.karto.mc2.mc2_interactivefoliage.WavingBlacklist;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
 //? >=26.2 {
@@ -628,6 +629,7 @@ public final class GpuFoliageRenderer {
 	 * numbers.
 	 */
 	private static final float WEIGHT_SCALE = 1023.0F;
+	private static final float PUSH_SCALE = 511.0F;
 	private static final float EXPOSURE_SCALE = 15.0F;
 
 	/**
@@ -642,14 +644,14 @@ public final class GpuFoliageRenderer {
 	}
 
 	/**
-	 * The wind weight, the push weight and how much of rain's wind reaches the plant, all between 0 and 1, as one float:
-	 * ten bits, ten bits and four.
+	 * The wind weight, the push weight, whether the plant stands still in calm weather, and how much of rain's wind
+	 * reaches the plant, as one float: ten bits, nine, one and four. The weights are between 0 and 1.
 	 */
-	private static float packWeights(float wave, float push, float exposure) {
+	private static float packWeights(float wave, float push, boolean still, float exposure) {
 		int w = Math.round(Mth.clamp(wave, 0.0F, 1.0F) * WEIGHT_SCALE);
-		int p = Math.round(Mth.clamp(push, 0.0F, 1.0F) * WEIGHT_SCALE);
+		int p = Math.round(Mth.clamp(push, 0.0F, 1.0F) * PUSH_SCALE);
 		int e = Math.round(Mth.clamp(exposure, 0.0F, 1.0F) * EXPOSURE_SCALE);
-		return (w * 1024 + p) * 16 + e;
+		return ((w * 512 + p) * 2 + (still ? 1 : 0)) * 16 + e;
 	}
 	private static final int INITIAL_SCRATCH_QUADS = 1024;
 
@@ -1045,6 +1047,8 @@ public final class GpuFoliageRenderer {
 		 * Snow! Real Magic's snow. A push moves it as far as any other.
 		 */
 		private float waving = 1.0F;
+		/** Whether the plant stands still in calm weather: a block on the waving blacklist. The weather's wind moves it. */
+		private boolean still;
 		/** Sway's own deformation for this plant, which decides how far a push moves each vertex. */
 		private DeformationContributor deformation;
 		private float deformationScale;
@@ -2859,7 +2863,7 @@ public final class GpuFoliageRenderer {
 					anchor.cellY - regionOrigin.getY(),
 					anchor.cellZ - regionOrigin.getZ()));
 			weightScratch.putFloat(packWeights(anchor.weightAt(regionOrigin.getY() + y) * anchor.waving,
-					anchor.pushWeightAt(localY), anchor.exposure));
+					anchor.pushWeightAt(localY), anchor.still, anchor.exposure));
 			return this;
 		}
 
@@ -2940,7 +2944,7 @@ public final class GpuFoliageRenderer {
 					anchor.cellY - regionOrigin.getY(),
 					anchor.cellZ - regionOrigin.getZ()));
 			weightScratch.putFloat(packWeights(anchor.weightAt(regionOrigin.getY() + y) * anchor.waving,
-					anchor.pushWeightAt(localY), anchor.exposure));
+					anchor.pushWeightAt(localY), anchor.still, anchor.exposure));
 		}
 
 		@Override
@@ -3154,7 +3158,7 @@ public final class GpuFoliageRenderer {
 				float worldY = regionOrigin.getY() + y + localY;
 				weightScratch.putFloat(cell);
 				weightScratch.putFloat(packWeights(anchor.weightAt(worldY) * anchor.waving, anchor.pushWeightAt(localY),
-						anchor.exposure));
+						anchor.still, anchor.exposure));
 			}
 		};
 
@@ -3198,7 +3202,10 @@ public final class GpuFoliageRenderer {
 					// so the anchor shares the block's.
 					anchor.exposure = shelter == null ? 1.0F
 							: shelter.exposureAt(pos.getX(), anchor.cellY, pos.getZ(), anchor.length);
-					// A plant under Snow! Real Magic's snow -- held in it, or the top half of one that is -- is weighed down.
+					// A block on the waving blacklist stands still in calm weather, and the weather's wind still moves it.
+					anchor.still = WavingBlacklist.contains(state);
+					// A plant under Snow! Real Magic's snow -- held in it, or the top half of one that is -- is weighed
+					// down, in calm weather and in the wind alike. Either still bends as far as any other when pushed.
 					anchor.waving = inSnow || SnowRealMagicCompat.standsOnSnow(level, pos, state) ? SNOW_LADEN_SWAY : 1.0F;
 					// Another mod may draw the plant lower than its block, as the chunk mesh shows it.
 					float lift = TerrainSlabsCompat.offsetY(level, pos, state) + raised;

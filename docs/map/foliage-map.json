@@ -117,7 +117,7 @@
    "summary": "The GPU renderer. Meshes every section near the player that holds foliage, packs sections into 8x4x8 regions (Sodium's grouping) and draws each region's visible runs in as few calls as it can.",
    "details": [
     "Geometry comes from ModelBlockRenderer.tesselateBlock, the method the section compiler uses, so AO, light and biome tint are vanilla's.",
-    "Each vertex carries two extra values after the block format: SwayCell (which plant, for its push) and SwayWeights (how much of the vertex moves, 10+10 bits, plus 4 bits of wind exposure).",
+    "Each vertex carries two extra values after the block format: SwayCell (which plant, for its push) and SwayWeights (one float, 24 exact bits: the wind weight 10, the push 9, a still-in-calm flag 1, the wind exposure 4; packWeights, unpacked in sway.glsl and both legacy vsh).",
     "Rebuilds have a 4 ms budget per frame on every version; the near area adapts its radius.",
     "Only near the player: further out the chunk mesh keeps the foliage, still.",
     "Three draw paths by version: drawLegacy (<1.21.11), a pass of its own (1.21.11-26.2), prepare/draw split into vanilla's pass (26.3+)."
@@ -128,7 +128,7 @@
    "fileInfo": {
     "gpu/GpuFoliageRenderer.java": {
      "kind": "java",
-     "lines": 3354,
+     "lines": 3361,
      "guard": "//? >=1.20.1 {"
     }
    }
@@ -152,7 +152,7 @@
    "fileInfo": {
     "gpu/GpuFoliageRenderer.java": {
      "kind": "java",
-     "lines": 3354,
+     "lines": 3361,
      "guard": "//? >=1.20.1 {"
     }
    }
@@ -177,7 +177,7 @@
    "fileInfo": {
     "gpu/GpuFoliageRenderer.java": {
      "kind": "java",
-     "lines": 3354,
+     "lines": 3361,
      "guard": "//? >=1.20.1 {"
     }
    }
@@ -211,7 +211,7 @@
    "fileInfo": {
     "gpu/GpuFoliageRenderer.java": {
      "kind": "java",
-     "lines": 3354,
+     "lines": 3361,
      "guard": "//? >=1.20.1 {"
     },
     "mixin/LevelPassMixin.java": {
@@ -237,7 +237,7 @@
    "fileInfo": {
     "gpu/GpuFoliageRenderer.java": {
      "kind": "java",
-     "lines": 3354,
+     "lines": 3361,
      "guard": "//? >=1.20.1 {"
     }
    }
@@ -550,6 +550,26 @@
    }
   },
   {
+   "id": "waving-blacklist",
+   "label": "WavingBlacklist",
+   "group": "motion",
+   "kind": "component",
+   "files": [
+    "WavingBlacklist.java"
+   ],
+   "summary": "Blocks the GPU renderer keeps from waving in calm weather (vines, glow lichen, carpets, lily pads, dripleaf, chorus...): chosen by the author, never the player, laid out like ModCompatRegistry with a section per mod, ids skipped when absent. The weather's wind still moves them and pushes still bend them.",
+   "details": [
+    "Meshed as SwayWeights' still flag (anchor.still); sway.glsl multiplies only the calm sway by it (weights.w), so rain's wind is untouched. Snow! Real Magic's SNOW_LADEN_SWAY scales calm sway and wind alike, through the wave weight."
+   ],
+   "fileInfo": {
+    "WavingBlacklist.java": {
+     "kind": "java",
+     "lines": 126,
+     "guard": "//? >=1.21.11 {"
+    }
+   }
+  },
+  {
    "id": "sway-glsl",
    "label": "sway.glsl",
    "group": "shaders",
@@ -561,7 +581,7 @@
    "fileInfo": {
     "shaders/include/sway.glsl": {
      "kind": "shader",
-     "lines": 175,
+     "lines": 179,
      "guard": ""
     }
    }
@@ -590,7 +610,7 @@
     },
     "shaders/core/foliage_legacy.vsh": {
      "kind": "shader",
-     "lines": 153,
+     "lines": 156,
      "guard": ""
     },
     "shaders/core/foliage_legacy.fsh": {
@@ -605,7 +625,7 @@
     },
     "shaders/core/foliage_legacy_1_20.vsh": {
      "kind": "shader",
-     "lines": 152,
+     "lines": 155,
      "guard": ""
     }
    }
@@ -2088,6 +2108,16 @@
    "label": "lists (NeoForge 26.1.2+)"
   },
   {
+   "source": "renderer",
+   "target": "waving-blacklist",
+   "label": "stills calm sway through"
+  },
+  {
+   "source": "waving-blacklist",
+   "target": "sway-glsl",
+   "label": "read as weights.w by"
+  },
+  {
    "source": "blockgetter-fix",
    "target": "iris",
    "label": "works around"
@@ -2379,7 +2409,7 @@
   },
   "gpu/GpuFoliageRenderer.java": {
    "kind": "java",
-   "lines": 3354,
+   "lines": 3361,
    "guard": "//? >=1.20.1 {"
   },
   "gpu/GpuFoliageSplit.java": {
@@ -2652,6 +2682,11 @@
    "lines": 15,
    "guard": ""
   },
+  "WavingBlacklist.java": {
+   "kind": "java",
+   "lines": 126,
+   "guard": "//? >=1.21.11 {"
+  },
   "shaders/core/foliage.fsh": {
    "kind": "shader",
    "lines": 26,
@@ -2674,7 +2709,7 @@
   },
   "shaders/core/foliage_legacy.vsh": {
    "kind": "shader",
-   "lines": 153,
+   "lines": 156,
    "guard": ""
   },
   "shaders/core/foliage_legacy_1_20.json": {
@@ -2684,7 +2719,7 @@
   },
   "shaders/core/foliage_legacy_1_20.vsh": {
    "kind": "shader",
-   "lines": 152,
+   "lines": 155,
    "guard": ""
   },
   "shaders/core/foliage_modern.fsh": {
@@ -2709,7 +2744,7 @@
   },
   "shaders/include/sway.glsl": {
    "kind": "shader",
-   "lines": 175,
+   "lines": 179,
    "guard": ""
   }
  },

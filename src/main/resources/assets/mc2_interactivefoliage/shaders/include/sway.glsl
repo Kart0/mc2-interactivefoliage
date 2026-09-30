@@ -109,15 +109,19 @@ vec3 mc2_unpackCell(float bits) {
     return vec3(x, y, rest - y * 256.0) - 64.0;
 }
 
-// SwayWeights: how freely this vertex sways, how far a push moves it, ten bits each, and how much of rain's wind
-// reaches the plant, four bits. The first is the wind's own curve; the second is Sway's, so a pushed plant bends the
-// same whoever draws it; the third is 1 in the open and falls under roofs, in caves and behind walls upwind, as the
-// mod works out when it meshes the plant. x: the wind weight, y: the push, z: the wind's reach.
-vec3 mc2_unpackWeights(float bits) {
+// SwayWeights: how freely this vertex sways, ten bits, how far a push moves it, nine, whether the plant stands still in
+// calm weather, one, and how much of rain's wind reaches the plant, four. The first is the wind's own curve; the second
+// is Sway's, so a pushed plant bends the same whoever draws it; the third is set for the blocks the mod keeps from
+// waving, which the weather's wind still moves; the fourth is 1 in the open and falls under roofs, in caves and behind
+// walls upwind, as the mod works out when it meshes the plant. x: the wind weight, y: the push, z: the wind's reach,
+// w: how much of the calm sway the plant has, 1 or 0.
+vec4 mc2_unpackWeights(float bits) {
     float exposure = bits - floor(bits / 16.0) * 16.0;
-    float weights = (bits - exposure) / 16.0;
-    float wave = floor(weights / 1024.0);
-    return vec3(vec2(wave, weights - wave * 1024.0) / 1023.0, exposure / 15.0);
+    float rest = (bits - exposure) / 16.0;
+    float still = rest - floor(rest / 2.0) * 2.0;
+    float weights = (rest - still) / 2.0;
+    float wave = floor(weights / 512.0);
+    return vec4(wave / 1023.0, (weights - wave * 512.0) / 511.0, exposure / 15.0, 1.0 - still);
 }
 
 // How far rain's wind moves a vertex that may sway this far, along x and z: the plant leans downwind, gusts rolling
@@ -150,7 +154,7 @@ vec3 mc2_sway(vec3 pos, vec3 modelOffset, ivec3 cameraBlockPos, vec3 cameraOffse
     float phase = (world.x + world.z) * MC2_SWAY_SCALE + gameTime * MC2_SWAY_SPEED;
     vec3 cell = mc2_unpackCell(swayCell) + modelOffset;
     vec2 force = mc2_cellPush(cell);
-    vec3 weights = mc2_unpackWeights(swayWeights);
+    vec4 weights = mc2_unpackWeights(swayWeights);
     // Every vertex of a plant reads the same force, so the whole plant calms together.
     float calm = smoothstep(0.0, MC2_PUSH_FOR_CALM, length(force));
     // How far this vertex may sway at all, and how much of its shaking a push leaves it.
@@ -158,7 +162,7 @@ vec3 mc2_sway(vec3 pos, vec3 modelOffset, ivec3 cameraBlockPos, vec3 cameraOffse
     float shake = mix(1.0, MC2_PUSHED_SWAY, calm);
     float amount = reach * shake;
     vec2 push = force * weights.y * MC2_INTERACT_STRENGTH;
-    vec2 sway = vec2(sin(phase), cos(phase * 1.3) * 0.7) * amount * mc2_CalmSway;
+    vec2 sway = vec2(sin(phase), cos(phase * 1.3) * 0.7) * amount * mc2_CalmSway * weights.w;
     // The game eases rain in and out over a few seconds, and the sway turns into the wind along with it -- as far as
     // the wind reaches the plant: under a roof or behind a wall it keeps its calm sway.
     float rain = mc2_Weather.x * weights.z

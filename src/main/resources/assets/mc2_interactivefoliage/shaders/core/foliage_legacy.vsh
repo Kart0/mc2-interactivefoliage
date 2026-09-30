@@ -100,12 +100,15 @@ vec3 unpackCell(float bits) {
     return vec3(x, y, rest - y * 256.0) - 64.0;
 }
 
-// The wind weight and the push, ten bits each, then how much of rain's wind reaches the plant, four bits.
-vec3 unpackWeights(float bits) {
+// The wind weight, ten bits, the push, nine, whether the plant stands still in calm weather, one, then how much of
+// rain's wind reaches the plant, four. w: how much of the calm sway the plant has. See sway.glsl.
+vec4 unpackWeights(float bits) {
     float exposure = bits - floor(bits / 16.0) * 16.0;
-    float weights = (bits - exposure) / 16.0;
-    float wave = floor(weights / 1024.0);
-    return vec3(vec2(wave, weights - wave * 1024.0) / 1023.0, exposure / 15.0);
+    float rest = (bits - exposure) / 16.0;
+    float still = rest - floor(rest / 2.0) * 2.0;
+    float weights = (rest - still) / 2.0;
+    float wave = floor(weights / 512.0);
+    return vec4(wave / 1023.0, (weights - wave * 512.0) / 511.0, exposure / 15.0, 1.0 - still);
 }
 
 // How far rain's wind moves a vertex that may sway this much. See sway.glsl.
@@ -131,13 +134,13 @@ void main() {
     float phase = (world.x + world.z) * SWAY_SCALE + GameTime * SWAY_SPEED;
     vec3 cell = unpackCell(SwayCell) + ChunkOffset;
     vec2 force = swayCellPush(cell);
-    vec3 weights = unpackWeights(SwayWeights);
+    vec4 weights = unpackWeights(SwayWeights);
     float calm = smoothstep(0.0, PUSH_FOR_CALM, length(force));
     float reach = weights.x * SWAY_STRENGTH * SwayIntensity * edgeEase(cell);
     float shake = mix(1.0, PUSHED_SWAY, calm);
     float amount = reach * shake;
     vec2 push = force * weights.y * INTERACT_STRENGTH;
-    vec2 sway = vec2(sin(phase), cos(phase * 1.3) * 0.7) * amount * CalmSway;
+    vec2 sway = vec2(sin(phase), cos(phase * 1.3) * 0.7) * amount * CalmSway * weights.w;
     float rain = Weather.x * weights.z * (1.0 - smoothstep(Weather.z - Weather.w, Weather.z, length(cell.xz + 0.5)));
     vec2 windOffset = rain > 0.0 ? wind(world, phase, reach, shake) * rain : vec2(0.0);
     pos.xz += mix(sway, vec2(0.0), rain) + windOffset + push;

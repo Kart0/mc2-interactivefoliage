@@ -36,7 +36,7 @@
      "summary": "The GPU renderer. Meshes every section near the player that holds foliage, packs sections into 8x4x8 regions (Sodium's grouping) and draws each region's visible runs in as few calls as it can.",
      "details": [
        "Geometry comes from ModelBlockRenderer.tesselateBlock, the method the section compiler uses, so AO, light and biome tint are vanilla's.",
-       "Each vertex carries two extra values after the block format: SwayCell (which plant, for its push) and SwayWeights (how much of the vertex moves, 10+10 bits, plus 4 bits of wind exposure).",
+       "Each vertex carries two extra values after the block format: SwayCell (which plant, for its push) and SwayWeights (one float, 24 exact bits: the wind weight 10, the push 9, a still-in-calm flag 1, the wind exposure 4; packWeights, unpacked in sway.glsl and both legacy vsh).",
        "Rebuilds have a 4 ms budget per frame on every version; the near area adapts its radius.",
        "Only near the player: further out the chunk mesh keeps the foliage, still.",
        "Three draw paths by version: drawLegacy (<1.21.11), a pass of its own (1.21.11-26.2), prepare/draw split into vanilla's pass (26.3+)."
@@ -140,6 +140,11 @@
     {"id": "modcompat", "label": "ModCompatRegistry", "group": "motion", "kind": "component",
      "files": ["ModCompatRegistry.java"],
      "summary": "Registers third-party mods' plants with Sway (by id, skipped when the mod is absent), which also makes them GPU foliage."},
+
+    {"id": "waving-blacklist", "label": "WavingBlacklist", "group": "motion", "kind": "component",
+     "files": ["WavingBlacklist.java"],
+     "summary": "Blocks the GPU renderer keeps from waving in calm weather (vines, glow lichen, carpets, lily pads, dripleaf, chorus...): chosen by the author, never the player, laid out like ModCompatRegistry with a section per mod, ids skipped when absent. The weather's wind still moves them and pushes still bend them.",
+     "details": ["Meshed as SwayWeights' still flag (anchor.still); sway.glsl multiplies only the calm sway by it (weights.w), so rain's wind is untouched. Snow! Real Magic's SNOW_LADEN_SWAY scales calm sway and wind alike, through the wave weight."]},
 
     {"id": "sway-glsl", "label": "sway.glsl", "group": "shaders", "kind": "shader",
      "files": ["shaders/include/sway.glsl"],
@@ -506,6 +511,8 @@
     ["mixin-configs", "srm-forge-indigo", "lists (Forge)"],
     ["mixin-configs", "srm-neoforge-render", "lists (NeoForge)"],
     ["mixin-configs", "blockgetter-fix", "lists (NeoForge 26.1.2+)"],
+    ["renderer", "waving-blacklist", "stills calm sway through"],
+    ["waving-blacklist", "sway-glsl", "read as weights.w by"],
     ["blockgetter-fix", "iris", "works around"],
     ["blockgetter-fix", "srm", "lets chunks read the plant of"],
     ["srm-neoforge-render", "srm", "hooks the drawing of"],
