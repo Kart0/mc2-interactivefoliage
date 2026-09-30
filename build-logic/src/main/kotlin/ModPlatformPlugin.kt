@@ -167,6 +167,10 @@ abstract class ModPlatformPlugin @Inject constructor() : Plugin<Project> {
 			if (ctx.loader !is Loader.NeoForge || ctx.stonecutter.eval(ctx.currentMcVersion, ">=1.21.11")) {
 				exclude("*.snowrealmagic_neoforge.mixins.json")
 			}
+			// Forgified Fabric API's block getter interface on the level's views, which Iris keeps from them, from 26.1.2.
+			if (ctx.loader !is Loader.NeoForge || !ctx.stonecutter.eval(ctx.currentMcVersion, ">=26.1.2")) {
+				exclude("*.blockgetter.mixins.json")
+			}
 			// Vanilla's render pass is only handed to the foliage from 26.3.
 			if (!ctx.stonecutter.eval(ctx.currentMcVersion, ">=26.3")) {
 				exclude("*.pass.mixins.json")

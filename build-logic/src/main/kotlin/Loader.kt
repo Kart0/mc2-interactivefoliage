@@ -167,6 +167,10 @@ sealed class Loader(val id: String) {
 					if (ctx.loader is Loader.NeoForge && !ctx.stonecutter.eval(ctx.currentMcVersion, ">=1.21.11")) {
 						add(ForgeMixin("${ctx.modId}.snowrealmagic_neoforge.mixins.json"))
 					}
+					// Forgified Fabric API's block getter interface on the level's views, which Iris keeps from them.
+					if (ctx.loader is Loader.NeoForge && ctx.stonecutter.eval(ctx.currentMcVersion, ">=26.1.2")) {
+						add(ForgeMixin("${ctx.modId}.blockgetter.mixins.json"))
+					}
 				}
 			)
 

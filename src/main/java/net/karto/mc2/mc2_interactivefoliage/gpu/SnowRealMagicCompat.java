@@ -18,6 +18,16 @@ import java.lang.reflect.Field;
 import java.util.Map;
 import java.util.WeakHashMap;
 *///?}
+//? >=26.1.2 {
+import net.minecraft.client.renderer.block.dispatch.BlockStateModel;
+import net.minecraft.client.renderer.block.dispatch.BlockStateModelPart;
+import net.minecraft.client.resources.model.sprite.Material;
+import net.minecraft.util.RandomSource;
+
+import java.lang.reflect.Field;
+import java.util.ArrayList;
+import java.util.List;
+//?}
 
 import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
@@ -277,6 +287,125 @@ public final class SnowRealMagicCompat {
 		return CONTAINED != null && (isSnowBlock(level.getBlockState(pos)) && !isSnowBlock(plant)
 				|| standsOnSnow(level, pos, plant));
 	}
+
+	//? >=26.1.2 {
+	private static final String SNOW_CLIENT_CONFIG_26 = "snownee.snow.client.SnowClientConfig";
+	/** The part Snow! Real Magic bakes for a model with a snowy variant: its normal and its snowy part together. */
+	private static final String SNOWY_PART = "snownee.snow.client.model.SnowyBlockStateModelPart";
+	private static Field snowyPartField;
+	private static Field snowVariantsField;
+	private static boolean snowyPartsUnknown;
+
+	/**
+	 * The model Snow! Real Magic draws a plant with where snow touches it, as the chunk mesh shows it: one whose parts
+	 * are the snowy ones, for the plant held in the snow, and for the top half of a tall plant standing on it while the
+	 * player has the snowy variants on. The plant's own model anywhere else.
+	 * <p>
+	 * From 26.1.2 the mod keeps the snowy variant in each part of the plant's model, and hands the snowy one only to
+	 * what it draws the plant through, which vanilla's block renderer is not.
+	 */
+	static BlockStateModel snowyVariant(BlockStateModel model, BlockState state, BlockGetter level, BlockPos pos,
+			boolean inSnow) {
+		if (CONTAINED == null || snowyPartsUnknown) {
+			return model;
+		}
+		if (!inSnow && !(standsOnSnow(level, pos, state) && snowVariantsOn())) {
+			return model;
+		}
+		return new SnowyModel(model);
+	}
+
+	private static boolean snowVariantsOn() {
+		try {
+			if (snowVariantsField == null) {
+				snowVariantsField = Class.forName(SNOW_CLIENT_CONFIG_26, false, SnowRealMagicCompat.class.getClassLoader())
+						.getField("snowVariants");
+			}
+			return snowVariantsField.getBoolean(null);
+		} catch (ReflectiveOperationException | LinkageError | RuntimeException e) {
+			return true;
+		}
+	}
+
+	/**
+	 * Swaps the mod's parts of a plant's model for their snowy ones where it draws the plant snowy: held in its snow
+	 * (the level has the snow there, the plant being drawn from inside it), or the top half of a tall plant standing on
+	 * it while the player has the snowy variants on. For a model that hands its parts on to a wrapper that only asks
+	 * for their quads, which would otherwise always get the plain ones: Sway's on NeoForge.
+	 */
+	public static void snowyParts(BlockGetter level, BlockPos pos, BlockState plant, List<BlockStateModelPart> parts) {
+		if (CONTAINED == null || snowyPartsUnknown) {
+			return;
+		}
+		boolean inSnow = isSnowBlock(level.getBlockState(pos)) && !isSnowBlock(plant);
+		if (!inSnow && !(standsOnSnow(level, pos, plant) && snowVariantsOn())) {
+			return;
+		}
+		parts.replaceAll(SnowRealMagicCompat::snowyPart);
+	}
+
+	/** The snowy part of one of the mod's parts, or the part itself for any other. */
+	private static BlockStateModelPart snowyPart(BlockStateModelPart part) {
+		if (snowyPartsUnknown || !part.getClass().getName().equals(SNOWY_PART)) {
+			return part;
+		}
+		try {
+			if (snowyPartField == null) {
+				Field field = part.getClass().getDeclaredField("snowy");
+				field.setAccessible(true);
+				snowyPartField = field;
+			}
+			Object snowy = snowyPartField.get(part);
+			return snowy instanceof BlockStateModelPart snowyPart ? snowyPart : part;
+		} catch (ReflectiveOperationException | RuntimeException e) {
+			snowyPartsUnknown = true;
+			ModTemplate.LOGGER.warn("Could not find Snow! Real Magic's snowy plant models: plants in its snow are drawn "
+					+ "without snow near the player", e);
+			return part;
+		}
+	}
+
+	/** A plant's model with the mod's parts swapped for their snowy ones. */
+	private static final class SnowyModel implements BlockStateModel {
+
+		private final BlockStateModel parent;
+
+		SnowyModel(BlockStateModel parent) {
+			this.parent = parent;
+		}
+
+		@Override
+		public void collectParts(RandomSource random, List<BlockStateModelPart> parts) {
+			List<BlockStateModelPart> own = new ArrayList<>();
+			parent.collectParts(random, own);
+			for (BlockStateModelPart part : own) {
+				parts.add(snowyPart(part));
+			}
+		}
+
+		//? neoforge {
+		/*@Override
+		public void collectParts(net.minecraft.client.renderer.block.BlockAndTintGetter level, BlockPos pos,
+				BlockState state, RandomSource random, List<BlockStateModelPart> parts) {
+			List<BlockStateModelPart> own = new ArrayList<>();
+			parent.collectParts(level, pos, state, random, own);
+			for (BlockStateModelPart part : own) {
+				parts.add(snowyPart(part));
+			}
+		}
+		*///?}
+
+		@Override
+		public Material.Baked particleMaterial() {
+			return parent.particleMaterial();
+		}
+
+		@Override
+		public int materialFlags() {
+			return parent.materialFlags();
+		}
+	}
+	//?}
 
 	/** Whether this is the top half of a tall plant whose lower half is held in Snow! Real Magic's snow. */
 	public static boolean standsOnSnow(BlockGetter level, BlockPos pos, BlockState state) {

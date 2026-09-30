@@ -2,7 +2,9 @@ package net.karto.mc2.mc2_interactivefoliage.platform.neoforge;
 
 //? neoforge && >=1.21.1 {
 
-/*import net.karto.mc2.mc2_interactivefoliage.ModTemplate;
+/*import com.github.razorplay01.sway.api.SwayAPI;
+import com.github.razorplay01.sway.platform.neoforge.util.SwayModel;
+import net.karto.mc2.mc2_interactivefoliage.ModTemplate;
 import net.karto.mc2.mc2_interactivefoliage.gpu.GpuFoliageRenderer;
 import net.karto.mc2.mc2_interactivefoliage.gpu.GpuFoliageSplit;
 import net.minecraft.client.multiplayer.ClientLevel;
@@ -11,20 +13,17 @@ import net.minecraft.client.renderer.block.dispatch.BlockStateModel;
 //?} elif >=1.21.11 {
 /^import net.minecraft.client.renderer.block.model.BlockStateModel;
 ^///?} else {
-/^import com.github.razorplay01.sway.api.SwayAPI;
-import com.github.razorplay01.sway.platform.neoforge.util.SwayModel;
-import net.minecraft.client.renderer.block.BlockModelShaper;
+/^import net.minecraft.client.renderer.block.BlockModelShaper;
 import net.minecraft.client.resources.model.BakedModel;
 import net.minecraft.client.resources.model.ModelResourceLocation;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.client.renderer.ShaderInstance;
 import net.minecraft.resources.ResourceLocation;
-import net.minecraft.world.level.block.Block;
 import net.neoforged.neoforge.client.event.RegisterShadersEvent;
 import java.io.IOException;
-import java.lang.reflect.Field;
 import java.util.HashMap;
 ^///?}
+import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.chunk.LevelChunk;
 import net.neoforged.api.distmarker.Dist;
@@ -38,6 +37,7 @@ import net.neoforged.neoforge.client.event.ExtractLevelRenderStateEvent;
 //?}
 import net.neoforged.neoforge.event.level.ChunkEvent;
 
+import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.Map;
 
@@ -106,6 +106,48 @@ public final class NeoforgeFoliageHooks {
 			NeoforgeFoliageModel wrapped = new NeoforgeFoliageModel(entry.getValue());
 			GpuFoliageSplit.registerGpuModel(entry.getKey(), wrapped);
 			models.put(entry.getKey(), wrapped);
+		}
+	}
+
+	/^*
+	 * Last of all, once Sway has wrapped them: Sway wraps the model of every block it knows, the ones it only pushes
+	 * and never bends as well -- Snow! Real Magic's snow, whose plant inside bends on its own. Its wrapper answers
+	 * through its parts, so the snow's own drawing -- the snow and the plant in it, through Fabric's rendering API --
+	 * is skipped and only the snow is drawn. Those models are handed back as they were.
+	 ^/
+	@SubscribeEvent(priority = EventPriority.LOWEST)
+	public static void unwrapPushedOnly(ModelEvent.ModifyBakingResult event) {
+		Map<BlockState, BlockStateModel> models = event.getBakingResult().blockStateModels();
+		for (Map.Entry<BlockState, BlockStateModel> entry : models.entrySet()) {
+			Block block = entry.getKey().getBlock();
+			if (entry.getValue() instanceof SwayModel sway && SwayAPI.isInteractive(block) && !GpuFoliageSplit.bends(block)) {
+				BlockStateModel inside = insideSway(sway);
+				if (inside != null) {
+					entry.setValue(inside);
+				}
+			}
+		}
+	}
+
+	private static Field swayParent;
+	private static boolean swayParentMissing;
+
+	/^* The model Sway wrapped, or null if its wrapper is not one this knows. ^/
+	private static BlockStateModel insideSway(SwayModel sway) {
+		if (swayParentMissing) {
+			return null;
+		}
+		try {
+			if (swayParent == null) {
+				swayParent = SwayModel.class.getDeclaredField("parent");
+				swayParent.setAccessible(true);
+			}
+			return (BlockStateModel) swayParent.get(sway);
+		} catch (ReflectiveOperationException | RuntimeException e) {
+			swayParentMissing = true;
+			ModTemplate.LOGGER.warn("Could not unwrap Sway's model of a block it only pushes; Snow! Real Magic's snow "
+					+ "may not be drawn", e);
+			return null;
 		}
 	}
 	//?} else {

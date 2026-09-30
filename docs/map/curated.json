@@ -279,7 +279,7 @@
 
     {"id": "srm-compat", "label": "SnowRealMagicCompat", "group": "snowrealmagic", "kind": "compat",
      "files": ["gpu/SnowRealMagicCompat.java", "ModCompatRegistry.java"],
-     "summary": "Read by name, never compiled against. Finds the plant a snow block holds, the snowy variant of a plant's model (walking the wrappers' wrapped/parent/originalModel fields), whether a model is drawn inside the snow (Forge: the snow's OPTIONS model property) and whether a tall plant's top half stands on it. Tested on 1.20.1 Fabric and Forge (vanilla and Embeddium) 1.21.1 Fabric (vanilla and Iris) and 1.21.1 NeoForge (vanilla, Sodium and Iris).",
+     "summary": "Read by name, never compiled against. Finds the plant a snow block holds, the snowy variant of a plant's model (walking the wrappers' wrapped/parent/originalModel fields), whether a model is drawn inside the snow (Forge: the snow's OPTIONS model property) and whether a tall plant's top half stands on it. Tested on 1.20.1 Fabric and Forge (vanilla and Embeddium) 1.21.1 Fabric (vanilla and Iris), 1.21.1 NeoForge (vanilla, Sodium and Iris), and 26.1.2 Fabric and NeoForge (vanilla, Sodium and Iris).",
      "details": [
        "Snow blocks are found by class (EntitySnowLayerBlock up to 10.x, SRMSnowLayerBlock from 12.x) once, then looked up by identity.",
        "Sway: ModCompatRegistry gives every snow block that holds plants a pipeline that only pushes (collision, proximity force, multiplier), no deformation: Sway pushes a position by its block, and the plant drawn there bends by its own pipeline. A deforming pipeline would bend the snow and the plant twice.",
@@ -296,7 +296,10 @@
        "Fabric 1.21.1 dev: Iris 1.8.14-beta.1 fails its mixins in the dev client; test Iris with the built jar in a launcher instance.",
        "NeoForge 1.21.1: Sway wraps the push-only snow's model too (as on Forge) and its wrapper says the model is plain, so Indigo drew the snow alone and the plant inside vanished on the CPU; NeoforgeFoliageHooks unwraps blocks Sway only pushes.",
        "SRM 12.x (NeoForge) can mark a snowy variant required (drawn even with snowVariants off); snowyVariantOf follows the config only.",
-       "Not yet written or tested after 1.21.1 (the snowy variant walk is BakedModel-only, before 1.21.11). Snow! Real Magic exists for 26.1.2 but not for 1.21.11, 26.2 or 26.3 yet."
+       "26.1.2 (SRM 26.0.x): the snowy variant lives in each part (SnowyBlockStateModelPart: normal + snowy), picked only when drawn through SRM's own emitter (SRMQuadEmitter) -- inside the snow always, a tall plant's top half on it while snowVariants is on. The GPU mesher asks parts through collectParts, so snowyVariant hands it a model whose parts are the snowy ones (field snowy, by reflection); NeoForge's Sway wraps each part in one that only has getQuads, so NeoforgeFoliageModel.collectParts hands Sway the snowy parts (snowyParts) before it wraps them.",
+       "NeoForge 26.1.2: Forgified Fabric API draws every chunk block through emitQuads (its SectionCompilerMixin), and a non-Fabric model's default emitQuads is collectParts: Sway's wrapper around the push-only snow skipped SRM's drawing, so NeoforgeFoliageHooks.unwrapPushedOnly (LOWEST) unwraps it there too.",
+       "Kiwi 26.0.20 (SRM's library) crashes opening the inventory on NeoForge 26.1.2.109: its EffectsInInventoryMixin targets renderText, which NeoForge renamed extractText. Not ours; test with /give.",
+       "Snow! Real Magic has no release for 1.21.11, 26.2 or 26.3 yet: add them when it ships."
      ]},
 
     {"id": "srm-forge-indigo", "label": "Indigo mixins (Forge)", "group": "snowrealmagic", "kind": "hook", "loaders": ["forge"], "versions": ["<1.21.1"],
@@ -313,6 +316,11 @@
        "The same model data carries the rest: NeoforgeFoliageModel decides there whether the GPU renderer draws the plant (LEFT_TO_GPU, no duplicates) and whether it is drawn snowy (SNOWY: SnowRealMagicCompat.drawnSnowy, held in the snow or a tall plant's top half on it), then draws the snowy variant through Sway's own SwayModel so it bends.",
        "Tint: Indigo multiplies a tinted quad by the block's color after SRM's transform has already painted it with that color (a darker green); under Indigo only, the color SRM paints (BlockColors.getColor in lambda$render$0) is taken as white. Sodium tints by the drawn block (the snow, no color) and keeps SRM's."
      ]},
+
+    {"id": "blockgetter-fix", "label": "BlockGetterMixinPlugin", "group": "snowrealmagic", "kind": "hook", "loaders": ["neoforge"], "versions": [">=26.1.2"],
+     "files": ["mixin/blockgetter/BlockGetterMixinPlugin.java", "mixin/blockgetter/LevelViewBlockGetterMixin.java"],
+     "summary": "Iris 1.11.4 on NeoForge loads BlockGetter while Mixin prepares its configs (its DHMixinConfigPlugin asks IrisPlatformHelpers whether Distant Horizons is installed, and verifying IrisForgeHelpers loads BlockGetter), so Forgified Fabric API's BlockGetterMixin never adds FabricBlockGetter to it -- with or without a shader pack. Snow! Real Magic casts the chunk's level view to it and the game crashed on the first chunk. This config plugin names FabricBlockGetter on the views themselves as they load (Sodium's LevelSlice, RenderSectionRegion, Level), by name, only when the API is installed; its methods are all defaults.",
+     "details": ["Found with -Xlog:class+load and -Dmixin.debug.verbose: 'Mixing BlockGetterMixin' never appears while LevelReaderMixin and BlockEntityMixin do."]},
 
     {"id": "sway-variants", "label": "SwayVariantModels", "group": "snowrealmagic", "kind": "compat", "loaders": ["fabric"], "versions": ["<1.21.11"],
      "files": ["platform/fabric/SwayVariantModels.java"],
@@ -361,7 +369,7 @@
      "pitfalls": ["The main mixins.json stays hand-written and empty: FletchingTable list generation once swept Iris/Polytone mixins into it. Check the built jar's mixin JSONs after touching mixin or build config."]},
 
     {"id": "mixin-configs", "label": "Mixin configs", "group": "build", "kind": "rule",
-     "summary": "mixins.json (empty), gpu.mixins.json (>=1.20.1), iris.mixins.json (where shader pack support is compiled; IrisMixinPlugin), polytone.mixins.json (1.21.1-26.2; required:false), pass.mixins.json (26.3+), snowrealmagic.mixins.json (Forge; required:false), snowrealmagic_neoforge.mixins.json (NeoForge before 1.21.11; required:false)."},
+     "summary": "mixins.json (empty), gpu.mixins.json (>=1.20.1), iris.mixins.json (where shader pack support is compiled; IrisMixinPlugin), polytone.mixins.json (1.21.1-26.2; required:false), pass.mixins.json (26.3+), snowrealmagic.mixins.json (Forge; required:false), snowrealmagic_neoforge.mixins.json (NeoForge before 1.21.11; required:false), blockgetter.mixins.json (NeoForge 26.1.2+; BlockGetterMixinPlugin, required:false)."},
 
     {"id": "access", "label": "Access wideners", "group": "build", "kind": "rule",
      "summary": "aw/<version>.accesswidener (Fabric) and aw/<version>.cfg (NeoForge/Forge AT). 26.3's widener opens GlRenderPipeline's constructor for the Iris path; its .cfg is empty."},
@@ -497,6 +505,9 @@
     ["snow-shake", "srm-compat", "finds plants through"],
     ["mixin-configs", "srm-forge-indigo", "lists (Forge)"],
     ["mixin-configs", "srm-neoforge-render", "lists (NeoForge)"],
+    ["mixin-configs", "blockgetter-fix", "lists (NeoForge 26.1.2+)"],
+    ["blockgetter-fix", "iris", "works around"],
+    ["blockgetter-fix", "srm", "lets chunks read the plant of"],
     ["srm-neoforge-render", "srm", "hooks the drawing of"],
     ["srm-neoforge-render", "model-neoforge", "hands model data to"],
     ["srm-neoforge-render", "sodium", "also covers"],
@@ -564,7 +575,7 @@
       {"label": "Snow! Real Magic", "cells": {
         "1.20.1": "fabric: done (SwayVariantModels, GPU plant + snowy variant, particles) | forge: done (Indigo mixins, vanilla and Embeddium, particles)",
         "1.21.1": "fabric: done (SRM 12.x snow blocks, CPU, GPU, Iris, particles) | neoforge: done (SnowRenderApiMixin, vanilla, Sodium, Iris, particles)",
-        "1.21.11": "no Snow! Real Magic release yet", "26.1.2": "not written (BlockStateModel era; SRM 26.0.x exists)", "26.2": "no Snow! Real Magic release yet", "26.3": "no Snow! Real Magic release yet"}},
+        "1.21.11": "no Snow! Real Magic release yet", "26.1.2": "fabric: done (snowy parts in the GPU mesher, CPU, GPU, Sodium, Iris) | neoforge: done (unwrapPushedOnly, snowy parts to Sway, BlockGetterMixinPlugin for Iris; vanilla, Sodium, Iris)", "26.2": "no Snow! Real Magic release yet", "26.3": "no Snow! Real Magic release yet"}},
       {"label": "Dev-run notes", "cells": {
         "1.20.1": "Fabric client on Java 17", "1.21.1": "fabric: Iris crashes the dev remapper, test in a launcher",
         "1.21.11": "neoforge (every version): disableGlValidation", "26.1.2": "", "26.2": "",

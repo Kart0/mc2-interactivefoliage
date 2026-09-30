@@ -128,7 +128,7 @@
    "fileInfo": {
     "gpu/GpuFoliageRenderer.java": {
      "kind": "java",
-     "lines": 3353,
+     "lines": 3354,
      "guard": "//? >=1.20.1 {"
     }
    }
@@ -152,7 +152,7 @@
    "fileInfo": {
     "gpu/GpuFoliageRenderer.java": {
      "kind": "java",
-     "lines": 3353,
+     "lines": 3354,
      "guard": "//? >=1.20.1 {"
     }
    }
@@ -177,7 +177,7 @@
    "fileInfo": {
     "gpu/GpuFoliageRenderer.java": {
      "kind": "java",
-     "lines": 3353,
+     "lines": 3354,
      "guard": "//? >=1.20.1 {"
     }
    }
@@ -211,7 +211,7 @@
    "fileInfo": {
     "gpu/GpuFoliageRenderer.java": {
      "kind": "java",
-     "lines": 3353,
+     "lines": 3354,
      "guard": "//? >=1.20.1 {"
     },
     "mixin/LevelPassMixin.java": {
@@ -237,7 +237,7 @@
    "fileInfo": {
     "gpu/GpuFoliageRenderer.java": {
      "kind": "java",
-     "lines": 3353,
+     "lines": 3354,
      "guard": "//? >=1.20.1 {"
     }
    }
@@ -312,12 +312,12 @@
    "fileInfo": {
     "platform/neoforge/NeoforgeFoliageModel.java": {
      "kind": "java",
-     "lines": 206,
+     "lines": 214,
      "guard": "//? neoforge && >=1.21.1 {"
     },
     "platform/neoforge/NeoforgeFoliageHooks.java": {
      "kind": "java",
-     "lines": 216,
+     "lines": 258,
      "guard": "//? neoforge && >=1.21.1 {"
     }
    }
@@ -1098,7 +1098,7 @@
     "gpu/SnowRealMagicCompat.java",
     "ModCompatRegistry.java"
    ],
-   "summary": "Read by name, never compiled against. Finds the plant a snow block holds, the snowy variant of a plant's model (walking the wrappers' wrapped/parent/originalModel fields), whether a model is drawn inside the snow (Forge: the snow's OPTIONS model property) and whether a tall plant's top half stands on it. Tested on 1.20.1 Fabric and Forge (vanilla and Embeddium) 1.21.1 Fabric (vanilla and Iris) and 1.21.1 NeoForge (vanilla, Sodium and Iris).",
+   "summary": "Read by name, never compiled against. Finds the plant a snow block holds, the snowy variant of a plant's model (walking the wrappers' wrapped/parent/originalModel fields), whether a model is drawn inside the snow (Forge: the snow's OPTIONS model property) and whether a tall plant's top half stands on it. Tested on 1.20.1 Fabric and Forge (vanilla and Embeddium) 1.21.1 Fabric (vanilla and Iris), 1.21.1 NeoForge (vanilla, Sodium and Iris), and 26.1.2 Fabric and NeoForge (vanilla, Sodium and Iris).",
    "details": [
     "Snow blocks are found by class (EntitySnowLayerBlock up to 10.x, SRMSnowLayerBlock from 12.x) once, then looked up by identity.",
     "Sway: ModCompatRegistry gives every snow block that holds plants a pipeline that only pushes (collision, proximity force, multiplier), no deformation: Sway pushes a position by its block, and the plant drawn there bends by its own pipeline. A deforming pipeline would bend the snow and the plant twice.",
@@ -1115,12 +1115,15 @@
     "Fabric 1.21.1 dev: Iris 1.8.14-beta.1 fails its mixins in the dev client; test Iris with the built jar in a launcher instance.",
     "NeoForge 1.21.1: Sway wraps the push-only snow's model too (as on Forge) and its wrapper says the model is plain, so Indigo drew the snow alone and the plant inside vanished on the CPU; NeoforgeFoliageHooks unwraps blocks Sway only pushes.",
     "SRM 12.x (NeoForge) can mark a snowy variant required (drawn even with snowVariants off); snowyVariantOf follows the config only.",
-    "Not yet written or tested after 1.21.1 (the snowy variant walk is BakedModel-only, before 1.21.11). Snow! Real Magic exists for 26.1.2 but not for 1.21.11, 26.2 or 26.3 yet."
+    "26.1.2 (SRM 26.0.x): the snowy variant lives in each part (SnowyBlockStateModelPart: normal + snowy), picked only when drawn through SRM's own emitter (SRMQuadEmitter) -- inside the snow always, a tall plant's top half on it while snowVariants is on. The GPU mesher asks parts through collectParts, so snowyVariant hands it a model whose parts are the snowy ones (field snowy, by reflection); NeoForge's Sway wraps each part in one that only has getQuads, so NeoforgeFoliageModel.collectParts hands Sway the snowy parts (snowyParts) before it wraps them.",
+    "NeoForge 26.1.2: Forgified Fabric API draws every chunk block through emitQuads (its SectionCompilerMixin), and a non-Fabric model's default emitQuads is collectParts: Sway's wrapper around the push-only snow skipped SRM's drawing, so NeoforgeFoliageHooks.unwrapPushedOnly (LOWEST) unwraps it there too.",
+    "Kiwi 26.0.20 (SRM's library) crashes opening the inventory on NeoForge 26.1.2.109: its EffectsInInventoryMixin targets renderText, which NeoForge renamed extractText. Not ours; test with /give.",
+    "Snow! Real Magic has no release for 1.21.11, 26.2 or 26.3 yet: add them when it ships."
    ],
    "fileInfo": {
     "gpu/SnowRealMagicCompat.java": {
      "kind": "java",
-     "lines": 292,
+     "lines": 421,
      "guard": "//? <1.21.11 {"
     },
     "ModCompatRegistry.java": {
@@ -1196,8 +1199,40 @@
     },
     "platform/neoforge/NeoforgeFoliageModel.java": {
      "kind": "java",
-     "lines": 206,
+     "lines": 214,
      "guard": "//? neoforge && >=1.21.1 {"
+    }
+   }
+  },
+  {
+   "id": "blockgetter-fix",
+   "label": "BlockGetterMixinPlugin",
+   "group": "snowrealmagic",
+   "kind": "hook",
+   "loaders": [
+    "neoforge"
+   ],
+   "versions": [
+    ">=26.1.2"
+   ],
+   "files": [
+    "mixin/blockgetter/BlockGetterMixinPlugin.java",
+    "mixin/blockgetter/LevelViewBlockGetterMixin.java"
+   ],
+   "summary": "Iris 1.11.4 on NeoForge loads BlockGetter while Mixin prepares its configs (its DHMixinConfigPlugin asks IrisPlatformHelpers whether Distant Horizons is installed, and verifying IrisForgeHelpers loads BlockGetter), so Forgified Fabric API's BlockGetterMixin never adds FabricBlockGetter to it -- with or without a shader pack. Snow! Real Magic casts the chunk's level view to it and the game crashed on the first chunk. This config plugin names FabricBlockGetter on the views themselves as they load (Sodium's LevelSlice, RenderSectionRegion, Level), by name, only when the API is installed; its methods are all defaults.",
+   "details": [
+    "Found with -Xlog:class+load and -Dmixin.debug.verbose: 'Mixing BlockGetterMixin' never appears while LevelReaderMixin and BlockEntityMixin do."
+   ],
+   "fileInfo": {
+    "mixin/blockgetter/BlockGetterMixinPlugin.java": {
+     "kind": "java",
+     "lines": 70,
+     "guard": "//? neoforge && >=26.1.2 {"
+    },
+    "mixin/blockgetter/LevelViewBlockGetterMixin.java": {
+     "kind": "java",
+     "lines": 21,
+     "guard": "//? neoforge && >=26.1.2 {"
     }
    }
   },
@@ -1311,7 +1346,7 @@
    "fileInfo": {
     "platform/neoforge/NeoforgeFoliageHooks.java": {
      "kind": "java",
-     "lines": 216,
+     "lines": 258,
      "guard": "//? neoforge && >=1.21.1 {"
     },
     "platform/neoforge/NeoforgeEntrypoint.java": {
@@ -1427,7 +1462,7 @@
    "label": "Mixin configs",
    "group": "build",
    "kind": "rule",
-   "summary": "mixins.json (empty), gpu.mixins.json (>=1.20.1), iris.mixins.json (where shader pack support is compiled; IrisMixinPlugin), polytone.mixins.json (1.21.1-26.2; required:false), pass.mixins.json (26.3+), snowrealmagic.mixins.json (Forge; required:false), snowrealmagic_neoforge.mixins.json (NeoForge before 1.21.11; required:false).",
+   "summary": "mixins.json (empty), gpu.mixins.json (>=1.20.1), iris.mixins.json (where shader pack support is compiled; IrisMixinPlugin), polytone.mixins.json (1.21.1-26.2; required:false), pass.mixins.json (26.3+), snowrealmagic.mixins.json (Forge; required:false), snowrealmagic_neoforge.mixins.json (NeoForge before 1.21.11; required:false), blockgetter.mixins.json (NeoForge 26.1.2+; BlockGetterMixinPlugin, required:false).",
    "fileInfo": {}
   },
   {
@@ -2048,6 +2083,21 @@
    "label": "lists (NeoForge)"
   },
   {
+   "source": "mixin-configs",
+   "target": "blockgetter-fix",
+   "label": "lists (NeoForge 26.1.2+)"
+  },
+  {
+   "source": "blockgetter-fix",
+   "target": "iris",
+   "label": "works around"
+  },
+  {
+   "source": "blockgetter-fix",
+   "target": "srm",
+   "label": "lets chunks read the plant of"
+  },
+  {
    "source": "srm-neoforge-render",
    "target": "srm",
    "label": "hooks the drawing of"
@@ -2209,7 +2259,7 @@
      "1.20.1": "fabric: done (SwayVariantModels, GPU plant + snowy variant, particles) | forge: done (Indigo mixins, vanilla and Embeddium, particles)",
      "1.21.1": "fabric: done (SRM 12.x snow blocks, CPU, GPU, Iris, particles) | neoforge: done (SnowRenderApiMixin, vanilla, Sodium, Iris, particles)",
      "1.21.11": "no Snow! Real Magic release yet",
-     "26.1.2": "not written (BlockStateModel era; SRM 26.0.x exists)",
+     "26.1.2": "fabric: done (snowy parts in the GPU mesher, CPU, GPU, Sodium, Iris) | neoforge: done (unwrapPushedOnly, snowy parts to Sway, BlockGetterMixinPlugin for Iris; vanilla, Sodium, Iris)",
      "26.2": "no Snow! Real Magic release yet",
      "26.3": "no Snow! Real Magic release yet"
     }
@@ -2245,6 +2295,13 @@
   "Talk to the user in Spanish; code, comments, commits and docs stay in English."
  ],
  "mixinConfigs": {
+  "mc2_interactivefoliage.blockgetter.mixins.json": {
+   "plugin": "net.karto.mc2.mc2_interactivefoliage.mixin.blockgetter.BlockGetterMixinPlugin",
+   "required": false,
+   "mixins": [
+    "LevelViewBlockGetterMixin"
+   ]
+  },
   "mc2_interactivefoliage.gpu.mixins.json": {
    "plugin": null,
    "required": true,
@@ -2322,7 +2379,7 @@
   },
   "gpu/GpuFoliageRenderer.java": {
    "kind": "java",
-   "lines": 3353,
+   "lines": 3354,
    "guard": "//? >=1.20.1 {"
   },
   "gpu/GpuFoliageSplit.java": {
@@ -2352,7 +2409,7 @@
   },
   "gpu/SnowRealMagicCompat.java": {
    "kind": "java",
-   "lines": 292,
+   "lines": 421,
    "guard": "//? <1.21.11 {"
   },
   "gpu/SnowShakeParticles.java": {
@@ -2384,6 +2441,16 @@
    "kind": "java",
    "lines": 327,
    "guard": "//? >=1.20.1 {"
+  },
+  "mixin/blockgetter/BlockGetterMixinPlugin.java": {
+   "kind": "java",
+   "lines": 70,
+   "guard": "//? neoforge && >=26.1.2 {"
+  },
+  "mixin/blockgetter/LevelViewBlockGetterMixin.java": {
+   "kind": "java",
+   "lines": 21,
+   "guard": "//? neoforge && >=26.1.2 {"
   },
   "mixin/ClientLevelMixin.java": {
    "kind": "java",
@@ -2562,12 +2629,12 @@
   },
   "platform/neoforge/NeoforgeFoliageHooks.java": {
    "kind": "java",
-   "lines": 216,
+   "lines": 258,
    "guard": "//? neoforge && >=1.21.1 {"
   },
   "platform/neoforge/NeoforgeFoliageModel.java": {
    "kind": "java",
-   "lines": 206,
+   "lines": 214,
    "guard": "//? neoforge && >=1.21.1 {"
   },
   "platform/neoforge/NeoforgeKeyBindings.java": {

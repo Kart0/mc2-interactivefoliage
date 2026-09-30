@@ -3211,7 +3211,8 @@ public final class GpuFoliageRenderer {
 					//?}
 					//? >=26.1.2 {
 					modelRenderer.tesselateBlock(output, offsetX + dx, offsetY + dy + lift, offsetZ + dz,
-							level, pos, state, GpuFoliageSplit.modelFor(state, models.get(state)),
+							level, pos, state, SnowRealMagicCompat.snowyVariant(GpuFoliageSplit.modelFor(state,
+									models.get(state)), state, level, pos, inSnow),
 							state.getSeed(pos));
 					//?} else {
 					/*//? >=1.21.11 {

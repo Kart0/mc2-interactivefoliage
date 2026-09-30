@@ -3,6 +3,9 @@ package net.karto.mc2.mc2_interactivefoliage.platform.neoforge;
 //? neoforge && >=1.21.1 {
 
 /*import net.karto.mc2.mc2_interactivefoliage.gpu.GpuFoliageSplit;
+//? >=26.1.2 {
+import net.karto.mc2.mc2_interactivefoliage.gpu.SnowRealMagicCompat;
+//?}
 //? <1.21.11 {
 /^import com.github.razorplay01.sway.platform.neoforge.util.SwayModel;
 import net.karto.mc2.mc2_interactivefoliage.gpu.SnowRealMagicCompat;
@@ -61,7 +64,12 @@ public final class NeoforgeFoliageModel implements BlockStateModel {
 		if (GpuFoliageSplit.leaveToGpu(level, pos)) {
 			return;
 		}
+		// Snow! Real Magic picks a part's snowy variant only as it is drawn through its own emitter, and Sway, which
+		// wraps this model, hands on only the parts' quads, the plain ones: the plant lost its snow as it was pushed, and
+		// a tall plant's top half on the snow never had it. So the snowy parts are handed over from here.
+		int from = parts.size();
 		parent.collectParts(level, pos, state, random, parts);
+		SnowRealMagicCompat.snowyParts(level, pos, state, parts.subList(from, parts.size()));
 	}
 
 	@Override
