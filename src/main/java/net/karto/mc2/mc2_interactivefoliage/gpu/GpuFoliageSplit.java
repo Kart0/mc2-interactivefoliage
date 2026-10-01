@@ -6,6 +6,7 @@ import com.github.razorplay01.sway.api.SwayAPI;
 import it.unimi.dsi.fastutil.longs.Long2LongOpenHashMap;
 import it.unimi.dsi.fastutil.longs.LongArrayList;
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
+import net.karto.mc2.mc2_interactivefoliage.FoliageSettings;
 import net.karto.mc2.mc2_interactivefoliage.WavingWhitelist;
 //? >=26.1.2 {
 import net.minecraft.client.renderer.block.BlockAndTintGetter;
@@ -27,6 +28,7 @@ import net.minecraft.client.renderer.chunk.RenderSectionRegion;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.SectionPos;
 import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.world.level.BlockGetter;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.state.BlockState;
 
@@ -541,7 +543,21 @@ public final class GpuFoliageSplit {
 	 * every block Sway bends and every block on the waving whitelist, its group on or off.
 	 */
 	public static boolean mayWave(Block block) {
-		return bends(block) || WavingWhitelist.listed(block);
+		return bends(block) || WavingWhitelist.listed(block) || WavingWhitelist.restsOnLeaves(block);
+	}
+
+	/**
+	 * Whether the block at this position is foliage the GPU renderer draws: foliage by its kind, or a block resting on
+	 * leaves while they wave -- snow on a tree -- which is foliage only there.
+	 */
+	public static boolean isFoliageAt(BlockGetter level, BlockPos pos, BlockState state) {
+		return isFoliage(state) || restsOnWavingLeaves(level, pos, state);
+	}
+
+	/** Whether this is a block resting on a leaf while the leaves wave, drawn and waved with them; see isFoliageAt. */
+	public static boolean restsOnWavingLeaves(BlockGetter level, BlockPos pos, BlockState state) {
+		return FoliageSettings.wavingLeaves() && WavingWhitelist.restsOnLeaves(state.getBlock())
+				&& WavingWhitelist.isLeaves(level.getBlockState(pos.below()).getBlock());
 	}
 
 	/**
@@ -552,9 +568,13 @@ public final class GpuFoliageSplit {
 		foliage = null;
 	}
 
-	/** Whether the GPU renderer has anything to draw at a block like this: foliage, or snow holding a plant. */
+	/**
+	 * Whether the GPU renderer may have anything to draw at a block like this: foliage, snow holding a plant, or a block
+	 * that may rest on leaves while they wave.
+	 */
 	static boolean mayHoldFoliage(BlockState state) {
-		return isFoliage(state) || SnowRealMagicCompat.isSnowBlock(state);
+		return isFoliage(state) || SnowRealMagicCompat.isSnowBlock(state)
+				|| FoliageSettings.wavingLeaves() && WavingWhitelist.restsOnLeaves(state.getBlock());
 	}
 
 	private static Class<?> findClass(String name) {

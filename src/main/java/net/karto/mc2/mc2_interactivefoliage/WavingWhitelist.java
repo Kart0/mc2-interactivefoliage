@@ -69,6 +69,8 @@ public final class WavingWhitelist {
 	private static final Map<Block, Group> BLOCKS = new IdentityHashMap<>();
 	/** The blocks that follow the leaves; see followLeaves(). */
 	private static final Set<Block> FOLLOWERS = Collections.newSetFromMap(new IdentityHashMap<>());
+	/** The blocks that rest on the leaves; see restOnLeaves(). */
+	private static final Set<Block> RESTING = Collections.newSetFromMap(new IdentityHashMap<>());
 	/** Set once the lists are read; models are baked on several threads at once, so they are read under a lock. */
 	private static volatile boolean resolved;
 
@@ -102,23 +104,34 @@ public final class WavingWhitelist {
 		general();
 		leaves();
 		followLeaves();
+		restOnLeaves();
 		tags();
 		Map<Group, Integer> counts = new EnumMap<>(Group.class);
 		for (Group group : BLOCKS.values()) {
 			counts.merge(group, 1, Integer::sum);
 		}
-		ModTemplate.LOGGER.info("Waving whitelist: {}, following the leaves: {}", counts, FOLLOWERS.size());
+		ModTemplate.LOGGER.info("Waving whitelist: {}, following the leaves: {}, resting on them: {}", counts,
+				FOLLOWERS.size(), RESTING.size());
 		resolved = true;
 	}
 
-	/** How hard this block waves: its group's intensity, or 1 for a block not on the whitelist. */
+	/**
+	 * How hard this block waves: its group's intensity, the leaves' for a block resting on them (only drawn while it
+	 * does), or 1 for a block not on the whitelist.
+	 */
 	public static float intensityOf(Block block) {
+		if (restsOnLeaves(block)) {
+			return Group.LEAVES.intensity;
+		}
 		Group group = contains(block) ? BLOCKS.get(block) : null;
 		return group == null ? 1.0F : group.intensity;
 	}
 
-	/** Whether this block waves as a field, as a tree's leaves do. */
+	/** Whether this block waves as a field, as a tree's leaves do, and what rests on them. */
 	public static boolean wavesAsField(Block block) {
+		if (restsOnLeaves(block)) {
+			return true;
+		}
 		Group group = contains(block) ? BLOCKS.get(block) : null;
 		return group != null && group.field;
 	}
@@ -131,6 +144,17 @@ public final class WavingWhitelist {
 		return FOLLOWERS.contains(block);
 	}
 
+
+	/**
+	 * Whether this block rests on the leaves: lying on top of one while they wave, it is drawn and waved with them, as
+	 * a field; anywhere else it stays as it is.
+	 */
+	public static boolean restsOnLeaves(Block block) {
+		if (!resolved) {
+			resolve();
+		}
+		return RESTING.contains(block);
+	}
 
 	/** Whether this block is one of the leaves group's, whether they wave now or not. */
 	public static boolean isLeaves(Block block) {
@@ -188,6 +212,20 @@ public final class WavingWhitelist {
 	}
 
 	// ==================================================================
+	// Rest on the leaves -- blocks lying on top of leaves, like snow
+	// ==================================================================
+	// Only on top of a leaf, and only while waving leaves is on: they then move exactly as the leaf under them, all
+	// over, so they never part from it. Anywhere else -- on the ground, on a roof -- they stay with the chunk mesh as
+	// they always have.
+
+	private static void restOnLeaves() {
+		// Vanilla
+		rest(
+				"minecraft:snow"
+		);
+	}
+
+	// ==================================================================
 	// Tags -- every block a tag names, from Minecraft and from each mod
 	// ==================================================================
 
@@ -210,6 +248,19 @@ public final class WavingWhitelist {
 			*///?}
 			if (key != null) {
 				BuiltInRegistries.BLOCK.getOptional(key).ifPresent(block -> BLOCKS.putIfAbsent(block, group));
+			}
+		}
+	}
+
+	private static void rest(String... ids) {
+		for (String id : ids) {
+			//? >=1.21.11 {
+			Identifier key = Identifier.tryParse(id);
+			//?} else {
+			/*ResourceLocation key = ResourceLocation.tryParse(id);
+			*///?}
+			if (key != null) {
+				BuiltInRegistries.BLOCK.getOptional(key).ifPresent(RESTING::add);
 			}
 		}
 	}

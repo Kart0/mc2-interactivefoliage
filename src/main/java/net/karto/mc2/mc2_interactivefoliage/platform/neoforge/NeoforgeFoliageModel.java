@@ -61,8 +61,8 @@ public final class NeoforgeFoliageModel implements BlockStateModel {
 	@Override
 	public void collectParts(BlockAndTintGetter level, BlockPos pos, BlockState state, RandomSource random,
 			List<BlockStateModelPart> parts) {
-		// A block whose whitelist group the player has switched off stays with the chunk mesh, wrapped or not.
-		if (GpuFoliageSplit.isFoliage(state) && GpuFoliageSplit.leaveToGpu(level, pos)) {
+		// A block whose whitelist group the player has switched off, or snow off the leaves, stays with the chunk mesh.
+		if (GpuFoliageSplit.isFoliageAt(level, pos, state) && GpuFoliageSplit.leaveToGpu(level, pos)) {
 			return;
 		}
 		// Snow! Real Magic picks a part's snowy variant only as it is drawn through its own emitter, and Sway, which
@@ -111,8 +111,8 @@ public final class NeoforgeFoliageModel implements BlockStateModel {
 	/^@Override
 	public void collectParts(BlockAndTintGetter level, BlockPos pos, BlockState state, RandomSource random,
 			List<BlockModelPart> parts) {
-		// A block whose whitelist group the player has switched off stays with the chunk mesh, wrapped or not.
-		if (GpuFoliageSplit.isFoliage(state) && GpuFoliageSplit.leaveToGpu(level, pos)) {
+		// A block whose whitelist group the player has switched off, or snow off the leaves, stays with the chunk mesh.
+		if (GpuFoliageSplit.isFoliageAt(level, pos, state) && GpuFoliageSplit.leaveToGpu(level, pos)) {
 			return;
 		}
 		parent.collectParts(level, pos, state, random, parts);
@@ -169,8 +169,8 @@ public final class NeoforgeFoliageModel extends BakedModelWrapper<BakedModel> {
 	// draws it (see SnowRenderApiMixin), at the snow's position either way.
 	@Override
 	public ModelData getModelData(BlockAndTintGetter level, BlockPos pos, BlockState state, ModelData modelData) {
-		// A block whose whitelist group the player has switched off stays with the chunk mesh, wrapped or not.
-		if (GpuFoliageSplit.isFoliage(state) && GpuFoliageSplit.leaveToGpu(level, pos)) {
+		// A block whose whitelist group the player has switched off, or snow off the leaves, stays with the chunk mesh.
+		if (GpuFoliageSplit.isFoliageAt(level, pos, state) && GpuFoliageSplit.leaveToGpu(level, pos)) {
 			return modelData.derive().with(LEFT_TO_GPU, Boolean.TRUE).build();
 		}
 		ModelData data = super.getModelData(level, pos, state, modelData);

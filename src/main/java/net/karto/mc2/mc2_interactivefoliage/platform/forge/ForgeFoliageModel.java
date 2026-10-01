@@ -49,8 +49,8 @@ public final class ForgeFoliageModel extends BakedModelWrapper<BakedModel> {
 
 	@Override
 	public ModelData getModelData(BlockAndTintGetter level, BlockPos pos, BlockState state, ModelData modelData) {
-		// A block whose whitelist group the player has switched off stays with the chunk mesh, wrapped or not.
-		if (GpuFoliageSplit.isFoliage(state) && GpuFoliageSplit.leaveToGpu(level, pos)) {
+		// A block whose whitelist group the player has switched off, or snow off the leaves, stays with the chunk mesh.
+		if (GpuFoliageSplit.isFoliageAt(level, pos, state) && GpuFoliageSplit.leaveToGpu(level, pos)) {
 			return modelData.derive().with(LEFT_TO_GPU, Boolean.TRUE).build();
 		}
 		ModelData data = super.getModelData(level, pos, state, modelData);

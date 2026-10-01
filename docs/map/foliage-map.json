@@ -128,7 +128,7 @@
    "fileInfo": {
     "gpu/GpuFoliageRenderer.java": {
      "kind": "java",
-     "lines": 3660,
+     "lines": 3664,
      "guard": "//? >=1.20.1 {"
     }
    }
@@ -152,7 +152,7 @@
    "fileInfo": {
     "gpu/GpuFoliageRenderer.java": {
      "kind": "java",
-     "lines": 3660,
+     "lines": 3664,
      "guard": "//? >=1.20.1 {"
     }
    }
@@ -177,7 +177,7 @@
    "fileInfo": {
     "gpu/GpuFoliageRenderer.java": {
      "kind": "java",
-     "lines": 3660,
+     "lines": 3664,
      "guard": "//? >=1.20.1 {"
     }
    }
@@ -211,7 +211,7 @@
    "fileInfo": {
     "gpu/GpuFoliageRenderer.java": {
      "kind": "java",
-     "lines": 3660,
+     "lines": 3664,
      "guard": "//? >=1.20.1 {"
     },
     "mixin/LevelPassMixin.java": {
@@ -237,7 +237,7 @@
    "fileInfo": {
     "gpu/GpuFoliageRenderer.java": {
      "kind": "java",
-     "lines": 3660,
+     "lines": 3664,
      "guard": "//? >=1.20.1 {"
     }
    }
@@ -259,7 +259,7 @@
    "fileInfo": {
     "gpu/GpuFoliageSplit.java": {
      "kind": "java",
-     "lines": 569,
+     "lines": 589,
      "guard": "//? >=1.20.1 {"
     }
    }
@@ -377,7 +377,7 @@
     },
     "gpu/GpuFoliageSplit.java": {
      "kind": "java",
-     "lines": 569,
+     "lines": 589,
      "guard": "//? >=1.20.1 {"
     }
    }
@@ -585,6 +585,7 @@
     "Leaves touching anything but air or leaves are tessellated with every face (a second ModelBlockRenderer built with cull off), since they move and their neighbour does not; the main renderer culls exactly as the section compiler does (its second argument is cull, always true there).",
     "Followers (vines): a majority vote of what is behind each block decides; leaves win -> the whole vine moves with the leaves' field and its free-hanging part below the lowest held block gets a plant's sway at 1.0 (still+steady flags; the leaves' weight is the shaders' MC2_LEAVES_WAVE constant, which must match Group.LEAVES, and the exposure bits carry the corner's wind reach, the same the leaves beside it read); strands of 1-2 blocks get the field only; otherwise, or with waving leaves off, interaction only, and a vine that clings mostly to anything else is not pushed either (SwayAnchor.pushless).",
     "Only a block solid on that side counts as behind a strand, by the test the rain's wind uses for walls (WindShelter.isSolidSide): a torch, fence, slab or another vine is as good as nothing.",
+    "Blocks resting on the leaves (restOnLeaves: minecraft:snow) are foliage only where they lie on a leaf while the leaves wave (GpuFoliageSplit.isFoliageAt / restsOnWavingLeaves, a position rule the model wrappers and the mesher ask): meshed as a field at the leaves' weight, so their bottom corners move with the leaf's top.",
     "Any other plant Sway hangs (pale hanging moss, cave vines, BOP's mosses...) follows the leaves the same way while it literally hangs from them (the block above its top), and is a plain plant otherwise."
    ],
    "pitfalls": [
@@ -593,7 +594,7 @@
    "fileInfo": {
     "WavingWhitelist.java": {
      "kind": "java",
-     "lines": 278,
+     "lines": 329,
      "guard": "//? >=1.21.11 {"
     }
    }
@@ -2458,12 +2459,12 @@
   },
   "gpu/GpuFoliageRenderer.java": {
    "kind": "java",
-   "lines": 3660,
+   "lines": 3664,
    "guard": "//? >=1.20.1 {"
   },
   "gpu/GpuFoliageSplit.java": {
    "kind": "java",
-   "lines": 569,
+   "lines": 589,
    "guard": "//? >=1.20.1 {"
   },
   "gpu/IrisCompat.java": {
@@ -2738,7 +2739,7 @@
   },
   "WavingWhitelist.java": {
    "kind": "java",
-   "lines": 278,
+   "lines": 329,
    "guard": "//? >=1.21.11 {"
   },
   "shaders/core/foliage.fsh": {

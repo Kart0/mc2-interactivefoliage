@@ -2936,7 +2936,10 @@ public final class GpuFoliageRenderer {
 				for (int index = 0; index < sections.length; index++) {
 					int sectionY = level.getSectionYFromSectionIndex(index);
 					long key = SectionPos.asLong(chunkX, sectionY, chunkZ);
-					if (!sections[index].maybeHas(state -> WavingWhitelist.listed(state.getBlock()))) {
+					// Snow that may lie on the leaves changes hands with them, as the leaves do: between the chunk mesh and
+					// the renderer.
+					if (!sections[index].maybeHas(state -> WavingWhitelist.listed(state.getBlock())
+							|| WavingWhitelist.restsOnLeaves(state.getBlock()))) {
 						// Blocks that follow the leaves, and hanging plants, stay the renderer's either way, only waving
 						// differently.
 						if (sections[index].maybeHas(state -> WavingWhitelist.followsLeaves(state.getBlock())
@@ -3447,11 +3450,12 @@ public final class GpuFoliageRenderer {
 					// Snow! Real Magic's snow holding a plant: the plant is meshed, the snow stays with the chunk mesh.
 					float raised = 0.0F;
 					boolean inSnow = false;
-					if (!GpuFoliageSplit.isFoliage(state)) {
+					pos.set(origin.getX() + dx, origin.getY() + dy, origin.getZ() + dz);
+					// Snow lying on a leaf, while the leaves wave, is meshed itself: it moves with the leaf, as a field.
+					if (!GpuFoliageSplit.isFoliage(state) && !GpuFoliageSplit.restsOnWavingLeaves(level, pos, state)) {
 						if (!SnowRealMagicCompat.isSnowBlock(state)) {
 							continue;
 						}
-						pos.set(origin.getX() + dx, origin.getY() + dy, origin.getZ() + dz);
 						BlockState plant = SnowRealMagicCompat.plantIn(level, pos, state);
 						if (plant == null || !GpuFoliageSplit.isFoliage(plant)) {
 							continue;
