@@ -1194,11 +1194,11 @@ public final class GpuFoliageRenderer {
 		}
 
 		/**
-		 * How much of rain's wind reaches a vertex at this position: the plant's own, or for a field, the corner's it sits
-		 * on, which every block sharing that corner reads alike.
+		 * How much of rain's wind reaches a vertex at this position: the plant's own, or for a field and a block hanging on
+		 * it, the corner's it sits on, which every block sharing that corner reads alike.
 		 */
 		float exposureAt(float worldX, float worldY, float worldZ) {
-			if (!field || fieldShelter == null) {
+			if (!(field || hangsOnLeaves) || fieldShelter == null) {
 				return exposure;
 			}
 			return fieldShelter.cornerExposure(Math.round(worldX), Math.round(worldY), Math.round(worldZ));
@@ -3481,8 +3481,8 @@ public final class GpuFoliageRenderer {
 					}
 					// A block that follows the leaves -- a vine -- only waves while they do. It then moves as the leaves it
 					// hangs on do, all over, and sways as the plant it is on top of that, from where it hangs: marked still
-					// and steady at once, which nothing else is, with the leaves' own weight where the wind's reach would go
-					// (the wind reaches it wherever it is, as it does the leaves). A push never calms it, so it keeps with
+					// and steady at once, which nothing else is, the wind reaching it as far as it reaches the leaves at the
+					// same corner (see exposureAt). A push never calms it, so it keeps with
 					// them. While the leaves stand still it neither sways nor moves in the wind, and pushes bend it; one that
 					// clings mostly to anything else -- a trunk -- neither waves nor bends, as what it clings to.
 					// Any other hanging plant does the same while it literally hangs from leaves that wave, and is left a
@@ -3496,7 +3496,7 @@ public final class GpuFoliageRenderer {
 							anchor.hangsOnLeaves = true;
 							anchor.still = true;
 							anchor.steady = true;
-							anchor.exposure = WavingWhitelist.leavesIntensity();
+							anchor.exposure = 1.0F;
 						} else if (follows) {
 							anchor.waving = 0.0F;
 							anchor.still = false;

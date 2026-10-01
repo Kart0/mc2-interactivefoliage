@@ -27,6 +27,8 @@ const float MC2_SWAY_SPEED = 2513.2741;
 const int MC2_PHASE_WRAP = 4095;
 const float MC2_SWAY_SCALE = 6.2831853 * 230.0 / 4096.0;
 const float MC2_SWAY_STRENGTH = 0.33;
+// How hard a tree's leaves wave, which a block hanging on them moves with: WavingWhitelist's LEAVES intensity.
+const float MC2_LEAVES_WAVE = 0.20;
 
 // ---- Rain's wind -------------------------------------------------------------------------------------------------
 // While it rains the calm sway gives way to a wind blowing west, the way the clouds drift. Every amount below is in
@@ -174,11 +176,11 @@ vec3 mc2_sway(vec3 pos, vec3 modelOffset, ivec3 cameraBlockPos, vec3 cameraOffse
     float steady;
     vec4 weights = mc2_unpackWeights(swayWeights, steady);
     // A block hanging on leaves -- a vine while they wave -- is marked still and steady at once, which nothing else is.
-    // It sways as the plant it is, all of its calm sway and all of the wind, and moves as the leaves do on top of that,
-    // all over: the leaves' own weight comes where the wind's reach would, the wind reaching it wherever it is.
+    // It sways as the plant it is, all of its calm sway, and moves as the leaves do on top of that, all over, at the
+    // leaves' own weight; the wind reaches both as far as it reaches the leaves at the same corner.
     bool hanging = steady > 0.5 && weights.w < 0.5;
     float calmShare = hanging ? 1.0 : weights.w;
-    float exposure = hanging ? 1.0 : weights.z;
+    float exposure = weights.z;
     // Where the edge's ease and rain's reach are measured: at a plant's anchor, so the whole plant eases together, or at
     // the vertex itself for the leaves, so the corners neighbouring leaves share move as one and they never part.
     vec3 easeAt = steady > 0.5 && !hanging ? pos - 0.5 : cell;
@@ -195,9 +197,9 @@ vec3 mc2_sway(vec3 pos, vec3 modelOffset, ivec3 cameraBlockPos, vec3 cameraOffse
     if (hanging) {
         // Where it hangs its own sway is nothing, and it moves exactly as the leaf beside it.
         vec3 atVertex = pos - 0.5;
-        float leafReach = weights.z * MC2_SWAY_STRENGTH * mc2_SwayIntensity * mc2_edgeEase(atVertex);
+        float leafReach = MC2_LEAVES_WAVE * MC2_SWAY_STRENGTH * mc2_SwayIntensity * mc2_edgeEase(atVertex);
         vec2 leafWind;
-        offset += mc2_motion(world, phase, gameTime, leafReach, 1.0, 1.0, 1.0, atVertex, leafWind);
+        offset += mc2_motion(world, phase, gameTime, leafReach, 1.0, 1.0, exposure, atVertex, leafWind);
         wind += leafWind;
     }
     pos.xz += offset + push;

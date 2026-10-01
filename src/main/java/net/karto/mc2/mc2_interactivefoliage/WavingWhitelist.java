@@ -46,7 +46,10 @@ public final class WavingWhitelist {
 	public enum Group {
 		/** Ground plants and other small blocks: always on. Waves like a plant, twice as hard. */
 		GENERAL(2.0F, false),
-		/** Leaves: the player can switch them off (waving leaves). Waves as a field, a fifth as far as a plant's tip. */
+		/**
+		 * Leaves: the player can switch them off (waving leaves). Waves as a field, a fifth as far as a plant's tip. The
+		 * shaders' MC2_LEAVES_WAVE must match it: blocks hanging on the leaves move with them at that weight.
+		 */
 		LEAVES(0.20F, true);
 
 		/** How hard the group's blocks wave: a multiple of a plant's sway, or for a field, of its tip's. */
@@ -144,11 +147,6 @@ public final class WavingWhitelist {
 	/** Whether this block is one of the leaves group's, whether they wave now or not. */
 	public static boolean isLeaves(Block block) {
 		return listed(block) && BLOCKS.get(block) == Group.LEAVES;
-	}
-
-	/** How hard the leaves wave, which the blocks following them match. */
-	public static float leavesIntensity() {
-		return Group.LEAVES.intensity;
 	}
 
 	// ==================================================================

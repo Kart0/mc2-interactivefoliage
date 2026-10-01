@@ -586,7 +586,7 @@
     "GpuFoliageSplit.mayWave wraps listed blocks at bake whatever their group's state; waves/isFoliage decide at mesh time, so the checkbox only rebuilds the GPU area's sections (GpuFoliageRenderer.foliageListChanged, remesh on the MeshSwap).",
     "Field wave: constant weight, edge and rain fade measured at the vertex (SwayWeights' steady flag, which also keeps pushes from calming the sway). Rain's reach is worked out per corner (WindShelter.cornerExposure: the 8 blocks around it, leaves neither walls nor roofs to one another, no sky light), the same for every block sharing the corner, so sheltered leaves calm without cracks.",
     "Leaves touching anything but air or leaves are tessellated with every face (a second ModelBlockRenderer built with cull off), since they move and their neighbour does not; the main renderer culls exactly as the section compiler does (its second argument is cull, always true there).",
-    "Followers (vines): a majority vote of what is behind each block decides; leaves win -> the whole vine moves with the leaves' field and its free-hanging part below the lowest held block gets a plant's sway at 1.0 (still+steady flags, the leaves' weight in the exposure bits); strands of 1-2 blocks get the field only; otherwise, or with waving leaves off, interaction only, and a vine that clings mostly to anything else is not pushed either (SwayAnchor.pushless).",
+    "Followers (vines): a majority vote of what is behind each block decides; leaves win -> the whole vine moves with the leaves' field and its free-hanging part below the lowest held block gets a plant's sway at 1.0 (still+steady flags; the leaves' weight is the shaders' MC2_LEAVES_WAVE constant, which must match Group.LEAVES, and the exposure bits carry the corner's wind reach, the same the leaves beside it read); strands of 1-2 blocks get the field only; otherwise, or with waving leaves off, interaction only, and a vine that clings mostly to anything else is not pushed either (SwayAnchor.pushless).",
     "Only a block solid on that side counts as behind a strand, by the test the rain's wind uses for walls (WindShelter.isSolidSide): a torch, fence, slab or another vine is as good as nothing.",
     "Any other plant Sway hangs (pale hanging moss, cave vines, BOP's mosses...) follows the leaves the same way while it literally hangs from them (the block above its top), and is a plain plant otherwise."
    ],
@@ -597,7 +597,7 @@
    "fileInfo": {
     "WavingWhitelist.java": {
      "kind": "java",
-     "lines": 288,
+     "lines": 286,
      "guard": "//? >=1.21.11 {"
     }
    }
@@ -614,7 +614,7 @@
    "fileInfo": {
     "shaders/include/sway.glsl": {
      "kind": "shader",
-     "lines": 211,
+     "lines": 213,
      "guard": ""
     }
    }
@@ -643,7 +643,7 @@
     },
     "shaders/core/foliage_legacy.vsh": {
      "kind": "shader",
-     "lines": 181,
+     "lines": 183,
      "guard": ""
     },
     "shaders/core/foliage_legacy.fsh": {
@@ -658,7 +658,7 @@
     },
     "shaders/core/foliage_legacy_1_20.vsh": {
      "kind": "shader",
-     "lines": 180,
+     "lines": 182,
      "guard": ""
     }
    }
@@ -2742,7 +2742,7 @@
   },
   "WavingWhitelist.java": {
    "kind": "java",
-   "lines": 288,
+   "lines": 286,
    "guard": "//? >=1.21.11 {"
   },
   "shaders/core/foliage.fsh": {
@@ -2767,7 +2767,7 @@
   },
   "shaders/core/foliage_legacy.vsh": {
    "kind": "shader",
-   "lines": 181,
+   "lines": 183,
    "guard": ""
   },
   "shaders/core/foliage_legacy_1_20.json": {
@@ -2777,7 +2777,7 @@
   },
   "shaders/core/foliage_legacy_1_20.vsh": {
    "kind": "shader",
-   "lines": 180,
+   "lines": 182,
    "guard": ""
   },
   "shaders/core/foliage_modern.fsh": {
@@ -2802,7 +2802,7 @@
   },
   "shaders/include/sway.glsl": {
    "kind": "shader",
-   "lines": 211,
+   "lines": 213,
    "guard": ""
   }
  },

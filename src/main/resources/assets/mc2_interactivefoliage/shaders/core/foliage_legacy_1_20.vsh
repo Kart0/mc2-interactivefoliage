@@ -41,6 +41,8 @@ const float SWAY_SPEED = 2513.2741;
 const int PHASE_WRAP = 4095;
 const float SWAY_SCALE = 6.2831853 * 230.0 / 4096.0;
 const float SWAY_STRENGTH = 0.33;
+// How hard a tree's leaves wave, which a block hanging on them moves with: WavingWhitelist's LEAVES intensity.
+const float LEAVES_WAVE = 0.20;
 
 #define MAX_CELLS 128
 layout(std140) uniform FoliageInteraction {
@@ -150,7 +152,7 @@ void main() {
     // Still and steady at once: a block hanging on leaves, swaying as a plant and moving as the leaves. See sway.glsl.
     bool hanging = steady > 0.5 && weights.w < 0.5;
     float calmShare = hanging ? 1.0 : weights.w;
-    float exposure = hanging ? 1.0 : weights.z;
+    float exposure = weights.z;
     // The leaves ease where each vertex is, so blocks that touch never part. See sway.glsl.
     vec3 easeAt = steady > 0.5 && !hanging ? pos - 0.5 : cell;
     float calm = smoothstep(0.0, PUSH_FOR_CALM, length(force));
@@ -162,9 +164,9 @@ void main() {
     vec2 offset = motion(world, phase, reach, shake, calmShare, exposure, easeAt, windOffset);
     if (hanging) {
         vec3 atVertex = pos - 0.5;
-        float leafReach = weights.z * SWAY_STRENGTH * SwayIntensity * edgeEase(atVertex);
+        float leafReach = LEAVES_WAVE * SWAY_STRENGTH * SwayIntensity * edgeEase(atVertex);
         vec2 leafWind;
-        offset += motion(world, phase, leafReach, 1.0, 1.0, 1.0, atVertex, leafWind);
+        offset += motion(world, phase, leafReach, 1.0, 1.0, exposure, atVertex, leafWind);
         windOffset += leafWind;
     }
     pos.xz += offset + push;
