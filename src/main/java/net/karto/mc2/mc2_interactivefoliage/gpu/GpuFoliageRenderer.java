@@ -97,7 +97,6 @@ import com.mojang.blaze3d.vertex.VertexFormatElement;
 *///?}
 import net.karto.mc2.mc2_interactivefoliage.FoliageSettings;
 import net.karto.mc2.mc2_interactivefoliage.ModTemplate;
-import net.karto.mc2.mc2_interactivefoliage.WavingBlacklist;
 import net.karto.mc2.mc2_interactivefoliage.WavingWhitelist;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
@@ -1061,7 +1060,10 @@ public final class GpuFoliageRenderer {
 		 * never passes a plant's tip. A push moves it as far as any other.
 		 */
 		private float waving = 1.0F;
-		/** Whether the plant stands still in calm weather: a block on the waving blacklist. The weather's wind moves it. */
+		/**
+		 * Whether the plant stands still in calm weather, the weather's wind moving it all the same. Only a block that
+		 * follows the leaves is marked so, together with steady; see WavingWhitelist.followLeaves().
+		 */
 		private boolean still;
 		/**
 		 * Whether the block waves as a field, as a tree's leaves do: every vertex as far, by where it is in the world, so
@@ -3398,8 +3400,7 @@ public final class GpuFoliageRenderer {
 					// so the anchor shares the block's.
 					anchor.exposure = shelter == null ? 1.0F
 							: shelter.exposureAt(pos.getX(), anchor.cellY, pos.getZ(), anchor.length);
-					// A block on the waving blacklist stands still in calm weather, and the weather's wind still moves it.
-					anchor.still = WavingBlacklist.contains(state);
+					anchor.still = false;
 					// A plant under Snow! Real Magic's snow -- held in it, or the top half of one that is -- is weighed
 					// down, in calm weather and in the wind alike. Either still bends as far as any other when pushed.
 					anchor.waving = inSnow || SnowRealMagicCompat.standsOnSnow(level, pos, state) ? SNOW_LADEN_SWAY : 1.0F;

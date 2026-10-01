@@ -40,6 +40,7 @@ public class ModTemplate {
 	 */
 	public static void onRegistriesReady() {
 		ModCompatRegistry.initialize();
+		SwayRemovals.initialize();
 	}
 
 	public static void onInitializeClient() {

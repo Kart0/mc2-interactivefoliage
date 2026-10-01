@@ -128,7 +128,7 @@
    "fileInfo": {
     "gpu/GpuFoliageRenderer.java": {
      "kind": "java",
-     "lines": 3583,
+     "lines": 3584,
      "guard": "//? >=1.20.1 {"
     }
    }
@@ -152,7 +152,7 @@
    "fileInfo": {
     "gpu/GpuFoliageRenderer.java": {
      "kind": "java",
-     "lines": 3583,
+     "lines": 3584,
      "guard": "//? >=1.20.1 {"
     }
    }
@@ -177,7 +177,7 @@
    "fileInfo": {
     "gpu/GpuFoliageRenderer.java": {
      "kind": "java",
-     "lines": 3583,
+     "lines": 3584,
      "guard": "//? >=1.20.1 {"
     }
    }
@@ -211,7 +211,7 @@
    "fileInfo": {
     "gpu/GpuFoliageRenderer.java": {
      "kind": "java",
-     "lines": 3583,
+     "lines": 3584,
      "guard": "//? >=1.20.1 {"
     },
     "mixin/LevelPassMixin.java": {
@@ -237,7 +237,7 @@
    "fileInfo": {
     "gpu/GpuFoliageRenderer.java": {
      "kind": "java",
-     "lines": 3583,
+     "lines": 3584,
      "guard": "//? >=1.20.1 {"
     }
    }
@@ -550,21 +550,21 @@
    }
   },
   {
-   "id": "waving-blacklist",
-   "label": "WavingBlacklist",
+   "id": "sway-removals",
+   "label": "SwayRemovals",
    "group": "motion",
    "kind": "component",
    "files": [
-    "WavingBlacklist.java"
+    "SwayRemovals.java"
    ],
-   "summary": "Blocks the GPU renderer keeps from waving in calm weather (glow lichen, carpets, lily pads, dripleaf, chorus...): chosen by the author, never the player, laid out like ModCompatRegistry with a section per mod, ids skipped when absent. The weather's wind still moves them and pushes still bend them.",
+   "summary": "Provisional: blocks Sway registers that it should not (moss carpet, glow lichen, spore blossom, chorus, big dripleaf), taken back out through Sway's public API (getRegistry().remove + an empty pipeline) right after ModCompatRegistry, before models bake. They stay plain vanilla in both renderers, so the GPU leaves them to the chunk. Goes once a Sway release drops them.",
    "details": [
-    "Meshed as SwayWeights' still flag (anchor.still); sway.glsl multiplies only the calm sway by it (weights.w), so rain's wind is untouched. Snow! Real Magic's SNOW_LADEN_SWAY scales calm sway and wind alike, through the wave weight."
+    "Replaced the waving blacklist, whose blocks were all of this kind. SwayWeights' still flag stays, now set only for blocks that follow the leaves."
    ],
    "fileInfo": {
-    "WavingBlacklist.java": {
+    "SwayRemovals.java": {
      "kind": "java",
-     "lines": 126,
+     "lines": 82,
      "guard": "//? >=1.21.11 {"
     }
    }
@@ -594,7 +594,7 @@
    "fileInfo": {
     "WavingWhitelist.java": {
      "kind": "java",
-     "lines": 289,
+     "lines": 288,
      "guard": "//? >=1.21.11 {"
     }
    }
@@ -2138,14 +2138,14 @@
    "label": "lists (NeoForge 26.1.2+)"
   },
   {
-   "source": "renderer",
-   "target": "waving-blacklist",
-   "label": "stills calm sway through"
+   "source": "sway-removals",
+   "target": "sway-api",
+   "label": "takes blocks out of"
   },
   {
-   "source": "waving-blacklist",
-   "target": "sway-glsl",
-   "label": "read as weights.w by"
+   "source": "sway-removals",
+   "target": "modcompat",
+   "label": "runs right after"
   },
   {
    "source": "renderer",
@@ -2459,7 +2459,7 @@
   },
   "gpu/GpuFoliageRenderer.java": {
    "kind": "java",
-   "lines": 3583,
+   "lines": 3584,
    "guard": "//? >=1.20.1 {"
   },
   "gpu/GpuFoliageSplit.java": {
@@ -2624,7 +2624,7 @@
   },
   "ModTemplate.java": {
    "kind": "java",
-   "lines": 64,
+   "lines": 65,
    "guard": "//? fabric {"
   },
   "platform/fabric/datagen/FabricDataGeneratorEntrypoint.java": {
@@ -2732,14 +2732,14 @@
    "lines": 34,
    "guard": ""
   },
-  "WavingBlacklist.java": {
+  "SwayRemovals.java": {
    "kind": "java",
-   "lines": 126,
+   "lines": 82,
    "guard": "//? >=1.21.11 {"
   },
   "WavingWhitelist.java": {
    "kind": "java",
-   "lines": 289,
+   "lines": 288,
    "guard": "//? >=1.21.11 {"
   },
   "shaders/core/foliage.fsh": {

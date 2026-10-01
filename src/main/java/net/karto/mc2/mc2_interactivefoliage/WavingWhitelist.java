@@ -184,8 +184,7 @@ public final class WavingWhitelist {
 	// ==================================================================
 	// They only wave while waving leaves is on: as the plants they are, in calm weather and in the weather's wind, as hard
 	// as the leaves, and a push leaves their sway as it is so they keep with the leaves. With it off, the renderer neither
-	// sways them nor moves them in the wind. Sway pushes them either way. Keep them off the blacklist: this list decides
-	// for them.
+	// sways them nor moves them in the wind. Sway pushes them either way.
 
 	private static void followLeaves() {
 		// Vanilla
