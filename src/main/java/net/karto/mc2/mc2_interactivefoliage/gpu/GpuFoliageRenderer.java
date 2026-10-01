@@ -3488,12 +3488,13 @@ public final class GpuFoliageRenderer {
 					if (anchor.field) {
 						anchor.exposure = 1.0F;
 					}
-					// A block that follows the leaves -- a vine -- only waves while they do. It then moves as the leaves it
-					// hangs on do, all over, and sways as the plant it is on top of that, from where it hangs: marked still
-					// and steady at once, which nothing else is, the wind reaching it as far as it reaches the leaves at the
-					// same corner (see exposureAt). A push never calms it, so it keeps with
-					// them. While the leaves stand still it neither sways nor moves in the wind, and pushes bend it; one that
-					// clings mostly to anything else -- a trunk -- neither waves nor bends, as what it clings to.
+					// A block that follows the leaves -- a vine -- moves as the leaves it hangs on do. While they wave it moves
+					// with them all over, and sways as the plant it is on top of that, from where it hangs: marked still and
+					// steady at once, which nothing else is, the wind reaching it as far as it reaches the leaves at the same
+					// corner (see exposureAt). A push never calms it, so it keeps with them. While they stand still, what they
+					// hold stands still too and only the part hanging free sways, as a plant; a short strand, held all the way,
+					// is only pushed. One that clings mostly to anything else -- a trunk -- neither waves nor bends, as what
+					// it clings to.
 					// Any other hanging plant does the same while it literally hangs from leaves that wave, and is left a
 					// plant as any other otherwise.
 					anchor.hangsOnLeaves = false;
@@ -3506,6 +3507,12 @@ public final class GpuFoliageRenderer {
 							anchor.still = true;
 							anchor.steady = true;
 							anchor.exposure = 1.0F;
+						} else if (follows && onLeaves && anchor.freeLength > 0) {
+							// The leaves stand still -- switched off, or Fast -- and so does all of it they hold; the part
+							// hanging free below still sways as the plant it is, in calm weather and in the weather's wind.
+							anchor.hangsOnLeaves = true;
+							anchor.still = false;
+							anchor.steady = false;
 						} else if (follows) {
 							anchor.waving = 0.0F;
 							anchor.still = false;
