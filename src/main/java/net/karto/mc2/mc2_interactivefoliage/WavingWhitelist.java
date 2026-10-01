@@ -60,15 +60,20 @@ public final class WavingWhitelist {
 			this.field = field;
 		}
 
-		/** Whether the group's blocks wave now: leaves only while the player has them on. */
+		/** Whether the group's blocks wave now: leaves only while they do; see leavesWave(). */
 		boolean enabled() {
-			return this != LEAVES || FoliageSettings.wavingLeaves();
+			return this != LEAVES || leavesWave();
 		}
 	}
 
 	private static final Map<Block, Group> BLOCKS = new IdentityHashMap<>();
 	/** The blocks that follow the leaves; see followLeaves(). */
 	private static final Set<Block> FOLLOWERS = Collections.newSetFromMap(new IdentityHashMap<>());
+	/**
+	 * Whether the game draws leaves see-through, as its Fancy leaves do, as the renderer last saw: Fast leaves are drawn
+	 * solid, and leaves the renderer waved would show their holes, so they are left to the game then.
+	 */
+	private static volatile boolean cutoutLeaves = true;
 	/** The blocks that rest on the leaves; see restOnLeaves(). */
 	private static final Set<Block> RESTING = Collections.newSetFromMap(new IdentityHashMap<>());
 	/** Set once the lists are read; models are baked on several threads at once, so they are read under a lock. */
@@ -154,6 +159,33 @@ public final class WavingWhitelist {
 			resolve();
 		}
 		return RESTING.contains(block);
+	}
+
+	/** Whether the leaves wave now: the player has them on, and the game draws them see-through (Fancy leaves). */
+	public static boolean leavesWave() {
+		return FoliageSettings.wavingLeaves() && cutoutLeaves;
+	}
+
+	/** Whether the game draws leaves see-through now, as its Fancy leaves do. Read on the render thread. */
+	public static boolean gameCutoutLeaves() {
+		//? >=1.21.11 {
+		return net.minecraft.client.Minecraft.getInstance().options.cutoutLeaves().get();
+		//?} else {
+		/*return net.minecraft.client.Minecraft.useFancyGraphics();
+		*///?}
+	}
+
+	/**
+	 * Follows the game's leaves, Fancy or Fast, once a frame; returns whether that changed, and with it which leaves
+	 * the renderer draws.
+	 */
+	public static boolean followGameLeaves() {
+		boolean cutout = gameCutoutLeaves();
+		if (cutout == cutoutLeaves) {
+			return false;
+		}
+		cutoutLeaves = cutout;
+		return true;
 	}
 
 	/** Whether this block is one of the leaves group's, whether they wave now or not. */

@@ -6,7 +6,6 @@ import com.github.razorplay01.sway.api.SwayAPI;
 import it.unimi.dsi.fastutil.longs.Long2LongOpenHashMap;
 import it.unimi.dsi.fastutil.longs.LongArrayList;
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
-import net.karto.mc2.mc2_interactivefoliage.FoliageSettings;
 import net.karto.mc2.mc2_interactivefoliage.WavingWhitelist;
 //? >=26.1.2 {
 import net.minecraft.client.renderer.block.BlockAndTintGetter;
@@ -556,7 +555,7 @@ public final class GpuFoliageSplit {
 
 	/** Whether this is a block resting on a leaf while the leaves wave, drawn and waved with them; see isFoliageAt. */
 	public static boolean restsOnWavingLeaves(BlockGetter level, BlockPos pos, BlockState state) {
-		return FoliageSettings.wavingLeaves() && WavingWhitelist.restsOnLeaves(state.getBlock())
+		return WavingWhitelist.leavesWave() && WavingWhitelist.restsOnLeaves(state.getBlock())
 				&& WavingWhitelist.isLeaves(level.getBlockState(pos.below()).getBlock());
 	}
 
@@ -574,7 +573,7 @@ public final class GpuFoliageSplit {
 	 */
 	static boolean mayHoldFoliage(BlockState state) {
 		return isFoliage(state) || SnowRealMagicCompat.isSnowBlock(state)
-				|| FoliageSettings.wavingLeaves() && WavingWhitelist.restsOnLeaves(state.getBlock());
+				|| WavingWhitelist.leavesWave() && WavingWhitelist.restsOnLeaves(state.getBlock());
 	}
 
 	private static Class<?> findClass(String name) {

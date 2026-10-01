@@ -1668,6 +1668,11 @@ public final class GpuFoliageRenderer {
 		}
 		// Decisions keep being applied while switched off, so the record is accurate when switched back on.
 		GpuFoliageSplit.applyMeshDecisions();
+		// Fast leaves are drawn solid by the game, and leaves the renderer waved would show their holes: switching between
+		// Fast and Fancy hands the leaves over, as the waving leaves setting does.
+		if (WavingWhitelist.followGameLeaves()) {
+			foliageListChanged();
+		}
 		// Where the chunk mesher cannot be told to leave foliage out, the renderer stays out of the way too, or every
 		// plant it drew would be drawn twice.
 		if (!FoliageSettings.gpuRenderer() || !SodiumBridge.canSplitChunkMeshes()) {
@@ -3496,7 +3501,7 @@ public final class GpuFoliageRenderer {
 					boolean follows = WavingWhitelist.followsLeaves(state.getBlock());
 					if (follows || anchor.hanging) {
 						boolean onLeaves = anchor.hangOnLeaves(level, !follows);
-						if (onLeaves && FoliageSettings.wavingLeaves()) {
+						if (onLeaves && WavingWhitelist.leavesWave()) {
 							anchor.hangsOnLeaves = true;
 							anchor.still = true;
 							anchor.steady = true;

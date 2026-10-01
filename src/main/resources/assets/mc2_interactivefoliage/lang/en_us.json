@@ -14,6 +14,7 @@
     "config.mc2_interactivefoliage.gpu.full":        "Full",
     "config.mc2_interactivefoliage.waving_foliage": "Waving Foliage",
     "config.mc2_interactivefoliage.waving_leaves": "Waving Leaves",
+    "config.mc2_interactivefoliage.waving_leaves.needs_fancy": "Leaves only wave with Fancy leaves (Video Settings).",
     "config.mc2_interactivefoliage.weather_wind": "Weather Wind",
     "config.mc2_interactivefoliage.distance": "Distance",
     "config.mc2_interactivefoliage.preset.classic": "Classic",
