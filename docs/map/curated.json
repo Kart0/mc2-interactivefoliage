@@ -143,8 +143,14 @@
 
     {"id": "waving-blacklist", "label": "WavingBlacklist", "group": "motion", "kind": "component",
      "files": ["WavingBlacklist.java"],
-     "summary": "Blocks the GPU renderer keeps from waving in calm weather (vines, glow lichen, carpets, lily pads, dripleaf, chorus...): chosen by the author, never the player, laid out like ModCompatRegistry with a section per mod, ids skipped when absent. The weather's wind still moves them and pushes still bend them.",
+     "summary": "Blocks the GPU renderer keeps from waving in calm weather (glow lichen, carpets, lily pads, dripleaf, chorus...): chosen by the author, never the player, laid out like ModCompatRegistry with a section per mod, ids skipped when absent. The weather's wind still moves them and pushes still bend them.",
      "details": ["Meshed as SwayWeights' still flag (anchor.still); sway.glsl multiplies only the calm sway by it (weights.w), so rain's wind is untouched. Snow! Real Magic's SNOW_LADEN_SWAY scales calm sway and wind alike, through the wave weight."]},
+
+    {"id": "waving-whitelist", "label": "WavingWhitelist", "group": "motion", "kind": "component", "versions": [">=26.3"],
+     "files": ["WavingWhitelist.java"],
+     "summary": "Blocks Sway does not bend that the GPU renderer still draws and waves, by group (vanilla and mods together): GENERAL (petals, wildflowers; always on, 2x a plant) and LEAVES (#minecraft:leaves; 0.20, waved as a field so touching leaves never part; the player's Waving Leaves checkbox). A follow-the-leaves list (vines) waves with the leaves only while they wave.",
+     "details": ["Tags are read at bake time from every jar's data/<ns>/tags/block files (Platform.readAll; NeoForge 26.3 through ModList), since the world's tags arrive after the models are baked.", "GpuFoliageSplit.mayWave wraps listed blocks at bake whatever their group's state; waves/isFoliage decide at mesh time, so the checkbox only rebuilds the GPU area's sections (GpuFoliageRenderer.foliageListChanged, remesh on the MeshSwap).", "Field wave: constant weight, exposure 1, edge and rain fade measured at the vertex (SwayWeights' steady flag, which also keeps pushes from calming the sway).", "Followers (vines): a majority vote of what is behind each block decides; leaves win -> the whole vine moves with the leaves' field and its free-hanging part below the lowest held block gets a plant's sway at 1.0 (still+steady flags, the leaves' weight in the exposure bits); strands of 1-2 blocks get the field only; otherwise, or with waving leaves off, interaction only."],
+     "pitfalls": ["Only 26.3 for now; listed()/followsLeaves() are false elsewhere until each version is hooked up.", "Fast leaves graphics: the GPU draws leaves as cutout, so they may look see-through next to the chunk's opaque fast leaves."]},
 
     {"id": "sway-glsl", "label": "sway.glsl", "group": "shaders", "kind": "shader",
      "files": ["shaders/include/sway.glsl"],
@@ -513,6 +519,10 @@
     ["mixin-configs", "blockgetter-fix", "lists (NeoForge 26.1.2+)"],
     ["renderer", "waving-blacklist", "stills calm sway through"],
     ["waving-blacklist", "sway-glsl", "read as weights.w by"],
+    ["renderer", "waving-whitelist", "waves listed blocks through"],
+    ["split", "waving-whitelist", "wraps and withholds by"],
+    ["settings", "waving-whitelist", "switches the leaves of"],
+    ["waving-whitelist", "sway-glsl", "read as the steady flag by"],
     ["blockgetter-fix", "iris", "works around"],
     ["blockgetter-fix", "srm", "lets chunks read the plant of"],
     ["srm-neoforge-render", "srm", "hooks the drawing of"],

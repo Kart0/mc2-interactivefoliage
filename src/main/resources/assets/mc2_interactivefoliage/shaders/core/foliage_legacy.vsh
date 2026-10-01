@@ -100,15 +100,18 @@ vec3 unpackCell(float bits) {
     return vec3(x, y, rest - y * 256.0) - 64.0;
 }
 
-// The wind weight, ten bits, the push, nine, whether the plant stands still in calm weather, one, then how much of
-// rain's wind reaches the plant, four. w: how much of the calm sway the plant has. See sway.glsl.
-vec4 unpackWeights(float bits) {
+// The wind weight, ten bits, the push, eight, whether the plant stands still in calm weather, one, whether it waves as a
+// steady (a push leaves its sway as it is), one, then how much of rain's wind reaches the plant, four. w: how much of the calm sway the plant has. See
+// sway.glsl.
+vec4 unpackWeights(float bits, out float steady) {
     float exposure = bits - floor(bits / 16.0) * 16.0;
     float rest = (bits - exposure) / 16.0;
+    steady = rest - floor(rest / 2.0) * 2.0;
+    rest = (rest - steady) / 2.0;
     float still = rest - floor(rest / 2.0) * 2.0;
     float weights = (rest - still) / 2.0;
-    float wave = floor(weights / 512.0);
-    return vec4(wave / 1023.0, (weights - wave * 512.0) / 511.0, exposure / 15.0, 1.0 - still);
+    float wave = floor(weights / 256.0);
+    return vec4(wave / 1023.0, (weights - wave * 256.0) / 255.0, exposure / 15.0, 1.0 - still);
 }
 
 // How far rain's wind moves a vertex that may sway this much. See sway.glsl.
@@ -123,6 +126,15 @@ vec2 wind(vec3 world, float phase, float reach, float shake) {
     return (WIND_DIRECTION * (lean + tug) + across * flutter) * strength;
 }
 
+// The calm sway and rain's wind of a vertex that may sway this far; the wind's part of it in windOffset. See sway.glsl.
+vec2 motion(vec3 world, float phase, float reach, float shake, float calmShare, float exposure, vec3 easeAt,
+            out vec2 windOffset) {
+    vec2 sway = vec2(sin(phase), cos(phase * 1.3) * 0.7) * reach * shake * CalmSway * calmShare;
+    float rain = Weather.x * exposure * (1.0 - smoothstep(Weather.z - Weather.w, Weather.z, length(easeAt.xz + 0.5)));
+    windOffset = rain > 0.0 ? wind(world, phase, reach, shake) * rain : vec2(0.0);
+    return mix(sway, vec2(0.0), rain) + windOffset;
+}
+
 out float vertexDistance;
 out vec4 vertexColor;
 out vec2 texCoord0;
@@ -134,16 +146,29 @@ void main() {
     float phase = (world.x + world.z) * SWAY_SCALE + GameTime * SWAY_SPEED;
     vec3 cell = unpackCell(SwayCell) + ChunkOffset;
     vec2 force = swayCellPush(cell);
-    vec4 weights = unpackWeights(SwayWeights);
+    float steady;
+    vec4 weights = unpackWeights(SwayWeights, steady);
+    // Still and steady at once: a block hanging on leaves, swaying as a plant and moving as the leaves. See sway.glsl.
+    bool hanging = steady > 0.5 && weights.w < 0.5;
+    float calmShare = hanging ? 1.0 : weights.w;
+    float exposure = hanging ? 1.0 : weights.z;
+    // The leaves ease where each vertex is, so blocks that touch never part. See sway.glsl.
+    vec3 easeAt = steady > 0.5 && !hanging ? pos - 0.5 : cell;
     float calm = smoothstep(0.0, PUSH_FOR_CALM, length(force));
-    float reach = weights.x * SWAY_STRENGTH * SwayIntensity * edgeEase(cell);
-    float shake = mix(1.0, PUSHED_SWAY, calm);
-    float amount = reach * shake;
+    float reach = weights.x * SWAY_STRENGTH * SwayIntensity * edgeEase(easeAt);
+    // A steady block never calms, so what hangs on the leaves stays on them while pushed. See sway.glsl.
+    float shake = steady > 0.5 ? 1.0 : mix(1.0, PUSHED_SWAY, calm);
     vec2 push = force * weights.y * INTERACT_STRENGTH;
-    vec2 sway = vec2(sin(phase), cos(phase * 1.3) * 0.7) * amount * CalmSway * weights.w;
-    float rain = Weather.x * weights.z * (1.0 - smoothstep(Weather.z - Weather.w, Weather.z, length(cell.xz + 0.5)));
-    vec2 windOffset = rain > 0.0 ? wind(world, phase, reach, shake) * rain : vec2(0.0);
-    pos.xz += mix(sway, vec2(0.0), rain) + windOffset + push;
+    vec2 windOffset;
+    vec2 offset = motion(world, phase, reach, shake, calmShare, exposure, easeAt, windOffset);
+    if (hanging) {
+        vec3 atVertex = pos - 0.5;
+        float leafReach = weights.z * SWAY_STRENGTH * SwayIntensity * edgeEase(atVertex);
+        vec2 leafWind;
+        offset += motion(world, phase, leafReach, 1.0, 1.0, 1.0, atVertex, leafWind);
+        windOffset += leafWind;
+    }
+    pos.xz += offset + push;
     float pushed = length(push + windOffset);
     pos.y -= min(pushed * pushed, pushed) * 0.5;
 

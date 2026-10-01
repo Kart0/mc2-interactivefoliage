@@ -148,6 +148,8 @@ public final class FoliageSettings {
 		boolean gpuRenderer = true;
 		GpuDistance gpuDistance = GpuDistance.ADAPTIVE;
 		boolean wavingFoliage = true;
+		/** Whether the leaves of the waving whitelist wave too, with the GPU renderer. */
+		boolean wavingLeaves = true;
 		/** Whether rain and storms turn the sway into wind, sheltered by roofs and walls. */
 		boolean weatherWind = true;
 		/** How far from the player that happens: one of performance, half and full. */
@@ -240,6 +242,15 @@ public final class FoliageSettings {
 	}
 
 	/** How strongly the wind sways foliage, as a multiplier of the shader's own strength. */
+	/** Whether the leaves of the waving whitelist wave too, with the GPU renderer. */
+	public static boolean wavingLeaves() {
+		return values.wavingLeaves;
+	}
+
+	public static void setWavingLeaves(boolean enabled) {
+		values.wavingLeaves = enabled;
+	}
+
 	public static float wavingIntensity() {
 		return values.wavingIntensity;
 	}

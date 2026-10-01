@@ -101,7 +101,7 @@ public final class ForgeFoliageHooks {
 		}
 		// The renderer looks models up by block state, so each state is matched to the id its model has.
 		for (Block block : BuiltInRegistries.BLOCK) {
-			if (!GpuFoliageSplit.bends(block)) {
+			if (!GpuFoliageSplit.mayWave(block)) {
 				continue;
 			}
 			for (BlockState state : block.getStateDefinition().getPossibleStates()) {
@@ -179,7 +179,7 @@ public final class ForgeFoliageHooks {
 			return false;
 		}
 		return BuiltInRegistries.BLOCK.getOptional(new ResourceLocation(location.getNamespace(), location.getPath()))
-				.map(GpuFoliageSplit::bends).orElse(false);
+				.map(GpuFoliageSplit::mayWave).orElse(false);
 	}
 }
 *///?}

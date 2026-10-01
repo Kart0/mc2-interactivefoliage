@@ -100,7 +100,7 @@ public final class NeoforgeFoliageHooks {
 	public static void onModifyBakingResult(ModelEvent.ModifyBakingResult event) {
 		Map<BlockState, BlockStateModel> models = event.getBakingResult().blockStateModels();
 		for (Map.Entry<BlockState, BlockStateModel> entry : new ArrayList<>(models.entrySet())) {
-			if (!GpuFoliageSplit.bends(entry.getKey().getBlock())) {
+			if (!GpuFoliageSplit.mayWave(entry.getKey().getBlock())) {
 				continue;
 			}
 			NeoforgeFoliageModel wrapped = new NeoforgeFoliageModel(entry.getValue());
@@ -179,7 +179,7 @@ public final class NeoforgeFoliageHooks {
 		}
 		// The renderer looks models up by block state, so each state is matched to the id its model has.
 		for (Block block : BuiltInRegistries.BLOCK) {
-			if (!GpuFoliageSplit.bends(block)) {
+			if (!GpuFoliageSplit.mayWave(block)) {
 				continue;
 			}
 			for (BlockState state : block.getStateDefinition().getPossibleStates()) {
@@ -250,7 +250,7 @@ public final class NeoforgeFoliageHooks {
 		if (ModelResourceLocation.INVENTORY_VARIANT.equals(id.variant())) {
 			return false;
 		}
-		return BuiltInRegistries.BLOCK.getOptional(id.id()).map(GpuFoliageSplit::bends).orElse(false);
+		return BuiltInRegistries.BLOCK.getOptional(id.id()).map(GpuFoliageSplit::mayWave).orElse(false);
 	}
 	^///?}
 }

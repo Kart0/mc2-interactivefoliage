@@ -6,6 +6,7 @@ import com.github.razorplay01.sway.api.SwayAPI;
 import it.unimi.dsi.fastutil.longs.Long2LongOpenHashMap;
 import it.unimi.dsi.fastutil.longs.LongArrayList;
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
+import net.karto.mc2.mc2_interactivefoliage.WavingWhitelist;
 //? >=26.1.2 {
 import net.minecraft.client.renderer.block.BlockAndTintGetter;
 //?} else {
@@ -133,6 +134,18 @@ public final class GpuFoliageSplit {
 	private static final LongArrayList REBUILD_NOW = new LongArrayList();
 
 	/**
+	 * Render thread only: sections whose foliage changed hands with a whitelist group switched, waiting for their new
+	 * chunk mesh to be on screen before the renderer meshes them again, and when to stop waiting.
+	 * <p>
+	 * The chunk mesh goes first and the renderer follows on the frame it is in place: a leaf let go is drawn twice or
+	 * not at all only for the few frames the renderer takes to catch up, rather than for as long as the chunk build.
+	 */
+	private static final Long2LongOpenHashMap REMESH_ON_SWAP = new Long2LongOpenHashMap();
+	private static final long REMESH_GIVE_UP_MILLIS = 2000L;
+	/** Render thread only: sections due to be meshed again by the renderer, collected for it. */
+	private static final LongArrayList REMESH_NOW = new LongArrayList();
+
+	/**
 	 * Sections the GPU renderer holds uploaded geometry for. Only these may be left out of the chunk mesh: until then the
 	 * chunk mesh keeps their foliage, rather than leave it to a renderer with nothing to show yet -- as it would for the
 	 * sections of a chunk that arrives inside the near area while the renderer is still working through its queue.
@@ -160,7 +173,11 @@ public final class GpuFoliageSplit {
 	private static final Map<BlockState, BakedModel> GPU_MODELS = new IdentityHashMap<>();
 	*///?}
 
-	private static Set<Block> foliage;
+	/**
+	 * Which blocks are foliage now, found on first use and forgotten when a whitelist group is switched: read by the
+	 * chunk builders' threads too, which see it whole or not at all.
+	 */
+	private static volatile Set<Block> foliage;
 
 	//? forge {
 	/*private static final String EMBEDDIUM_SLICE_VIEW = "org.embeddedt.embeddium.render.world.WorldSliceLocal";
@@ -250,6 +267,10 @@ public final class GpuFoliageSplit {
 				long key = swap.sectionKey();
 				// The chunk mesh that took the foliage back is on screen now: the renderer can stop drawing it.
 				HANDING_BACK.remove(key);
+				// Its foliage changed hands with a whitelist group: the renderer follows the chunk mesh now.
+				if (REMESH_ON_SWAP.remove(key) != 0L) {
+					REMESH_NOW.add(key);
+				}
 				// The chunk mesh that let the foliage go is on screen now: the renderer starts drawing it, on this frame.
 				if (TAKING_OVER.remove(key)) {
 					MESHED_WITHOUT_FOLIAGE.add(key);
@@ -353,6 +374,33 @@ public final class GpuFoliageSplit {
 		REBUILD_NOW.clear();
 	}
 
+	/**
+	 * Render thread: the renderer is to mesh this section again once its new chunk mesh is on screen, the chunk mesh
+	 * having just been asked for; see REMESH_ON_SWAP.
+	 */
+	static void remeshOnSwap(long sectionKey) {
+		REMESH_ON_SWAP.put(sectionKey, System.currentTimeMillis() + REMESH_GIVE_UP_MILLIS);
+	}
+
+	/** Render thread: hands over each section the renderer is to mesh again now, its chunk mesh in place or long due. */
+	static void forEachRemeshDue(LongConsumer remesh) {
+		if (!REMESH_ON_SWAP.isEmpty()) {
+			long now = System.currentTimeMillis();
+			var entries = REMESH_ON_SWAP.long2LongEntrySet().fastIterator();
+			while (entries.hasNext()) {
+				var entry = entries.next();
+				if (now > entry.getLongValue()) {
+					REMESH_NOW.add(entry.getLongKey());
+					entries.remove();
+				}
+			}
+		}
+		for (int i = 0; i < REMESH_NOW.size(); i++) {
+			remesh.accept(REMESH_NOW.getLong(i));
+		}
+		REMESH_NOW.clear();
+	}
+
 	/** Render thread: whether the chunk mesh on screen for this section went without its foliage. */
 	static boolean chunkMeshLeftFoliage(long sectionKey) {
 		if (MESHED_WITHOUT_FOLIAGE.contains(sectionKey)) {
@@ -397,6 +445,7 @@ public final class GpuFoliageSplit {
 	/** Render thread: the section was unloaded, and its next build has to be recorded afresh. */
 	static void forgetSection(long sectionKey) {
 		HANDING_BACK.remove(sectionKey);
+		REMESH_ON_SWAP.remove(sectionKey);
 		NEEDS_REBUILD.remove(sectionKey);
 		TAKING_OVER.remove(sectionKey);
 		if (MESHED_WITHOUT_FOLIAGE.remove(sectionKey)) {
@@ -442,26 +491,31 @@ public final class GpuFoliageSplit {
 		NEEDS_REBUILD.clear();
 		REBUILD_NOW.clear();
 		TAKING_OVER.clear();
+		REMESH_ON_SWAP.clear();
+		REMESH_NOW.clear();
 		generation++;
 	}
 
 	/**
 	 * Whether this block is foliage the GPU renderer draws: every block Sway animates, the vanilla foliage it
-	 * registers itself plus whatever {@link net.karto.mc2.mc2_interactivefoliage.ModCompatRegistry} found.
+	 * registers itself plus whatever {@link net.karto.mc2.mc2_interactivefoliage.ModCompatRegistry} found, and the
+	 * blocks of the waving whitelist.
 	 * <p>
-	 * Resolved once and cached, because {@code isInteractive} walks Sway's registries. Render thread only.
+	 * Resolved once and cached, because {@code isInteractive} walks Sway's registries; any thread may ask, and two
+	 * that find it gone at once both work it out the same.
 	 */
-	static boolean isFoliage(BlockState state) {
-		if (foliage == null) {
+	public static boolean isFoliage(BlockState state) {
+		Set<Block> known = foliage;
+		if (known == null) {
 			Set<Block> found = Collections.newSetFromMap(new IdentityHashMap<>());
 			for (Block block : BuiltInRegistries.BLOCK) {
-				if (bends(block)) {
+				if (waves(block)) {
 					found.add(block);
 				}
 			}
-			foliage = found;
+			foliage = known = found;
 		}
-		return foliage.contains(state.getBlock());
+		return known.contains(state.getBlock());
 	}
 
 	/**
@@ -471,6 +525,31 @@ public final class GpuFoliageSplit {
 	 */
 	public static boolean bends(Block block) {
 		return SwayAPI.isInteractive(block) && !SwayAPI.getBehaviorPipeline(block).getDeformationContributors().isEmpty();
+	}
+
+	/**
+	 * Whether the GPU renderer draws and waves this block, which makes it foliage: its models are wrapped so a chunk
+	 * mesher leaves it to the renderer. Every block Sway bends, and the blocks of the waving whitelist, which Sway
+	 * does not.
+	 */
+	public static boolean waves(Block block) {
+		return bends(block) || WavingWhitelist.contains(block);
+	}
+
+	/**
+	 * Whether the GPU renderer may ever draw this block, which is what its models are wrapped for as they are baked:
+	 * every block Sway bends and every block on the waving whitelist, its group on or off.
+	 */
+	public static boolean mayWave(Block block) {
+		return bends(block) || WavingWhitelist.listed(block);
+	}
+
+	/**
+	 * Forgets which blocks are foliage, after a whitelist group was switched on or off. The chunks have to be built
+	 * again after it, the chunk mesh's and the renderer's.
+	 */
+	public static void foliageChanged() {
+		foliage = null;
 	}
 
 	/** Whether the GPU renderer has anything to draw at a block like this: foliage, or snow holding a plant. */

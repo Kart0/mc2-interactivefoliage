@@ -128,7 +128,7 @@
    "fileInfo": {
     "gpu/GpuFoliageRenderer.java": {
      "kind": "java",
-     "lines": 3361,
+     "lines": 3583,
      "guard": "//? >=1.20.1 {"
     }
    }
@@ -152,7 +152,7 @@
    "fileInfo": {
     "gpu/GpuFoliageRenderer.java": {
      "kind": "java",
-     "lines": 3361,
+     "lines": 3583,
      "guard": "//? >=1.20.1 {"
     }
    }
@@ -177,7 +177,7 @@
    "fileInfo": {
     "gpu/GpuFoliageRenderer.java": {
      "kind": "java",
-     "lines": 3361,
+     "lines": 3583,
      "guard": "//? >=1.20.1 {"
     }
    }
@@ -211,7 +211,7 @@
    "fileInfo": {
     "gpu/GpuFoliageRenderer.java": {
      "kind": "java",
-     "lines": 3361,
+     "lines": 3583,
      "guard": "//? >=1.20.1 {"
     },
     "mixin/LevelPassMixin.java": {
@@ -237,7 +237,7 @@
    "fileInfo": {
     "gpu/GpuFoliageRenderer.java": {
      "kind": "java",
-     "lines": 3361,
+     "lines": 3583,
      "guard": "//? >=1.20.1 {"
     }
    }
@@ -259,7 +259,7 @@
    "fileInfo": {
     "gpu/GpuFoliageSplit.java": {
      "kind": "java",
-     "lines": 490,
+     "lines": 569,
      "guard": "//? >=1.20.1 {"
     }
    }
@@ -283,7 +283,7 @@
    "fileInfo": {
     "gpu/GpuFoliageModel.java": {
      "kind": "java",
-     "lines": 91,
+     "lines": 92,
      "guard": "//? fabric {"
     },
     "platform/fabric/FabricFoliageHooks.java": {
@@ -312,7 +312,7 @@
    "fileInfo": {
     "platform/neoforge/NeoforgeFoliageModel.java": {
      "kind": "java",
-     "lines": 214,
+     "lines": 215,
      "guard": "//? neoforge && >=1.21.1 {"
     },
     "platform/neoforge/NeoforgeFoliageHooks.java": {
@@ -377,7 +377,7 @@
     },
     "gpu/GpuFoliageSplit.java": {
      "kind": "java",
-     "lines": 490,
+     "lines": 569,
      "guard": "//? >=1.20.1 {"
     }
    }
@@ -502,13 +502,13 @@
    "fileInfo": {
     "FoliageSettings.java": {
      "kind": "java",
-     "lines": 322,
+     "lines": 333,
      "guard": ""
     },
     "FoliageConfigScreen.java": {
      "kind": "java",
-     "lines": 683,
-     "guard": ""
+     "lines": 718,
+     "guard": "//? >=26.3 {"
     },
     "platform/fabric/FabricModMenuIntegration.java": {
      "kind": "java",
@@ -557,7 +557,7 @@
    "files": [
     "WavingBlacklist.java"
    ],
-   "summary": "Blocks the GPU renderer keeps from waving in calm weather (vines, glow lichen, carpets, lily pads, dripleaf, chorus...): chosen by the author, never the player, laid out like ModCompatRegistry with a section per mod, ids skipped when absent. The weather's wind still moves them and pushes still bend them.",
+   "summary": "Blocks the GPU renderer keeps from waving in calm weather (glow lichen, carpets, lily pads, dripleaf, chorus...): chosen by the author, never the player, laid out like ModCompatRegistry with a section per mod, ids skipped when absent. The weather's wind still moves them and pushes still bend them.",
    "details": [
     "Meshed as SwayWeights' still flag (anchor.still); sway.glsl multiplies only the calm sway by it (weights.w), so rain's wind is untouched. Snow! Real Magic's SNOW_LADEN_SWAY scales calm sway and wind alike, through the wave weight."
    ],
@@ -565,6 +565,36 @@
     "WavingBlacklist.java": {
      "kind": "java",
      "lines": 126,
+     "guard": "//? >=1.21.11 {"
+    }
+   }
+  },
+  {
+   "id": "waving-whitelist",
+   "label": "WavingWhitelist",
+   "group": "motion",
+   "kind": "component",
+   "versions": [
+    ">=26.3"
+   ],
+   "files": [
+    "WavingWhitelist.java"
+   ],
+   "summary": "Blocks Sway does not bend that the GPU renderer still draws and waves, by group (vanilla and mods together): GENERAL (petals, wildflowers; always on, 2x a plant) and LEAVES (#minecraft:leaves; 0.20, waved as a field so touching leaves never part; the player's Waving Leaves checkbox). A follow-the-leaves list (vines) waves with the leaves only while they wave.",
+   "details": [
+    "Tags are read at bake time from every jar's data/<ns>/tags/block files (Platform.readAll; NeoForge 26.3 through ModList), since the world's tags arrive after the models are baked.",
+    "GpuFoliageSplit.mayWave wraps listed blocks at bake whatever their group's state; waves/isFoliage decide at mesh time, so the checkbox only rebuilds the GPU area's sections (GpuFoliageRenderer.foliageListChanged, remesh on the MeshSwap).",
+    "Field wave: constant weight, exposure 1, edge and rain fade measured at the vertex (SwayWeights' steady flag, which also keeps pushes from calming the sway).",
+    "Followers (vines): a majority vote of what is behind each block decides; leaves win -> the whole vine moves with the leaves' field and its free-hanging part below the lowest held block gets a plant's sway at 1.0 (still+steady flags, the leaves' weight in the exposure bits); strands of 1-2 blocks get the field only; otherwise, or with waving leaves off, interaction only."
+   ],
+   "pitfalls": [
+    "Only 26.3 for now; listed()/followsLeaves() are false elsewhere until each version is hooked up.",
+    "Fast leaves graphics: the GPU draws leaves as cutout, so they may look see-through next to the chunk's opaque fast leaves."
+   ],
+   "fileInfo": {
+    "WavingWhitelist.java": {
+     "kind": "java",
+     "lines": 289,
      "guard": "//? >=1.21.11 {"
     }
    }
@@ -581,7 +611,7 @@
    "fileInfo": {
     "shaders/include/sway.glsl": {
      "kind": "shader",
-     "lines": 179,
+     "lines": 211,
      "guard": ""
     }
    }
@@ -610,7 +640,7 @@
     },
     "shaders/core/foliage_legacy.vsh": {
      "kind": "shader",
-     "lines": 156,
+     "lines": 181,
      "guard": ""
     },
     "shaders/core/foliage_legacy.fsh": {
@@ -625,7 +655,7 @@
     },
     "shaders/core/foliage_legacy_1_20.vsh": {
      "kind": "shader",
-     "lines": 155,
+     "lines": 180,
      "guard": ""
     }
    }
@@ -1219,7 +1249,7 @@
     },
     "platform/neoforge/NeoforgeFoliageModel.java": {
      "kind": "java",
-     "lines": 214,
+     "lines": 215,
      "guard": "//? neoforge && >=1.21.1 {"
     }
    }
@@ -1381,7 +1411,7 @@
     },
     "platform/neoforge/NeoforgePlatform.java": {
      "kind": "java",
-     "lines": 26,
+     "lines": 47,
      "guard": "//? neoforge {"
     }
    }
@@ -2118,6 +2148,26 @@
    "label": "read as weights.w by"
   },
   {
+   "source": "renderer",
+   "target": "waving-whitelist",
+   "label": "waves listed blocks through"
+  },
+  {
+   "source": "split",
+   "target": "waving-whitelist",
+   "label": "wraps and withholds by"
+  },
+  {
+   "source": "settings",
+   "target": "waving-whitelist",
+   "label": "switches the leaves of"
+  },
+  {
+   "source": "waving-whitelist",
+   "target": "sway-glsl",
+   "label": "read as the steady flag by"
+  },
+  {
    "source": "blockgetter-fix",
    "target": "iris",
    "label": "works around"
@@ -2389,12 +2439,12 @@
  "files": {
   "FoliageConfigScreen.java": {
    "kind": "java",
-   "lines": 683,
-   "guard": ""
+   "lines": 718,
+   "guard": "//? >=26.3 {"
   },
   "FoliageSettings.java": {
    "kind": "java",
-   "lines": 322,
+   "lines": 333,
    "guard": ""
   },
   "gpu/GpuFoliageInteraction.java": {
@@ -2404,17 +2454,17 @@
   },
   "gpu/GpuFoliageModel.java": {
    "kind": "java",
-   "lines": 91,
+   "lines": 92,
    "guard": "//? fabric {"
   },
   "gpu/GpuFoliageRenderer.java": {
    "kind": "java",
-   "lines": 3361,
+   "lines": 3583,
    "guard": "//? >=1.20.1 {"
   },
   "gpu/GpuFoliageSplit.java": {
    "kind": "java",
-   "lines": 490,
+   "lines": 569,
    "guard": "//? >=1.20.1 {"
   },
   "gpu/IrisCompat.java": {
@@ -2664,7 +2714,7 @@
   },
   "platform/neoforge/NeoforgeFoliageModel.java": {
    "kind": "java",
-   "lines": 214,
+   "lines": 215,
    "guard": "//? neoforge && >=1.21.1 {"
   },
   "platform/neoforge/NeoforgeKeyBindings.java": {
@@ -2674,17 +2724,22 @@
   },
   "platform/neoforge/NeoforgePlatform.java": {
    "kind": "java",
-   "lines": 26,
+   "lines": 47,
    "guard": "//? neoforge {"
   },
   "platform/Platform.java": {
    "kind": "java",
-   "lines": 15,
+   "lines": 34,
    "guard": ""
   },
   "WavingBlacklist.java": {
    "kind": "java",
    "lines": 126,
+   "guard": "//? >=1.21.11 {"
+  },
+  "WavingWhitelist.java": {
+   "kind": "java",
+   "lines": 289,
    "guard": "//? >=1.21.11 {"
   },
   "shaders/core/foliage.fsh": {
@@ -2709,7 +2764,7 @@
   },
   "shaders/core/foliage_legacy.vsh": {
    "kind": "shader",
-   "lines": 156,
+   "lines": 181,
    "guard": ""
   },
   "shaders/core/foliage_legacy_1_20.json": {
@@ -2719,7 +2774,7 @@
   },
   "shaders/core/foliage_legacy_1_20.vsh": {
    "kind": "shader",
-   "lines": 155,
+   "lines": 180,
    "guard": ""
   },
   "shaders/core/foliage_modern.fsh": {
@@ -2744,7 +2799,7 @@
   },
   "shaders/include/sway.glsl": {
    "kind": "shader",
-   "lines": 179,
+   "lines": 211,
    "guard": ""
   }
  },

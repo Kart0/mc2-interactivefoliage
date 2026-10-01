@@ -3,6 +3,10 @@ package net.karto.mc2.mc2_interactivefoliage;
 import com.github.razorplay01.sway.config.SwayConfig;
 import net.minecraft.client.gui.components.AbstractSliderButton;
 import net.minecraft.client.gui.components.Button;
+//? >=26.3 {
+import net.minecraft.client.gui.components.Checkbox;
+import net.karto.mc2.mc2_interactivefoliage.gpu.GpuFoliageRenderer;
+//?}
 import net.minecraft.client.gui.components.CycleButton;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
@@ -45,6 +49,9 @@ public class FoliageConfigScreen extends Screen {
 	private WavingIntensitySlider wavingIntensitySlider;
 	private Button resetWavingIntensityBtn;
 	//?}
+	//? >=26.3 {
+	private Checkbox wavingLeavesBox;
+	//?}
 
 	public FoliageConfigScreen(Screen parent) {
 		super(Component.translatable("config.mc2_interactivefoliage.title"));
@@ -78,6 +85,10 @@ public class FoliageConfigScreen extends Screen {
 		// beside its own setting.
 		rows += 4;
 		extra += 10;
+		//?}
+		//? >=26.3 {
+		// The leaves' checkbox, under the wind.
+		rows += 1;
 		//?}
 		return 20 + (rows - 1) * spacing + extra + (spacing + 10) + 20;
 	}
@@ -238,6 +249,25 @@ public class FoliageConfigScreen extends Screen {
 				btn -> wavingIntensitySlider.reset()
 		).bounds(right + sliderWidth + RESET_GAP, y, RESET_WIDTH, 20).build();
 		this.addRenderableWidget(resetWavingIntensityBtn);
+
+		//? >=26.3 {
+		y += spacing;
+
+		// ── Whether leaves wave too, with the wind ──────────────────────────────
+		// Switching them rebuilds the near sections holding leaves: whether a leaf is drawn by the chunk mesh or the
+		// renderer changes there.
+		wavingLeavesBox = Checkbox.builder(Component.translatable("config.mc2_interactivefoliage.waving_leaves"), this.font)
+				.pos(left, y + (20 - Checkbox.getBoxSize(this.font)) / 2)
+				.selected(FoliageSettings.wavingLeaves())
+				.onValueChange((box, value) -> {
+					FoliageSettings.setWavingLeaves(value);
+					GpuFoliageRenderer.foliageListChanged();
+				})
+				.build();
+		// Centred across both columns, as the interaction's switch is: the box and its text are as wide as the text.
+		wavingLeavesBox.setX(cx - wavingLeavesBox.getWidth() / 2);
+		this.addRenderableWidget(wavingLeavesBox);
+		//?}
 		updateGpuOptions();
 		updatePreset();
 		//?}
@@ -455,6 +485,11 @@ public class FoliageConfigScreen extends Screen {
 		if (resetWavingIntensityBtn != null) {
 			resetWavingIntensityBtn.visible = wind && !FoliageSettings.isDefaultWavingIntensity();
 		}
+		//? >=26.3 {
+		if (wavingLeavesBox != null) {
+			wavingLeavesBox.visible = wind;
+		}
+		//?}
 	}
 
 	/**

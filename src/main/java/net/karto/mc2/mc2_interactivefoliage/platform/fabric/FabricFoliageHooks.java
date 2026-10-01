@@ -36,7 +36,7 @@ public final class FabricFoliageHooks {
 		//? >=1.21.11 {
 		ModelLoadingPlugin.register(context -> context.modifyBlockModelAfterBake().register(
 				ModelModifier.WRAP_LAST_PHASE,
-				(model, bake) -> GpuFoliageSplit.bends(bake.state().getBlock()) ? new GpuFoliageModel(model) : model));
+				(model, bake) -> GpuFoliageSplit.mayWave(bake.state().getBlock()) ? new GpuFoliageModel(model) : model));
 		//?} else {
 		/*// Before 1.21.11 a baked model is not told which block state it is for, only the id it was baked
 		// under. A block state's model is baked under the block's own id and the state's variant, so the
@@ -97,7 +97,7 @@ public final class FabricFoliageHooks {
 		if (id == null || ModelResourceLocation.INVENTORY_VARIANT.equals(id.variant())) {
 			return false;
 		}
-		return BuiltInRegistries.BLOCK.getOptional(id.id()).map(GpuFoliageSplit::bends).orElse(false);
+		return BuiltInRegistries.BLOCK.getOptional(id.id()).map(GpuFoliageSplit::mayWave).orElse(false);
 	}
 	*///?} elif <1.21.1 {
 	/*// Before 1.21.1 every baked model comes through here, the ones block states and items are built from as well, and
@@ -107,7 +107,7 @@ public final class FabricFoliageHooks {
 			return false;
 		}
 		return BuiltInRegistries.BLOCK.getOptional(new ResourceLocation(location.getNamespace(), location.getPath()))
-				.map(GpuFoliageSplit::bends).orElse(false);
+				.map(GpuFoliageSplit::mayWave).orElse(false);
 	}
 	*///?}
 }

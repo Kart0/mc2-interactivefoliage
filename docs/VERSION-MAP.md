@@ -58,7 +58,7 @@ Meshes the foliage near the player on its own and draws it with the sway on the 
   - Three draw paths by version: drawLegacy (<1.21.11), a pass of its own (1.21.11-26.2), prepare/draw split into vanilla's pass (26.3+).
   - Pitfall: It is one 3300-line file guarded per version; read the branch for the version you work on, not the first one you find.
   - Files: `gpu/GpuFoliageRenderer.java`
-  - Links: draws through draw-legacy; draws through draw-pass; draws through draw-split; owns near-area; is fed by split; uploads interaction; bakes shelter from wind; asks sodium-bridge; asks iris-compat; meshes the plant in the snow through srm-compat; stills calm sway through waving-blacklist
+  - Links: draws through draw-legacy; draws through draw-pass; draws through draw-split; owns near-area; is fed by split; uploads interaction; bakes shelter from wind; asks sodium-bridge; asks iris-compat; meshes the plant in the snow through srm-compat; stills calm sway through waving-blacklist; waves listed blocks through waving-whitelist
 - **Legacy draw** (<1.21.11): Before 1.21.11: a ShaderInstance loaded from JSON and VertexBuffers per region, drawn right away from the loader's render event.
   - Shader registered through CoreShaderRegistrationCallback (Fabric) or RegisterShadersEvent (NeoForge/Forge).
   - The frame hook hands over camera, frustum, model view and projection (legacy draw(Vec3, Frustum, Matrix4f, Matrix4f)).
@@ -99,7 +99,7 @@ Takes the near foliage out of the chunk mesh, and hands it back and forth withou
   - Meshers hand the model the position: Fabric's rendering API, NeoForge's model extensions, Forge's model data. Vanilla, Sodium 0.6+ and Embeddium all go through them.
   - Sodium's LevelSlice (WorldSlice before 0.6) is how a Sodium build is recognised.
   - Files: `gpu/GpuFoliageSplit.java`
-  - Links: wrapped as model-fabric; wrapped as model-neoforge; wrapped as model-forge; swaps through handover; asks isInteractive sway-api
+  - Links: wrapped as model-fabric; wrapped as model-neoforge; wrapped as model-forge; swaps through handover; asks isInteractive sway-api; wraps and withholds by waving-whitelist
 - **GpuFoliageModel (FRAPI)** (fabric): Fabric: wraps foliage models with ModelLoadingPlugin, outside Sway's wrapper, and withholds quads in emitQuads.
   - modifyModelAfterBake before 1.21.11 (block read from the model id), modifyBlockModelAfterBake from 1.21.11 (the state is handed over).
   - Files: `gpu/GpuFoliageModel.java`, `platform/fabric/FabricFoliageHooks.java`
@@ -143,14 +143,23 @@ What moves the plants: Sway's pushes, the calm sway, the rain wind and its shelt
 - **Settings & screen**: The mod's own config file next to Sway's, the two-column screen with presets, renderer (CPU/GPU), waving, weather wind and distance.
   - Pitfall: User-facing text goes through translation keys (the user translates). Update widgets in place, never rebuild the screen.
   - Files: `FoliageSettings.java`, `FoliageConfigScreen.java`, `platform/fabric/FabricModMenuIntegration.java`, `platform/fabric/FoliageKeyBindings.java`, `platform/neoforge/NeoforgeKeyBindings.java`, `platform/forge/ForgeKeyBindings.java`
-  - Links: configures renderer
+  - Links: configures renderer; switches the leaves of waving-whitelist
 - **ModCompatRegistry**: Registers third-party mods' plants with Sway (by id, skipped when the mod is absent), which also makes them GPU foliage.
   - Files: `ModCompatRegistry.java`
   - Links: registers blocks with sway-api
-- **WavingBlacklist**: Blocks the GPU renderer keeps from waving in calm weather (vines, glow lichen, carpets, lily pads, dripleaf, chorus...): chosen by the author, never the player, laid out like ModCompatRegistry with a section per mod, ids skipped when absent. The weather's wind still moves them and pushes still bend them.
+- **WavingBlacklist**: Blocks the GPU renderer keeps from waving in calm weather (glow lichen, carpets, lily pads, dripleaf, chorus...): chosen by the author, never the player, laid out like ModCompatRegistry with a section per mod, ids skipped when absent. The weather's wind still moves them and pushes still bend them.
   - Meshed as SwayWeights' still flag (anchor.still); sway.glsl multiplies only the calm sway by it (weights.w), so rain's wind is untouched. Snow! Real Magic's SNOW_LADEN_SWAY scales calm sway and wind alike, through the wave weight.
   - Files: `WavingBlacklist.java`
   - Links: read as weights.w by sway-glsl
+- **WavingWhitelist** (>=26.3): Blocks Sway does not bend that the GPU renderer still draws and waves, by group (vanilla and mods together): GENERAL (petals, wildflowers; always on, 2x a plant) and LEAVES (#minecraft:leaves; 0.20, waved as a field so touching leaves never part; the player's Waving Leaves checkbox). A follow-the-leaves list (vines) waves with the leaves only while they wave.
+  - Tags are read at bake time from every jar's data/<ns>/tags/block files (Platform.readAll; NeoForge 26.3 through ModList), since the world's tags arrive after the models are baked.
+  - GpuFoliageSplit.mayWave wraps listed blocks at bake whatever their group's state; waves/isFoliage decide at mesh time, so the checkbox only rebuilds the GPU area's sections (GpuFoliageRenderer.foliageListChanged, remesh on the MeshSwap).
+  - Field wave: constant weight, exposure 1, edge and rain fade measured at the vertex (SwayWeights' steady flag, which also keeps pushes from calming the sway).
+  - Followers (vines): a majority vote of what is behind each block decides; leaves win -> the whole vine moves with the leaves' field and its free-hanging part below the lowest held block gets a plant's sway at 1.0 (still+steady flags, the leaves' weight in the exposure bits); strands of 1-2 blocks get the field only; otherwise, or with waving leaves off, interaction only.
+  - Pitfall: Only 26.3 for now; listed()/followsLeaves() are false elsewhere until each version is hooked up.
+  - Pitfall: Fast leaves graphics: the GPU draws leaves as cutout, so they may look see-through next to the chunk's opaque fast leaves.
+  - Files: `WavingWhitelist.java`
+  - Links: read as the steady flag by sway-glsl
 
 ### Shaders
 
@@ -394,7 +403,7 @@ The Minecraft versions the mod is built for.
 - **1.21.11** (fabric, neoforge): GpuFoliageRenderer, Own render pass, Near area & regions, GpuFoliageSplit, GpuFoliageModel (FRAPI), NeoforgeFoliageModel, Mesh swap handover, Change tracking, Sway, GpuFoliageInteraction, SwayProximityForceMixin, Rain wind & shelter, Settings & screen, ModCompatRegistry, WavingBlacklist, sway.glsl, foliage.vsh/.fsh, Shader set per jar, Offline shader check, TerrainFoliageShader, Terrain Slabs, SodiumBridge, Sodium upload hook, SodiumFoliageShader, Sodium, IrisCompat, IrisFoliageShaders, Pack program injection, Pack shadow map, IrisVertexExtension, Iris, ShadowMapRendererMixin, Polytone, Snow! Real Magic, SnowRealMagicCompat, SnowShakeParticles, FabricFoliageHooks, NeoforgeFoliageHooks, Stonecutter, build-logic, Mixin configs, Access wideners, Dev-run traps, Fabric API
 - **26.1.2** (fabric, neoforge): GpuFoliageRenderer, Own render pass, Near area & regions, GpuFoliageSplit, GpuFoliageModel (FRAPI), NeoforgeFoliageModel, Mesh swap handover, Change tracking, Sway, GpuFoliageInteraction, SwayProximityForceMixin, Rain wind & shelter, Settings & screen, ModCompatRegistry, WavingBlacklist, sway.glsl, foliage.vsh/.fsh, Shader set per jar, Offline shader check, TerrainFoliageShader, Terrain Slabs, SodiumBridge, Sodium upload hook, SodiumFoliageShader, Sodium, IrisCompat, IrisFoliageShaders, Pack program injection, Pack shadow map, IrisVertexExtension, Iris, ShadowMapRendererMixin, Polytone, Snow! Real Magic, SnowRealMagicCompat, BlockGetterMixinPlugin, SnowShakeParticles, FabricFoliageHooks, NeoforgeFoliageHooks, Stonecutter, build-logic, Mixin configs, Access wideners, Dev-run traps, Fabric API
 - **26.2** (fabric, neoforge): GpuFoliageRenderer, Own render pass, Near area & regions, GpuFoliageSplit, GpuFoliageModel (FRAPI), NeoforgeFoliageModel, Mesh swap handover, Change tracking, Sway, GpuFoliageInteraction, SwayProximityForceMixin, Rain wind & shelter, Settings & screen, ModCompatRegistry, WavingBlacklist, sway.glsl, foliage.vsh/.fsh, Shader set per jar, Offline shader check, TerrainFoliageShader, Terrain Slabs, SodiumBridge, Sodium upload hook, SodiumFoliageShader, Sodium, IrisCompat, IrisFoliageShaders, Pack program injection, Pack shadow map, IrisVertexExtension, Iris, ShadowMapRendererMixin, Polytone, Snow! Real Magic, SnowRealMagicCompat, BlockGetterMixinPlugin, SnowShakeParticles, FabricFoliageHooks, NeoforgeFoliageHooks, Stonecutter, build-logic, Mixin configs, Access wideners, Dev-run traps, Fabric API
-- **26.3** (fabric, neoforge): GpuFoliageRenderer, Prepare / draw split, Near area & regions, GpuFoliageSplit, GpuFoliageModel (FRAPI), NeoforgeFoliageModel, Mesh swap handover, Change tracking, Sway, GpuFoliageInteraction, SwayProximityForceMixin, Rain wind & shelter, Settings & screen, ModCompatRegistry, WavingBlacklist, sway.glsl, foliage_modern, Shader set per jar, Offline shader check, TerrainFoliageShader, Terrain Slabs, SodiumBridge, Sodium upload hook, SodiumFoliageShader, Sodium, IrisCompat, IrisFoliageShaders, Pack program injection, Pack shadow map, IrisVertexExtension, Iris, Polytone, Snow! Real Magic, SnowRealMagicCompat, BlockGetterMixinPlugin, SnowShakeParticles, FabricFoliageHooks, NeoforgeFoliageHooks, LevelPassMixin, Stonecutter, build-logic, Mixin configs, Access wideners, Dev-run traps, Fabric API
+- **26.3** (fabric, neoforge): GpuFoliageRenderer, Prepare / draw split, Near area & regions, GpuFoliageSplit, GpuFoliageModel (FRAPI), NeoforgeFoliageModel, Mesh swap handover, Change tracking, Sway, GpuFoliageInteraction, SwayProximityForceMixin, Rain wind & shelter, Settings & screen, ModCompatRegistry, WavingBlacklist, WavingWhitelist, sway.glsl, foliage_modern, Shader set per jar, Offline shader check, TerrainFoliageShader, Terrain Slabs, SodiumBridge, Sodium upload hook, SodiumFoliageShader, Sodium, IrisCompat, IrisFoliageShaders, Pack program injection, Pack shadow map, IrisVertexExtension, Iris, Polytone, Snow! Real Magic, SnowRealMagicCompat, BlockGetterMixinPlugin, SnowShakeParticles, FabricFoliageHooks, NeoforgeFoliageHooks, LevelPassMixin, Stonecutter, build-logic, Mixin configs, Access wideners, Dev-run traps, Fabric API
 
 ## Mixin configs (read from the source tree)
 

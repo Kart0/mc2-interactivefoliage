@@ -54,7 +54,8 @@ public final class GpuFoliageModel extends WrapperBlockStateModel {
 	@Override
 	public void emitQuads(QuadEmitter emitter, BlockAndTintGetter level, BlockPos pos, BlockState state,
 			RandomSource random, Predicate<Direction> cullTest) {
-		if (GpuFoliageSplit.leaveToGpu(level, pos)) {
+		// A block whose whitelist group the player has switched off stays with the chunk mesh, wrapped or not.
+		if (GpuFoliageSplit.isFoliage(state) && GpuFoliageSplit.leaveToGpu(level, pos)) {
 			return;
 		}
 		super.emitQuads(emitter, level, pos, state, random, cullTest);

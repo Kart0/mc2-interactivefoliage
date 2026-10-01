@@ -61,7 +61,8 @@ public final class NeoforgeFoliageModel implements BlockStateModel {
 	@Override
 	public void collectParts(BlockAndTintGetter level, BlockPos pos, BlockState state, RandomSource random,
 			List<BlockStateModelPart> parts) {
-		if (GpuFoliageSplit.leaveToGpu(level, pos)) {
+		// A block whose whitelist group the player has switched off stays with the chunk mesh, wrapped or not.
+		if (GpuFoliageSplit.isFoliage(state) && GpuFoliageSplit.leaveToGpu(level, pos)) {
 			return;
 		}
 		// Snow! Real Magic picks a part's snowy variant only as it is drawn through its own emitter, and Sway, which

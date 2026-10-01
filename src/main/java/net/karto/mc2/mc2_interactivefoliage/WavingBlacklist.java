@@ -49,9 +49,9 @@ public final class WavingBlacklist {
 	// ------------------------------------------------------------------
 
 	private static void vanilla() {
-		// Clinging to walls and ceilings.
+		// Clinging to walls and ceilings. Vines are not here: they follow the leaves they hang on, see
+		// WavingWhitelist.followLeaves().
 		add(
-				"minecraft:vine",
 				"minecraft:glow_lichen"
 		);
 		// Lying flat on the ground or on water.
@@ -74,8 +74,8 @@ public final class WavingBlacklist {
 	// ------------------------------------------------------------------
 
 	private static void biomesOPlenty() {
+		// Willow vines follow the leaves they hang on, see WavingWhitelist.followLeaves().
 		add(
-				"biomesoplenty:willow_vine"
 		);
 	}
 

@@ -98,6 +98,7 @@ import com.mojang.blaze3d.vertex.VertexFormatElement;
 import net.karto.mc2.mc2_interactivefoliage.FoliageSettings;
 import net.karto.mc2.mc2_interactivefoliage.ModTemplate;
 import net.karto.mc2.mc2_interactivefoliage.WavingBlacklist;
+import net.karto.mc2.mc2_interactivefoliage.WavingWhitelist;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
 //? >=26.2 {
@@ -139,12 +140,15 @@ import net.minecraft.client.renderer.texture.AbstractTexture;
 import net.minecraft.client.renderer.texture.TextureAtlas;
 //?}
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.core.SectionPos;
 import net.minecraft.util.Mth;
 //? >=1.21.11 {
 import net.minecraft.resources.Identifier;
 //?}
+import net.minecraft.world.level.block.PipeBlock;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.block.state.properties.BooleanProperty;
 import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.level.chunk.LevelChunkSection;
 //? >=1.21.1 {
@@ -275,6 +279,8 @@ public final class GpuFoliageRenderer {
 	private static final float COLUMN_CURVE_BLOCKS = 2.0F;
 	/** How much further a strand that has taken on the curve sways and leans, eased in along with the curve. */
 	private static final float LONG_STRAND_SWAY = 2.0F;
+	/** A strand hanging on leaves this long or shorter only moves as the leaves do; see SwayAnchor.hangOnLeaves. */
+	private static final int SHORT_HANGING_STRAND = 2;
 
 	/**
 	 * How much of its sway a column loses per block of length, and how far that can go: a strand of
@@ -629,7 +635,7 @@ public final class GpuFoliageRenderer {
 	 * numbers.
 	 */
 	private static final float WEIGHT_SCALE = 1023.0F;
-	private static final float PUSH_SCALE = 511.0F;
+	private static final float PUSH_SCALE = 255.0F;
 	private static final float EXPOSURE_SCALE = 15.0F;
 
 	/**
@@ -644,14 +650,15 @@ public final class GpuFoliageRenderer {
 	}
 
 	/**
-	 * The wind weight, the push weight, whether the plant stands still in calm weather, and how much of rain's wind
-	 * reaches the plant, as one float: ten bits, nine, one and four. The weights are between 0 and 1.
+	 * The wind weight, the push weight, whether the plant stands still in calm weather, whether it keeps its sway while
+	 * pushed (a field, or what follows the leaves), and how much of rain's wind reaches the plant, as one float: ten
+	 * bits, eight, one, one and four. The weights are between 0 and 1.
 	 */
-	private static float packWeights(float wave, float push, boolean still, float exposure) {
+	private static float packWeights(float wave, float push, boolean still, boolean steady, float exposure) {
 		int w = Math.round(Mth.clamp(wave, 0.0F, 1.0F) * WEIGHT_SCALE);
 		int p = Math.round(Mth.clamp(push, 0.0F, 1.0F) * PUSH_SCALE);
 		int e = Math.round(Mth.clamp(exposure, 0.0F, 1.0F) * EXPOSURE_SCALE);
-		return ((w * 512 + p) * 2 + (still ? 1 : 0)) * 16 + e;
+		return (((w * 256 + p) * 2 + (still ? 1 : 0)) * 2 + (steady ? 1 : 0)) * 16 + e;
 	}
 	private static final int INITIAL_SCRATCH_QUADS = 1024;
 
@@ -1030,6 +1037,13 @@ public final class GpuFoliageRenderer {
 	private static final class SwayAnchor {
 		/** Column length is shared by every block of a strand, so it is resolved once per anchor. */
 		private final Map<BlockPos, Integer> lengthByAnchor = new HashMap<>();
+		/** Whether a strand starts on leaves, where its free part starts and how long it is, by anchor; see hangOnLeaves. */
+		private final Map<BlockPos, float[]> freeByAnchor = new HashMap<>();
+		/** Whether this is a block hanging on leaves while they wave; see hangOnLeaves. */
+		private boolean hangsOnLeaves;
+		/** Where its free part starts, and how many blocks long it is: none for a strand held all the way down. */
+		private float freeTop;
+		private int freeLength;
 
 		private float anchorY;
 		/** The anchor block, where Sway keeps the force for the whole plant. */
@@ -1037,18 +1051,25 @@ public final class GpuFoliageRenderer {
 		private int cellY;
 		private int cellZ;
 		private boolean hanging;
-		private float damping = 1.0F;
 		/** How many blocks tall the plant stands, from its anchor. */
 		private int length = 1;
 		/** How much of rain's wind reaches the plant; see WindShelter. Set once the anchor is prepared. */
 		private float exposure = 1.0F;
 		/**
-		 * How much of its sway the plant keeps, wind included: all of it, or SNOW_LADEN_SWAY for a plant weighed down by
-		 * Snow! Real Magic's snow. A push moves it as far as any other.
+		 * How much of its sway the plant keeps, wind included: all of it, SNOW_LADEN_SWAY for a plant weighed down by
+		 * Snow! Real Magic's snow, or more for a block of the waving whitelist, as its group says. The weight it scales
+		 * never passes a plant's tip. A push moves it as far as any other.
 		 */
 		private float waving = 1.0F;
 		/** Whether the plant stands still in calm weather: a block on the waving blacklist. The weather's wind moves it. */
 		private boolean still;
+		/**
+		 * Whether the block waves as a field, as a tree's leaves do: every vertex as far, by where it is in the world, so
+		 * blocks that touch move together. Nothing pushes it, and the wind reaches it wherever it is.
+		 */
+		private boolean field;
+		/** Whether a push leaves the plant's sway as it is: a field, and what follows the leaves while they wave. */
+		private boolean steady;
 		/** Sway's own deformation for this plant, which decides how far a push moves each vertex. */
 		private DeformationContributor deformation;
 		private float deformationScale;
@@ -1090,7 +1111,6 @@ public final class GpuFoliageRenderer {
 			cellY = anchor.getY();
 			cellZ = anchor.getZ();
 			length = multiblock == null ? 1 : lengthOf(multiblock, anchor, level);
-			damping = 1.0F - Math.min(MAX_LENGTH_DAMPING, (length - 1) * LENGTH_DAMPING_PER_BLOCK);
 		}
 
 		/**
@@ -1133,11 +1153,139 @@ public final class GpuFoliageRenderer {
 		 */
 		float weightAt(float worldY) {
 			float distance = hanging ? anchorY - worldY : worldY - anchorY;
+			return curveAt(distance, length, hanging);
+		}
+
+		/** The sway's weight this far along a strand this long, from where it is held; see weightAt. */
+		private static float curveAt(float distance, int length, boolean hanging) {
 			float along = Mth.clamp(distance / Math.max(SWAY_SPAN, length), 0.0F, 1.0F);
 			float curving = Mth.clamp((length - SWAY_SPAN) / COLUMN_CURVE_BLOCKS, 0.0F, 1.0F);
 			float eased = curving * curving * (3.0F - 2.0F * curving);
 			float exponent = Mth.lerp(eased, 1.0F, hanging ? HANGING_CURVE : STALK_CURVE);
+			float damping = 1.0F - Math.min(MAX_LENGTH_DAMPING, (length - 1) * LENGTH_DAMPING_PER_BLOCK);
 			return (float) Math.pow(along, exponent) * damping * Mth.lerp(eased, 1.0F, LONG_STRAND_SWAY);
+		}
+
+		/**
+		 * How freely a vertex at this height sways, as meshed: a field waves the same all over, and a block hanging on
+		 * leaves sways as a plant only where it hangs free.
+		 */
+		float waveAt(float worldY) {
+			if (field) {
+				return waving;
+			}
+			if (hangsOnLeaves) {
+				return freeLength == 0 ? 0.0F : curveAt(freeTop - worldY, freeLength, true) * waving;
+			}
+			return weightAt(worldY) * waving;
+		}
+
+		/** How far a push moves a vertex at this height, as meshed: Sway's own weight, none for a block Sway does not push. */
+		float pushAt(float localY) {
+			return pushWeightAt(localY);
+		}
+
+		/**
+		 * Whether this strand hangs on leaves, and where it hangs free; false for one that clings mostly to anything else
+		 * -- a trunk, a wall -- which stands still, as its support does, and would cut through it if it moved as the leaves.
+		 * <p>
+		 * The blocks behind it decide: leaves behind more of its blocks than anything else, and it moves as they do; else it
+		 * stands still. One with nothing behind any block -- hanging free from the underside of a canopy -- goes by what is
+		 * above its top. One that moves as the leaves also sways as a plant where it hangs free: from its lowest block with
+		 * something behind it down to its tip, from that block down. Where something is behind it, it moves as the leaves
+		 * alone. A strand of one or two blocks only moves as the leaves. Worked out once per strand, each time its section
+		 * is meshed.
+		 */
+		boolean hangOnLeaves(ClientLevel level) {
+			hangsOnLeaves = false;
+			freeLength = 0;
+			if (!hanging) {
+				return false;
+			}
+			BlockPos anchor = new BlockPos(cellX, cellY, cellZ);
+			float[] known = freeByAnchor.get(anchor);
+			if (known == null) {
+				known = measureHang(level, anchor);
+				freeByAnchor.put(anchor, known);
+			}
+			if (known[0] == 0.0F) {
+				return false;
+			}
+			hangsOnLeaves = true;
+			freeTop = known[1];
+			freeLength = (int) known[2];
+			return true;
+		}
+
+		/** Whether the strand hangs on leaves (1 or 0), the top of its free part and how long it is; see hangOnLeaves. */
+		private float[] measureHang(ClientLevel level, BlockPos anchor) {
+			int tipY = cellY - length + 1;
+			BlockPos.MutableBlockPos at = new BlockPos.MutableBlockPos();
+			int onLeaves = 0;
+			int onOther = 0;
+			// The lowest block with something behind it: everything below it hangs free.
+			int heldY = cellY + 1;
+			for (int y = cellY; y >= tipY; y--) {
+				at.set(cellX, y, cellZ);
+				int behind = behind(level, at, level.getBlockState(at));
+				if (behind == BEHIND_LEAVES) {
+					onLeaves++;
+				} else if (behind == BEHIND_OTHER) {
+					onOther++;
+				}
+				if (behind != BEHIND_NOTHING) {
+					heldY = y;
+				}
+			}
+			boolean leaves = onLeaves + onOther == 0
+					? WavingWhitelist.isLeaves(level.getBlockState(anchor.above()).getBlock())
+					: onLeaves > onOther;
+			if (!leaves) {
+				return new float[] {0.0F, 0.0F, 0.0F};
+			}
+			if (length <= SHORT_HANGING_STRAND) {
+				return new float[] {1.0F, 0.0F, 0.0F};
+			}
+			// Nothing behind any of it: it hangs free from its anchor, as any hanging plant.
+			return heldY > cellY ? new float[] {1.0F, anchorY, length} : new float[] {1.0F, heldY, heldY - tipY};
+		}
+
+		private static final int BEHIND_NOTHING = 0;
+		private static final int BEHIND_LEAVES = 1;
+		private static final int BEHIND_OTHER = 2;
+
+		/**
+		 * What is behind this block of a strand, on a side it clings to, or any side for one that clings to none: leaves
+		 * where any of those sides has them, anything else, or nothing.
+		 */
+		private static int behind(ClientLevel level, BlockPos pos, BlockState state) {
+			boolean clings = false;
+			int found = BEHIND_NOTHING;
+			for (Direction side : Direction.Plane.HORIZONTAL) {
+				BooleanProperty face = PipeBlock.PROPERTY_BY_DIRECTION.get(side);
+				if (state.hasProperty(face) && state.getValue(face)) {
+					clings = true;
+					found = Math.max(found, supportAt(level, pos.relative(side)));
+				}
+			}
+			if (!clings) {
+				for (Direction side : Direction.Plane.HORIZONTAL) {
+					found = Math.max(found, supportAt(level, pos.relative(side)));
+				}
+			}
+			// Leaves on any side outweigh anything else on another.
+			return found == BEHIND_LEAVES_RANK ? BEHIND_LEAVES : found;
+		}
+
+		/** Ranks what is at a position for behind(): leaves above anything else, anything above nothing. */
+		private static final int BEHIND_LEAVES_RANK = 3;
+
+		private static int supportAt(ClientLevel level, BlockPos pos) {
+			BlockState state = level.getBlockState(pos);
+			if (state.isAir()) {
+				return BEHIND_NOTHING;
+			}
+			return WavingWhitelist.isLeaves(state.getBlock()) ? BEHIND_LEAVES_RANK : BEHIND_OTHER;
 		}
 	}
 
@@ -1514,6 +1662,8 @@ public final class GpuFoliageRenderer {
 		// GpuFoliageSplit.NEEDS_REBUILD for why only once the build is in place.
 		GpuFoliageSplit.forEachRebuildDue(key ->
 				rebuildChunkMesh(minecraft, SectionPos.x(key), SectionPos.y(key), SectionPos.z(key)));
+		// Sections whose foliage changed hands with a whitelist group, their chunk mesh now in place.
+		GpuFoliageSplit.forEachRemeshDue(DIRTY::add);
 		if (reseedPending && minecraft.player != null) {
 			reseedPending = false;
 			reseedLoadedChunks(minecraft, minecraft.level);
@@ -2707,6 +2857,52 @@ public final class GpuFoliageRenderer {
 		discardAll();
 	}
 
+	/**
+	 * A whitelist group was switched on or off: its blocks change hands, the chunk mesh's or the renderer's, in the near
+	 * sections only -- further out the chunk mesh draws them either way, and nothing there has to be built again.
+	 * <p>
+	 * A section the renderer draws has its chunk mesh built again first, and is meshed again by the renderer as soon as
+	 * that mesh is on screen. A section it does not draw yet -- leaves and nothing else -- is queued like any new one,
+	 * and taken over the usual way once meshed.
+	 */
+	public static void foliageListChanged() {
+		GpuFoliageSplit.foliageChanged();
+		Minecraft minecraft = Minecraft.getInstance();
+		ClientLevel level = minecraft.level;
+		if (!active || level == null || !GpuFoliageSplit.hasArea()) {
+			return;
+		}
+		int centreX = GpuFoliageSplit.centreX();
+		int centreZ = GpuFoliageSplit.centreZ();
+		int radius = GpuFoliageSplit.radius();
+		for (int chunkX = centreX - radius; chunkX <= centreX + radius; chunkX++) {
+			for (int chunkZ = centreZ - radius; chunkZ <= centreZ + radius; chunkZ++) {
+				LevelChunk chunk = level.getChunkSource().getChunk(chunkX, chunkZ, ChunkStatus.FULL, false);
+				if (chunk == null || !GpuFoliageSplit.isNear(chunkX, chunkZ)) {
+					continue;
+				}
+				LevelChunkSection[] sections = chunk.getSections();
+				for (int index = 0; index < sections.length; index++) {
+					int sectionY = level.getSectionYFromSectionIndex(index);
+					long key = SectionPos.asLong(chunkX, sectionY, chunkZ);
+					if (!sections[index].maybeHas(state -> WavingWhitelist.listed(state.getBlock()))) {
+						// Blocks that follow the leaves stay the renderer's either way, only waving differently.
+						if (sections[index].maybeHas(state -> WavingWhitelist.followsLeaves(state.getBlock()))) {
+							markIfHeld(key);
+						}
+						continue;
+					}
+					if (GpuFoliageSplit.isGpuReady(key)) {
+						rebuildChunkMesh(minecraft, chunkX, sectionY, chunkZ);
+						GpuFoliageSplit.remeshOnSwap(key);
+					} else {
+						DIRTY.add(key);
+					}
+				}
+			}
+		}
+	}
+
 	/** Has the chunk mesher mesh again every section of a column that could hold foliage. */
 	/**
 	 * Asks for a section's chunk mesh to be built again, by whichever route is in charge: vanilla's own, or
@@ -2862,8 +3058,8 @@ public final class GpuFoliageRenderer {
 			weightScratch.putFloat(packCell(anchor.cellX - regionOrigin.getX(),
 					anchor.cellY - regionOrigin.getY(),
 					anchor.cellZ - regionOrigin.getZ()));
-			weightScratch.putFloat(packWeights(anchor.weightAt(regionOrigin.getY() + y) * anchor.waving,
-					anchor.pushWeightAt(localY), anchor.still, anchor.exposure));
+			weightScratch.putFloat(packWeights(anchor.waveAt(regionOrigin.getY() + y), anchor.pushAt(localY),
+					anchor.still, anchor.steady, anchor.exposure));
 			return this;
 		}
 
@@ -2943,8 +3139,8 @@ public final class GpuFoliageRenderer {
 			weightScratch.putFloat(packCell(anchor.cellX - regionOrigin.getX(),
 					anchor.cellY - regionOrigin.getY(),
 					anchor.cellZ - regionOrigin.getZ()));
-			weightScratch.putFloat(packWeights(anchor.weightAt(regionOrigin.getY() + y) * anchor.waving,
-					anchor.pushWeightAt(localY), anchor.still, anchor.exposure));
+			weightScratch.putFloat(packWeights(anchor.waveAt(regionOrigin.getY() + y), anchor.pushAt(localY),
+					anchor.still, anchor.steady, anchor.exposure));
 		}
 
 		@Override
@@ -3157,8 +3353,8 @@ public final class GpuFoliageRenderer {
 				float localY = quad.position(vertex).y();
 				float worldY = regionOrigin.getY() + y + localY;
 				weightScratch.putFloat(cell);
-				weightScratch.putFloat(packWeights(anchor.weightAt(worldY) * anchor.waving, anchor.pushWeightAt(localY),
-						anchor.still, anchor.exposure));
+				weightScratch.putFloat(packWeights(anchor.waveAt(worldY), anchor.pushAt(localY), anchor.still,
+						anchor.steady, anchor.exposure));
 			}
 		};
 
@@ -3207,6 +3403,32 @@ public final class GpuFoliageRenderer {
 					// A plant under Snow! Real Magic's snow -- held in it, or the top half of one that is -- is weighed
 					// down, in calm weather and in the wind alike. Either still bends as far as any other when pushed.
 					anchor.waving = inSnow || SnowRealMagicCompat.standsOnSnow(level, pos, state) ? SNOW_LADEN_SWAY : 1.0F;
+					// A block of the waving whitelist waves as hard as its group says, and leaves as a field, which the wind
+					// reaches wherever it is so that neighbouring blocks never part.
+					anchor.waving *= WavingWhitelist.intensityOf(state.getBlock());
+					anchor.field = WavingWhitelist.wavesAsField(state.getBlock());
+					anchor.steady = anchor.field;
+					if (anchor.field) {
+						anchor.exposure = 1.0F;
+					}
+					// A block that follows the leaves -- a vine -- only waves while they do. It then moves as the leaves it
+					// hangs on do, all over, and sways as the plant it is on top of that, from where it hangs: marked still
+					// and steady at once, which nothing else is, with the leaves' own weight where the wind's reach would go
+					// (the wind reaches it wherever it is, as it does the leaves). A push never calms it, so it keeps with
+					// them. While the leaves stand still it neither sways nor moves in the wind; pushes bend it either way.
+					anchor.hangsOnLeaves = false;
+					if (WavingWhitelist.followsLeaves(state.getBlock())) {
+						// Only while the leaves wave, and only a strand that starts on them.
+						if (FoliageSettings.wavingLeaves() && anchor.hangOnLeaves(level)) {
+							anchor.still = true;
+							anchor.steady = true;
+							anchor.exposure = WavingWhitelist.leavesIntensity();
+						} else {
+							anchor.waving = 0.0F;
+							anchor.still = false;
+							anchor.steady = false;
+						}
+					}
 					// Another mod may draw the plant lower than its block, as the chunk mesh shows it.
 					float lift = TerrainSlabsCompat.offsetY(level, pos, state) + raised;
 					//? iris {
