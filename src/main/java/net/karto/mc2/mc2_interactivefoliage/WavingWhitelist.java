@@ -32,7 +32,7 @@ import java.util.Set;
  * and every mod's together, so a group can be switched on or off as a whole. A block of a mod that is not installed, or
  * of a version that does not have it, is skipped. Tags get their own section, apart from the blocks named one by one.
  * <p>
- * Only 1.21.11 and later draw these for now; everywhere else the list stays empty until its version is hooked up.
+ * Only 1.21.1 and later draw these for now; everywhere else the list stays empty until its version is hooked up.
  */
 public final class WavingWhitelist {
 
@@ -91,7 +91,7 @@ public final class WavingWhitelist {
 	 * without baking them again.
 	 */
 	public static boolean listed(Block block) {
-		//? >=1.21.11 {
+		//? >=1.21.1 {
 		if (!resolved) {
 			resolve();
 		}
@@ -101,7 +101,7 @@ public final class WavingWhitelist {
 		*///?}
 	}
 
-	//? >=1.21.11 {
+	//? >=1.21.1 {
 	private static synchronized void resolve() {
 		if (resolved) {
 			return;
@@ -133,7 +133,7 @@ public final class WavingWhitelist {
 
 	/** Whether this block follows the leaves: waves as hard as they do while they wave, and not at all else. */
 	public static boolean followsLeaves(Block block) {
-		//? >=1.21.11 {
+		//? >=1.21.1 {
 		if (!resolved) {
 			resolve();
 		}
@@ -163,6 +163,7 @@ public final class WavingWhitelist {
 		add(Group.GENERAL,
 				"biomesoplenty:white_petals",
 				"biomesoplenty:purple_wildflowers",
+				"biomesoplenty:wildflower",
 				"biomesoplenty:clover",
 				"biomesoplenty:huge_clover_petal"
 

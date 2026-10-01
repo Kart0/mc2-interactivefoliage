@@ -169,7 +169,8 @@ public final class NeoforgeFoliageModel extends BakedModelWrapper<BakedModel> {
 	// draws it (see SnowRenderApiMixin), at the snow's position either way.
 	@Override
 	public ModelData getModelData(BlockAndTintGetter level, BlockPos pos, BlockState state, ModelData modelData) {
-		if (GpuFoliageSplit.leaveToGpu(level, pos)) {
+		// A block whose whitelist group the player has switched off stays with the chunk mesh, wrapped or not.
+		if (GpuFoliageSplit.isFoliage(state) && GpuFoliageSplit.leaveToGpu(level, pos)) {
 			return modelData.derive().with(LEFT_TO_GPU, Boolean.TRUE).build();
 		}
 		ModelData data = super.getModelData(level, pos, state, modelData);

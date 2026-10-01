@@ -283,7 +283,7 @@
    "fileInfo": {
     "gpu/GpuFoliageModel.java": {
      "kind": "java",
-     "lines": 92,
+     "lines": 93,
      "guard": "//? fabric {"
     },
     "platform/fabric/FabricFoliageHooks.java": {
@@ -312,7 +312,7 @@
    "fileInfo": {
     "platform/neoforge/NeoforgeFoliageModel.java": {
      "kind": "java",
-     "lines": 216,
+     "lines": 217,
      "guard": "//? neoforge && >=1.21.1 {"
     },
     "platform/neoforge/NeoforgeFoliageHooks.java": {
@@ -508,7 +508,7 @@
     "FoliageConfigScreen.java": {
      "kind": "java",
      "lines": 718,
-     "guard": "//? >=1.21.11 {"
+     "guard": "//? >=1.21.1 {"
     },
     "platform/fabric/FabricModMenuIntegration.java": {
      "kind": "java",
@@ -575,7 +575,7 @@
    "group": "motion",
    "kind": "component",
    "versions": [
-    ">=1.21.11"
+    ">=1.21.1"
    ],
    "files": [
     "WavingWhitelist.java"
@@ -591,13 +591,13 @@
     "Any other plant Sway hangs (pale hanging moss, cave vines, BOP's mosses...) follows the leaves the same way while it literally hangs from them (the block above its top), and is a plain plant otherwise."
    ],
    "pitfalls": [
-    "Only 1.21.11 and later for now; listed()/followsLeaves() are false elsewhere until each version is hooked up.",
+    "Only 1.21.1 and later for now; listed()/followsLeaves() are false elsewhere until each version is hooked up.",
     "Fast leaves graphics: the GPU draws leaves as cutout, so they may look see-through next to the chunk's opaque fast leaves."
    ],
    "fileInfo": {
     "WavingWhitelist.java": {
      "kind": "java",
-     "lines": 289,
+     "lines": 290,
      "guard": "//? >=1.21.11 {"
     }
    }
@@ -1252,7 +1252,7 @@
     },
     "platform/neoforge/NeoforgeFoliageModel.java": {
      "kind": "java",
-     "lines": 216,
+     "lines": 217,
      "guard": "//? neoforge && >=1.21.1 {"
     }
    }
@@ -1414,7 +1414,7 @@
     },
     "platform/neoforge/NeoforgePlatform.java": {
      "kind": "java",
-     "lines": 47,
+     "lines": 54,
      "guard": "//? neoforge {"
     }
    }
@@ -2443,7 +2443,7 @@
   "FoliageConfigScreen.java": {
    "kind": "java",
    "lines": 718,
-   "guard": "//? >=1.21.11 {"
+   "guard": "//? >=1.21.1 {"
   },
   "FoliageSettings.java": {
    "kind": "java",
@@ -2457,7 +2457,7 @@
   },
   "gpu/GpuFoliageModel.java": {
    "kind": "java",
-   "lines": 92,
+   "lines": 93,
    "guard": "//? fabric {"
   },
   "gpu/GpuFoliageRenderer.java": {
@@ -2717,7 +2717,7 @@
   },
   "platform/neoforge/NeoforgeFoliageModel.java": {
    "kind": "java",
-   "lines": 216,
+   "lines": 217,
    "guard": "//? neoforge && >=1.21.1 {"
   },
   "platform/neoforge/NeoforgeKeyBindings.java": {
@@ -2727,7 +2727,7 @@
   },
   "platform/neoforge/NeoforgePlatform.java": {
    "kind": "java",
-   "lines": 47,
+   "lines": 54,
    "guard": "//? neoforge {"
   },
   "platform/Platform.java": {
@@ -2742,7 +2742,7 @@
   },
   "WavingWhitelist.java": {
    "kind": "java",
-   "lines": 289,
+   "lines": 290,
    "guard": "//? >=1.21.11 {"
   },
   "shaders/core/foliage.fsh": {
