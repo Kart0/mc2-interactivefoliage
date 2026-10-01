@@ -171,9 +171,58 @@ public final class WavingWhitelist {
 		//? >=1.21.11 {
 		return net.minecraft.client.Minecraft.getInstance().options.cutoutLeaves().get();
 		//?} else {
-		/*return net.minecraft.client.Minecraft.useFancyGraphics();
+		/*// Sodium and Embeddium have leaves of their own, Default, Fancy or Fast, which decide over the graphics setting.
+		Boolean sodium = sodiumFancyLeaves();
+		return sodium != null ? sodium : net.minecraft.client.Minecraft.useFancyGraphics();
 		*///?}
 	}
+
+	//? <1.21.11 {
+	/*/^* Where Sodium keeps its leaves quality: its options, their quality settings, the leaves' and how it is asked. ^/
+	private static boolean sodiumSought;
+	private static java.lang.reflect.Method sodiumOptions;
+	private static java.lang.reflect.Field sodiumQuality;
+	private static java.lang.reflect.Field sodiumLeaves;
+	private static java.lang.reflect.Method sodiumIsFancy;
+
+	/^*
+	 * Whether Sodium (or Embeddium, which keeps Sodium's names) draws leaves Fancy, its own setting read against the
+	 * graphics setting as Sodium reads it; null without either, or where it is not where it is looked for.
+	 ^/
+	private static Boolean sodiumFancyLeaves() {
+		if (!sodiumSought) {
+			sodiumSought = true;
+			for (String name : new String[] {"net.caffeinemc.mods.sodium.client.SodiumClientMod",
+					"me.jellysquid.mods.sodium.client.SodiumClientMod"}) {
+				try {
+					Class<?> mod = Class.forName(name, false, WavingWhitelist.class.getClassLoader());
+					java.lang.reflect.Method options = mod.getMethod("options");
+					java.lang.reflect.Field quality = options.getReturnType().getField("quality");
+					java.lang.reflect.Field leaves = quality.getType().getField("leavesQuality");
+					java.lang.reflect.Method isFancy = leaves.getType().getMethod("isFancy",
+							net.minecraft.client.GraphicsStatus.class);
+					sodiumOptions = options;
+					sodiumQuality = quality;
+					sodiumLeaves = leaves;
+					sodiumIsFancy = isFancy;
+					break;
+				} catch (ReflectiveOperationException | LinkageError e) {
+					// Not this one.
+				}
+			}
+		}
+		if (sodiumIsFancy == null) {
+			return null;
+		}
+		try {
+			Object leaves = sodiumLeaves.get(sodiumQuality.get(sodiumOptions.invoke(null)));
+			return (Boolean) sodiumIsFancy.invoke(leaves,
+					net.minecraft.client.Minecraft.getInstance().options.graphicsMode().get());
+		} catch (ReflectiveOperationException | RuntimeException e) {
+			return null;
+		}
+	}
+	*///?}
 
 	/**
 	 * Follows the game's leaves, Fancy or Fast, once a frame; returns whether that changed, and with it which leaves
