@@ -82,6 +82,11 @@ final class WindShelter {
 	 * and states are few. Only read and written while meshing, on the render thread.
 	 */
 	private static final Reference2ByteOpenHashMap<BlockState> COVERAGE = new Reference2ByteOpenHashMap<>();
+	/** In {@link #SIDES}: the block stands solid seen along X, and seen along Z. */
+	private static final byte SOLID_ALONG_X = 1;
+	private static final byte SOLID_ALONG_Z = 2;
+	/** Whether each block state stands solid on its sides, as a wall does, seen along each horizontal axis; see isSolidSide. */
+	private static final Reference2ByteOpenHashMap<BlockState> SIDES = new Reference2ByteOpenHashMap<>();
 	/** The ids in the settings' wind walls, as last read; see {@link #isWindWall}. */
 	private static List<String> windWallIds = List.of();
 	private static Set<Block> windWalls = Set.of();
@@ -250,6 +255,30 @@ final class WindShelter {
 	}
 
 	/**
+	 * Whether this block stands solid on its sides seen along this horizontal axis, as a wall the wind cannot blow
+	 * through does: the same test walls pass, from whichever side. A torch, a fence, a slab or another plant does not.
+	 * Measured once per state, on the render thread, while meshing.
+	 */
+	static boolean isSolidSide(ClientLevel level, BlockPos pos, BlockState state, Direction.Axis axis) {
+		byte sides;
+		if (SIDES.containsKey(state)) {
+			sides = SIDES.getByte(state);
+		} else {
+			sides = 0;
+			if (!state.isAir() && !state.getCollisionShape(level, pos).isEmpty()
+					&& !(isOpenWork(state.getBlock()) && !windWalls.contains(state.getBlock()))) {
+				VoxelShape shape = state.getShape(level, pos);
+				if (!shape.isEmpty()) {
+					sides = (byte) ((covered(shape, Direction.Axis.X) >= WALL_COVERAGE ? SOLID_ALONG_X : 0)
+							| (covered(shape, Direction.Axis.Z) >= WALL_COVERAGE ? SOLID_ALONG_Z : 0));
+				}
+			}
+			SIDES.put(state, sides);
+		}
+		return (sides & (axis == Direction.Axis.X ? SOLID_ALONG_X : SOLID_ALONG_Z)) != 0;
+	}
+
+	/**
 	 * What a block state does for the wind, from the outline it shows: it stops the wind if, seen from the east, it
 	 * covers WALL_COVERAGE of its face, and covers what is below if it does as much seen from above. Fences, fence gates
 	 * and bars never stop it -- the wind goes through their gaps, which their outline does not show -- unless the
@@ -290,6 +319,7 @@ final class WindShelter {
 		windWallIds = List.copyOf(ids);
 		windWalls = blocks;
 		COVERAGE.clear();
+		SIDES.clear();
 	}
 
 	/**

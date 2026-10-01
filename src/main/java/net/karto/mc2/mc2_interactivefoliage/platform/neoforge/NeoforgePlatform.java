@@ -22,7 +22,7 @@ public class NeoforgePlatform implements Platform {
 		return ModLoader.NEOFORGE;
 	}
 
-	//? >=26.3 {
+	//? >=26.2 {
 	/^*
 	 * Every mod file's own copy, Minecraft's among them: the mods are modules here, and a file in a module is not found
 	 * through the class loader unless the module opens its folder.

@@ -3,7 +3,7 @@ package net.karto.mc2.mc2_interactivefoliage;
 import com.github.razorplay01.sway.config.SwayConfig;
 import net.minecraft.client.gui.components.AbstractSliderButton;
 import net.minecraft.client.gui.components.Button;
-//? >=26.3 {
+//? >=26.2 {
 import net.minecraft.client.gui.components.Checkbox;
 import net.karto.mc2.mc2_interactivefoliage.gpu.GpuFoliageRenderer;
 //?}
@@ -49,7 +49,7 @@ public class FoliageConfigScreen extends Screen {
 	private WavingIntensitySlider wavingIntensitySlider;
 	private Button resetWavingIntensityBtn;
 	//?}
-	//? >=26.3 {
+	//? >=26.2 {
 	private Checkbox wavingLeavesBox;
 	//?}
 
@@ -86,7 +86,7 @@ public class FoliageConfigScreen extends Screen {
 		rows += 4;
 		extra += 10;
 		//?}
-		//? >=26.3 {
+		//? >=26.2 {
 		// The leaves' checkbox, under the wind.
 		rows += 1;
 		//?}
@@ -250,7 +250,7 @@ public class FoliageConfigScreen extends Screen {
 		).bounds(right + sliderWidth + RESET_GAP, y, RESET_WIDTH, 20).build();
 		this.addRenderableWidget(resetWavingIntensityBtn);
 
-		//? >=26.3 {
+		//? >=26.2 {
 		y += spacing;
 
 		// ── Whether leaves wave too, with the wind ──────────────────────────────
@@ -485,7 +485,7 @@ public class FoliageConfigScreen extends Screen {
 		if (resetWavingIntensityBtn != null) {
 			resetWavingIntensityBtn.visible = wind && !FoliageSettings.isDefaultWavingIntensity();
 		}
-		//? >=26.3 {
+		//? >=26.2 {
 		if (wavingLeavesBox != null) {
 			wavingLeavesBox.visible = wind;
 		}

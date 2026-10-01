@@ -1040,6 +1040,8 @@ public final class GpuFoliageRenderer {
 		private final Map<BlockPos, float[]> freeByAnchor = new HashMap<>();
 		/** Whether this is a block hanging on leaves while they wave; see hangOnLeaves. */
 		private boolean hangsOnLeaves;
+		/** Whether a push leaves it where it is: a block that follows the leaves, clinging to anything else. */
+		private boolean pushless;
 		/** Where its free part starts, and how many blocks long it is: none for a strand held all the way down. */
 		private float freeTop;
 		private int freeLength;
@@ -1184,7 +1186,7 @@ public final class GpuFoliageRenderer {
 
 		/** How far a push moves a vertex at this height, as meshed: Sway's own weight, none for a block Sway does not push. */
 		float pushAt(float localY) {
-			return pushWeightAt(localY);
+			return pushless ? 0.0F : pushWeightAt(localY);
 		}
 
 		/**
@@ -1197,9 +1199,12 @@ public final class GpuFoliageRenderer {
 		 * something behind it down to its tip, from that block down. Where something is behind it, it moves as the leaves
 		 * alone. A strand of one or two blocks only moves as the leaves. Worked out once per strand, each time its section
 		 * is meshed.
+		 * <p>
+		 * Strictly, only what is above its top decides, whatever is behind it: for a plant that hangs from the underside of
+		 * a block rather than clinging to a side, which hangs on leaves only when it literally hangs from them. Sets where
+		 * it hangs free either way; whether it then moves as the leaves is the caller's to set (hangsOnLeaves).
 		 */
-		boolean hangOnLeaves(ClientLevel level) {
-			hangsOnLeaves = false;
+		boolean hangOnLeaves(ClientLevel level, boolean strictly) {
 			freeLength = 0;
 			if (!hanging) {
 				return false;
@@ -1207,20 +1212,19 @@ public final class GpuFoliageRenderer {
 			BlockPos anchor = new BlockPos(cellX, cellY, cellZ);
 			float[] known = freeByAnchor.get(anchor);
 			if (known == null) {
-				known = measureHang(level, anchor);
+				known = measureHang(level, anchor, strictly);
 				freeByAnchor.put(anchor, known);
 			}
 			if (known[0] == 0.0F) {
 				return false;
 			}
-			hangsOnLeaves = true;
 			freeTop = known[1];
 			freeLength = (int) known[2];
 			return true;
 		}
 
 		/** Whether the strand hangs on leaves (1 or 0), the top of its free part and how long it is; see hangOnLeaves. */
-		private float[] measureHang(ClientLevel level, BlockPos anchor) {
+		private float[] measureHang(ClientLevel level, BlockPos anchor, boolean strictly) {
 			int tipY = cellY - length + 1;
 			BlockPos.MutableBlockPos at = new BlockPos.MutableBlockPos();
 			int onLeaves = 0;
@@ -1239,7 +1243,7 @@ public final class GpuFoliageRenderer {
 					heldY = y;
 				}
 			}
-			boolean leaves = onLeaves + onOther == 0
+			boolean leaves = strictly || onLeaves + onOther == 0
 					? WavingWhitelist.isLeaves(level.getBlockState(anchor.above()).getBlock())
 					: onLeaves > onOther;
 			if (!leaves) {
@@ -1267,27 +1271,34 @@ public final class GpuFoliageRenderer {
 				BooleanProperty face = PipeBlock.PROPERTY_BY_DIRECTION.get(side);
 				if (state.hasProperty(face) && state.getValue(face)) {
 					clings = true;
-					found = Math.max(found, supportAt(level, pos.relative(side)));
+					found = Math.max(found, supportAt(level, pos.relative(side), side.getAxis()));
 				}
 			}
 			if (!clings) {
 				for (Direction side : Direction.Plane.HORIZONTAL) {
-					found = Math.max(found, supportAt(level, pos.relative(side)));
+					found = Math.max(found, supportAt(level, pos.relative(side), side.getAxis()));
 				}
 			}
 			// Leaves on any side outweigh anything else on another.
 			return found == BEHIND_LEAVES_RANK ? BEHIND_LEAVES : found;
 		}
 
-		/** Ranks what is at a position for behind(): leaves above anything else, anything above nothing. */
+		/** Ranks what is at a position for behind(): leaves above anything solid, anything solid above nothing. */
 		private static final int BEHIND_LEAVES_RANK = 3;
 
-		private static int supportAt(ClientLevel level, BlockPos pos) {
+		/**
+		 * What is at a position for behind(). Only a block solid on that side counts as something, by the test the rain's
+		 * wind uses for walls: a torch, a fence, a slab or another vine behind a strand is as good as nothing.
+		 */
+		private static int supportAt(ClientLevel level, BlockPos pos, Direction.Axis axis) {
 			BlockState state = level.getBlockState(pos);
 			if (state.isAir()) {
 				return BEHIND_NOTHING;
 			}
-			return WavingWhitelist.isLeaves(state.getBlock()) ? BEHIND_LEAVES_RANK : BEHIND_OTHER;
+			if (WavingWhitelist.isLeaves(state.getBlock())) {
+				return BEHIND_LEAVES_RANK;
+			}
+			return WindShelter.isSolidSide(level, pos, state, axis) ? BEHIND_OTHER : BEHIND_NOTHING;
 		}
 	}
 
@@ -2888,8 +2899,10 @@ public final class GpuFoliageRenderer {
 					int sectionY = level.getSectionYFromSectionIndex(index);
 					long key = SectionPos.asLong(chunkX, sectionY, chunkZ);
 					if (!sections[index].maybeHas(state -> WavingWhitelist.listed(state.getBlock()))) {
-						// Blocks that follow the leaves stay the renderer's either way, only waving differently.
-						if (sections[index].maybeHas(state -> WavingWhitelist.followsLeaves(state.getBlock()))) {
+						// Blocks that follow the leaves, and hanging plants, stay the renderer's either way, only waving
+						// differently.
+						if (sections[index].maybeHas(state -> WavingWhitelist.followsLeaves(state.getBlock())
+								|| HangingVineMultiblockBehavior.isHangingVine(state))) {
 							markIfHeld(key);
 						}
 						continue;
@@ -3416,18 +3429,25 @@ public final class GpuFoliageRenderer {
 					// hangs on do, all over, and sways as the plant it is on top of that, from where it hangs: marked still
 					// and steady at once, which nothing else is, with the leaves' own weight where the wind's reach would go
 					// (the wind reaches it wherever it is, as it does the leaves). A push never calms it, so it keeps with
-					// them. While the leaves stand still it neither sways nor moves in the wind; pushes bend it either way.
+					// them. While the leaves stand still it neither sways nor moves in the wind, and pushes bend it; one that
+					// clings mostly to anything else -- a trunk -- neither waves nor bends, as what it clings to.
+					// Any other hanging plant does the same while it literally hangs from leaves that wave, and is left a
+					// plant as any other otherwise.
 					anchor.hangsOnLeaves = false;
-					if (WavingWhitelist.followsLeaves(state.getBlock())) {
-						// Only while the leaves wave, and only a strand that starts on them.
-						if (FoliageSettings.wavingLeaves() && anchor.hangOnLeaves(level)) {
+					anchor.pushless = false;
+					boolean follows = WavingWhitelist.followsLeaves(state.getBlock());
+					if (follows || anchor.hanging) {
+						boolean onLeaves = anchor.hangOnLeaves(level, !follows);
+						if (onLeaves && FoliageSettings.wavingLeaves()) {
+							anchor.hangsOnLeaves = true;
 							anchor.still = true;
 							anchor.steady = true;
 							anchor.exposure = WavingWhitelist.leavesIntensity();
-						} else {
+						} else if (follows) {
 							anchor.waving = 0.0F;
 							anchor.still = false;
 							anchor.steady = false;
+							anchor.pushless = !onLeaves;
 						}
 					}
 					// Another mod may draw the plant lower than its block, as the chunk mesh shows it.

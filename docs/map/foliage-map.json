@@ -128,7 +128,7 @@
    "fileInfo": {
     "gpu/GpuFoliageRenderer.java": {
      "kind": "java",
-     "lines": 3584,
+     "lines": 3604,
      "guard": "//? >=1.20.1 {"
     }
    }
@@ -152,7 +152,7 @@
    "fileInfo": {
     "gpu/GpuFoliageRenderer.java": {
      "kind": "java",
-     "lines": 3584,
+     "lines": 3604,
      "guard": "//? >=1.20.1 {"
     }
    }
@@ -177,7 +177,7 @@
    "fileInfo": {
     "gpu/GpuFoliageRenderer.java": {
      "kind": "java",
-     "lines": 3584,
+     "lines": 3604,
      "guard": "//? >=1.20.1 {"
     }
    }
@@ -211,7 +211,7 @@
    "fileInfo": {
     "gpu/GpuFoliageRenderer.java": {
      "kind": "java",
-     "lines": 3584,
+     "lines": 3604,
      "guard": "//? >=1.20.1 {"
     },
     "mixin/LevelPassMixin.java": {
@@ -237,7 +237,7 @@
    "fileInfo": {
     "gpu/GpuFoliageRenderer.java": {
      "kind": "java",
-     "lines": 3584,
+     "lines": 3604,
      "guard": "//? >=1.20.1 {"
     }
    }
@@ -477,7 +477,7 @@
    "fileInfo": {
     "gpu/WindShelter.java": {
      "kind": "java",
-     "lines": 327,
+     "lines": 357,
      "guard": "//? >=1.20.1 {"
     }
    }
@@ -508,7 +508,7 @@
     "FoliageConfigScreen.java": {
      "kind": "java",
      "lines": 718,
-     "guard": "//? >=26.3 {"
+     "guard": "//? >=26.2 {"
     },
     "platform/fabric/FabricModMenuIntegration.java": {
      "kind": "java",
@@ -575,7 +575,7 @@
    "group": "motion",
    "kind": "component",
    "versions": [
-    ">=26.3"
+    ">=26.2"
    ],
    "files": [
     "WavingWhitelist.java"
@@ -585,10 +585,12 @@
     "Tags are read at bake time from every jar's data/<ns>/tags/block files (Platform.readAll; NeoForge 26.3 through ModList), since the world's tags arrive after the models are baked.",
     "GpuFoliageSplit.mayWave wraps listed blocks at bake whatever their group's state; waves/isFoliage decide at mesh time, so the checkbox only rebuilds the GPU area's sections (GpuFoliageRenderer.foliageListChanged, remesh on the MeshSwap).",
     "Field wave: constant weight, exposure 1, edge and rain fade measured at the vertex (SwayWeights' steady flag, which also keeps pushes from calming the sway).",
-    "Followers (vines): a majority vote of what is behind each block decides; leaves win -> the whole vine moves with the leaves' field and its free-hanging part below the lowest held block gets a plant's sway at 1.0 (still+steady flags, the leaves' weight in the exposure bits); strands of 1-2 blocks get the field only; otherwise, or with waving leaves off, interaction only."
+    "Followers (vines): a majority vote of what is behind each block decides; leaves win -> the whole vine moves with the leaves' field and its free-hanging part below the lowest held block gets a plant's sway at 1.0 (still+steady flags, the leaves' weight in the exposure bits); strands of 1-2 blocks get the field only; otherwise, or with waving leaves off, interaction only, and a vine that clings mostly to anything else is not pushed either (SwayAnchor.pushless).",
+    "Only a block solid on that side counts as behind a strand, by the test the rain's wind uses for walls (WindShelter.isSolidSide): a torch, fence, slab or another vine is as good as nothing.",
+    "Any other plant Sway hangs (pale hanging moss, cave vines, BOP's mosses...) follows the leaves the same way while it literally hangs from them (the block above its top), and is a plain plant otherwise."
    ],
    "pitfalls": [
-    "Only 26.3 for now; listed()/followsLeaves() are false elsewhere until each version is hooked up.",
+    "Only 26.2 and 26.3 for now; listed()/followsLeaves() are false elsewhere until each version is hooked up.",
     "Fast leaves graphics: the GPU draws leaves as cutout, so they may look see-through next to the chunk's opaque fast leaves."
    ],
    "fileInfo": {
@@ -2440,7 +2442,7 @@
   "FoliageConfigScreen.java": {
    "kind": "java",
    "lines": 718,
-   "guard": "//? >=26.3 {"
+   "guard": "//? >=26.2 {"
   },
   "FoliageSettings.java": {
    "kind": "java",
@@ -2459,7 +2461,7 @@
   },
   "gpu/GpuFoliageRenderer.java": {
    "kind": "java",
-   "lines": 3584,
+   "lines": 3604,
    "guard": "//? >=1.20.1 {"
   },
   "gpu/GpuFoliageSplit.java": {
@@ -2519,7 +2521,7 @@
   },
   "gpu/WindShelter.java": {
    "kind": "java",
-   "lines": 327,
+   "lines": 357,
    "guard": "//? >=1.20.1 {"
   },
   "mixin/blockgetter/BlockGetterMixinPlugin.java": {
