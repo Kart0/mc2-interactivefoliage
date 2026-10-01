@@ -312,7 +312,7 @@
    "fileInfo": {
     "platform/neoforge/NeoforgeFoliageModel.java": {
      "kind": "java",
-     "lines": 215,
+     "lines": 216,
      "guard": "//? neoforge && >=1.21.1 {"
     },
     "platform/neoforge/NeoforgeFoliageHooks.java": {
@@ -508,7 +508,7 @@
     "FoliageConfigScreen.java": {
      "kind": "java",
      "lines": 718,
-     "guard": "//? >=26.1.2 {"
+     "guard": "//? >=1.21.11 {"
     },
     "platform/fabric/FabricModMenuIntegration.java": {
      "kind": "java",
@@ -575,7 +575,7 @@
    "group": "motion",
    "kind": "component",
    "versions": [
-    ">=26.1.2"
+    ">=1.21.11"
    ],
    "files": [
     "WavingWhitelist.java"
@@ -591,13 +591,13 @@
     "Any other plant Sway hangs (pale hanging moss, cave vines, BOP's mosses...) follows the leaves the same way while it literally hangs from them (the block above its top), and is a plain plant otherwise."
    ],
    "pitfalls": [
-    "Only 26.1.2 and later for now; listed()/followsLeaves() are false elsewhere until each version is hooked up.",
+    "Only 1.21.11 and later for now; listed()/followsLeaves() are false elsewhere until each version is hooked up.",
     "Fast leaves graphics: the GPU draws leaves as cutout, so they may look see-through next to the chunk's opaque fast leaves."
    ],
    "fileInfo": {
     "WavingWhitelist.java": {
      "kind": "java",
-     "lines": 286,
+     "lines": 289,
      "guard": "//? >=1.21.11 {"
     }
    }
@@ -1252,7 +1252,7 @@
     },
     "platform/neoforge/NeoforgeFoliageModel.java": {
      "kind": "java",
-     "lines": 215,
+     "lines": 216,
      "guard": "//? neoforge && >=1.21.1 {"
     }
    }
@@ -2443,7 +2443,7 @@
   "FoliageConfigScreen.java": {
    "kind": "java",
    "lines": 718,
-   "guard": "//? >=26.1.2 {"
+   "guard": "//? >=1.21.11 {"
   },
   "FoliageSettings.java": {
    "kind": "java",
@@ -2717,7 +2717,7 @@
   },
   "platform/neoforge/NeoforgeFoliageModel.java": {
    "kind": "java",
-   "lines": 215,
+   "lines": 216,
    "guard": "//? neoforge && >=1.21.1 {"
   },
   "platform/neoforge/NeoforgeKeyBindings.java": {
@@ -2742,7 +2742,7 @@
   },
   "WavingWhitelist.java": {
    "kind": "java",
-   "lines": 286,
+   "lines": 289,
    "guard": "//? >=1.21.11 {"
   },
   "shaders/core/foliage.fsh": {

@@ -111,7 +111,8 @@ public final class NeoforgeFoliageModel implements BlockStateModel {
 	/^@Override
 	public void collectParts(BlockAndTintGetter level, BlockPos pos, BlockState state, RandomSource random,
 			List<BlockModelPart> parts) {
-		if (GpuFoliageSplit.leaveToGpu(level, pos)) {
+		// A block whose whitelist group the player has switched off stays with the chunk mesh, wrapped or not.
+		if (GpuFoliageSplit.isFoliage(state) && GpuFoliageSplit.leaveToGpu(level, pos)) {
 			return;
 		}
 		parent.collectParts(level, pos, state, random, parts);
