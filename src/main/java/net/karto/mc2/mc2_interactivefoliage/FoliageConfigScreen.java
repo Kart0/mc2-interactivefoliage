@@ -3,7 +3,7 @@ package net.karto.mc2.mc2_interactivefoliage;
 import com.github.razorplay01.sway.config.SwayConfig;
 import net.minecraft.client.gui.components.AbstractSliderButton;
 import net.minecraft.client.gui.components.Button;
-//? >=1.21.1 {
+//? >=1.20.1 {
 import net.minecraft.client.gui.components.Checkbox;
 import net.karto.mc2.mc2_interactivefoliage.gpu.GpuFoliageRenderer;
 //?}
@@ -49,7 +49,7 @@ public class FoliageConfigScreen extends Screen {
 	private WavingIntensitySlider wavingIntensitySlider;
 	private Button resetWavingIntensityBtn;
 	//?}
-	//? >=1.21.1 {
+	//? >=1.20.1 {
 	private Checkbox wavingLeavesBox;
 	//?}
 
@@ -86,7 +86,7 @@ public class FoliageConfigScreen extends Screen {
 		rows += 4;
 		extra += 10;
 		//?}
-		//? >=1.21.1 {
+		//? >=1.20.1 {
 		// The leaves' checkbox, under the wind.
 		rows += 1;
 		//?}
@@ -250,12 +250,12 @@ public class FoliageConfigScreen extends Screen {
 		).bounds(right + sliderWidth + RESET_GAP, y, RESET_WIDTH, 20).build();
 		this.addRenderableWidget(resetWavingIntensityBtn);
 
-		//? >=1.21.1 {
 		y += spacing;
 
 		// ── Whether leaves wave too, with the wind ──────────────────────────────
 		// Switching them rebuilds the near sections holding leaves: whether a leaf is drawn by the chunk mesh or the
 		// renderer changes there.
+		//? >=1.21.1 {
 		wavingLeavesBox = Checkbox.builder(Component.translatable("config.mc2_interactivefoliage.waving_leaves"), this.font)
 				.pos(left, y + (20 - Checkbox.getBoxSize(this.font)) / 2)
 				.selected(FoliageSettings.wavingLeaves())
@@ -266,8 +266,22 @@ public class FoliageConfigScreen extends Screen {
 				.build();
 		// Centred across both columns, as the interaction's switch is: the box and its text are as wide as the text.
 		wavingLeavesBox.setX(cx - wavingLeavesBox.getWidth() / 2);
+		//?} else {
+		/*// Before 1.20.3 a checkbox is built whole, as wide as it is told, and only says it was pressed: a 20 pixel box,
+		// then its text.
+		Component wavingLeavesLabel = Component.translatable("config.mc2_interactivefoliage.waving_leaves");
+		int wavingLeavesWidth = 20 + 4 + this.font.width(wavingLeavesLabel);
+		wavingLeavesBox = new Checkbox(cx - wavingLeavesWidth / 2, y, wavingLeavesWidth, 20, wavingLeavesLabel,
+				FoliageSettings.wavingLeaves()) {
+			@Override
+			public void onPress() {
+				super.onPress();
+				FoliageSettings.setWavingLeaves(selected());
+				GpuFoliageRenderer.foliageListChanged();
+			}
+		};
+		*///?}
 		this.addRenderableWidget(wavingLeavesBox);
-		//?}
 		updateGpuOptions();
 		updatePreset();
 		//?}
@@ -485,7 +499,7 @@ public class FoliageConfigScreen extends Screen {
 		if (resetWavingIntensityBtn != null) {
 			resetWavingIntensityBtn.visible = wind && !FoliageSettings.isDefaultWavingIntensity();
 		}
-		//? >=1.21.1 {
+		//? >=1.20.1 {
 		if (wavingLeavesBox != null) {
 			wavingLeavesBox.visible = wind;
 		}

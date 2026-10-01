@@ -31,8 +31,6 @@ import java.util.Set;
  * Chosen by the author, not the player, and laid out by group rather than by mod: each group gathers vanilla's blocks
  * and every mod's together, so a group can be switched on or off as a whole. A block of a mod that is not installed, or
  * of a version that does not have it, is skipped. Tags get their own section, apart from the blocks named one by one.
- * <p>
- * Only 1.21.1 and later draw these for now; everywhere else the list stays empty until its version is hooked up.
  */
 public final class WavingWhitelist {
 
@@ -91,17 +89,12 @@ public final class WavingWhitelist {
 	 * without baking them again.
 	 */
 	public static boolean listed(Block block) {
-		//? >=1.21.1 {
 		if (!resolved) {
 			resolve();
 		}
 		return BLOCKS.containsKey(block);
-		//?} else {
-		/*return false;
-		*///?}
 	}
 
-	//? >=1.21.1 {
 	private static synchronized void resolve() {
 		if (resolved) {
 			return;
@@ -117,7 +110,6 @@ public final class WavingWhitelist {
 		ModTemplate.LOGGER.info("Waving whitelist: {}, following the leaves: {}", counts, FOLLOWERS.size());
 		resolved = true;
 	}
-	//?}
 
 	/** How hard this block waves: its group's intensity, or 1 for a block not on the whitelist. */
 	public static float intensityOf(Block block) {
@@ -133,14 +125,10 @@ public final class WavingWhitelist {
 
 	/** Whether this block follows the leaves: waves as hard as they do while they wave, and not at all else. */
 	public static boolean followsLeaves(Block block) {
-		//? >=1.21.1 {
 		if (!resolved) {
 			resolve();
 		}
 		return FOLLOWERS.contains(block);
-		//?} else {
-		/*return false;
-		*///?}
 	}
 
 
