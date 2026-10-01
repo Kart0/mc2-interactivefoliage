@@ -683,6 +683,13 @@ public final class GpuFoliageRenderer {
 	private static final float SNOW_LADEN_SWAY = 0.20F;
 
 	private static ModelBlockRenderer modelRenderer;
+	//? >=26.1.2 {
+	/**
+	 * The same, drawing every face, culled or not: for leaves touching anything but leaves, whose faces against it the
+	 * chunk mesh hides, and which would leave a hole there as they move away from it.
+	 */
+	private static ModelBlockRenderer uncullingRenderer;
+	//?}
 	/** Whether the renderer is in charge of the near foliage, following the waving foliage setting. */
 	private static boolean active;
 	//? <26.1.2 {
@@ -1056,6 +1063,8 @@ public final class GpuFoliageRenderer {
 		private int length = 1;
 		/** How much of rain's wind reaches the plant; see WindShelter. Set once the anchor is prepared. */
 		private float exposure = 1.0F;
+		/** Where a field's wind is worked out, corner by corner, while it rains; null while it does not. */
+		private WindShelter fieldShelter;
 		/**
 		 * How much of its sway the plant keeps, wind included: all of it, SNOW_LADEN_SWAY for a plant weighed down by
 		 * Snow! Real Magic's snow, or more for a block of the waving whitelist, as its group says. The weight it scales
@@ -1184,6 +1193,17 @@ public final class GpuFoliageRenderer {
 			return weightAt(worldY) * waving;
 		}
 
+		/**
+		 * How much of rain's wind reaches a vertex at this position: the plant's own, or for a field, the corner's it sits
+		 * on, which every block sharing that corner reads alike.
+		 */
+		float exposureAt(float worldX, float worldY, float worldZ) {
+			if (!field || fieldShelter == null) {
+				return exposure;
+			}
+			return fieldShelter.cornerExposure(Math.round(worldX), Math.round(worldY), Math.round(worldZ));
+		}
+
 		/** How far a push moves a vertex at this height, as meshed: Sway's own weight, none for a block Sway does not push. */
 		float pushAt(float localY) {
 			return pushless ? 0.0F : pushWeightAt(localY);
@@ -1300,6 +1320,21 @@ public final class GpuFoliageRenderer {
 			}
 			return WindShelter.isSolidSide(level, pos, state, axis) ? BEHIND_OTHER : BEHIND_NOTHING;
 		}
+	}
+
+	/**
+	 * Whether a block has anything but air or leaves beside it, on any side. A field's faces against such a neighbour are
+	 * drawn all the same: the leaves move and it does not, so a culled face would leave a hole between them.
+	 */
+	private static boolean touchesOtherThanLeaves(ClientLevel level, BlockPos pos) {
+		BlockPos.MutableBlockPos at = new BlockPos.MutableBlockPos();
+		for (Direction side : Direction.values()) {
+			BlockState beside = level.getBlockState(at.setWithOffset(pos, side));
+			if (!beside.isAir() && !WavingWhitelist.isLeaves(beside.getBlock())) {
+				return true;
+			}
+		}
+		return false;
 	}
 
 	/** Whether this renderer is drawing the near foliage, which is while it is switched on in a world. */
@@ -1443,6 +1478,9 @@ public final class GpuFoliageRenderer {
 		// The renderer snapshots options such as smooth lighting, which are among the things that
 		// land here, so it is rebuilt from the current options on next use.
 		modelRenderer = null;
+		//? >=26.1.2 {
+		uncullingRenderer = null;
+		//?}
 		// Nothing queues the chunks that are already loaded again: with Sodium in charge a resource
 		// reload rebuilds its own meshes without passing any hook. They are rediscovered on next draw.
 		reseedPending = true;
@@ -3074,7 +3112,8 @@ public final class GpuFoliageRenderer {
 					anchor.cellY - regionOrigin.getY(),
 					anchor.cellZ - regionOrigin.getZ()));
 			weightScratch.putFloat(packWeights(anchor.waveAt(regionOrigin.getY() + y), anchor.pushAt(localY),
-					anchor.still, anchor.steady, anchor.exposure));
+					anchor.still, anchor.steady, anchor.exposureAt(regionOrigin.getX() + x, regionOrigin.getY() + y,
+							regionOrigin.getZ() + z)));
 			return this;
 		}
 
@@ -3134,8 +3173,10 @@ public final class GpuFoliageRenderer {
 		private final SwayAnchor anchor;
 		private final BlockPos regionOrigin;
 		private float blockY;
-		/^* The height of a vertex being written element by element, kept until it is ended. ^/
+		/^* The position of a vertex being written element by element, kept until it is ended. ^/
+		private float pendingX;
 		private float pendingY;
+		private float pendingZ;
 
 		FoliageVertexWriter(VertexConsumer delegate, SwayAnchor anchor, BlockPos regionOrigin) {
 			this.delegate = delegate;
@@ -3148,27 +3189,30 @@ public final class GpuFoliageRenderer {
 			this.blockY = blockY;
 		}
 
-		private void writeWeights(float y) {
+		private void writeWeights(float x, float y, float z) {
 			float localY = y - blockY;
 			reserveWeights(WEIGHT_BYTES);
 			weightScratch.putFloat(packCell(anchor.cellX - regionOrigin.getX(),
 					anchor.cellY - regionOrigin.getY(),
 					anchor.cellZ - regionOrigin.getZ()));
 			weightScratch.putFloat(packWeights(anchor.waveAt(regionOrigin.getY() + y), anchor.pushAt(localY),
-					anchor.still, anchor.steady, anchor.exposure));
+					anchor.still, anchor.steady, anchor.exposureAt(regionOrigin.getX() + x, regionOrigin.getY() + y,
+							regionOrigin.getZ() + z)));
 		}
 
 		@Override
 		public void vertex(float x, float y, float z, float red, float green, float blue, float alpha,
 				float u, float v, int overlay, int light, float normalX, float normalY, float normalZ) {
 			delegate.vertex(x, y, z, red, green, blue, alpha, u, v, overlay, light, normalX, normalY, normalZ);
-			writeWeights(y);
+			writeWeights(x, y, z);
 		}
 
 		@Override
 		public VertexConsumer vertex(double x, double y, double z) {
 			delegate.vertex(x, y, z);
+			pendingX = (float) x;
 			pendingY = (float) y;
+			pendingZ = (float) z;
 			return this;
 		}
 
@@ -3205,7 +3249,7 @@ public final class GpuFoliageRenderer {
 		@Override
 		public void endVertex() {
 			delegate.endVertex();
-			writeWeights(pendingY);
+			writeWeights(pendingX, pendingY, pendingZ);
 		}
 
 		@Override
@@ -3314,9 +3358,15 @@ public final class GpuFoliageRenderer {
 		if (modelRenderer == null) {
 			// Same arguments the section compiler passes, so the geometry matches it exactly.
 			//? >=26.1.2 {
+			// The second argument is whether faces against a neighbour hiding them are culled, as the section compiler
+			// always has them.
 			modelRenderer = new ModelBlockRenderer(
 					minecraft.options.ambientOcclusion().get(),
-					minecraft.options.cutoutLeaves().get(),
+					true,
+					minecraft.getBlockColors());
+			uncullingRenderer = new ModelBlockRenderer(
+					minecraft.options.ambientOcclusion().get(),
+					false,
 					minecraft.getBlockColors());
 			//?} else {
 			/*modelRenderer = new ModelBlockRenderer(minecraft.getBlockColors());
@@ -3357,6 +3407,8 @@ public final class GpuFoliageRenderer {
 		// Vanilla writes the standard attributes; alongside each quad we append the sway weight of its
 		// four vertices, so both bindings stay in step without touching its output.
 		SwayAnchor anchor = new SwayAnchor();
+		// A tree's leaves are sheltered corner by corner, on their own terms; see WindShelter.cornerExposure.
+		anchor.fieldShelter = shelter == null ? null : new WindShelter(level, origin, true);
 		//? >=26.1.2 {
 		BlockQuadOutput output = (x, y, z, quad, instance) -> {
 			builder.putBlockBakedQuad(x, y, z, quad, instance);
@@ -3369,7 +3421,8 @@ public final class GpuFoliageRenderer {
 				float worldY = regionOrigin.getY() + y + localY;
 				weightScratch.putFloat(cell);
 				weightScratch.putFloat(packWeights(anchor.waveAt(worldY), anchor.pushAt(localY), anchor.still,
-						anchor.steady, anchor.exposure));
+						anchor.steady, anchor.exposureAt(regionOrigin.getX() + x + quad.position(vertex).x(), worldY,
+								regionOrigin.getZ() + z + quad.position(vertex).z())));
 			}
 		};
 
@@ -3422,6 +3475,7 @@ public final class GpuFoliageRenderer {
 					anchor.waving *= WavingWhitelist.intensityOf(state.getBlock());
 					anchor.field = WavingWhitelist.wavesAsField(state.getBlock());
 					anchor.steady = anchor.field;
+					// A field's reach is worked out at each corner instead, the same for every block sharing it.
 					if (anchor.field) {
 						anchor.exposure = 1.0F;
 					}
@@ -3460,7 +3514,8 @@ public final class GpuFoliageRenderer {
 					}
 					//?}
 					//? >=26.1.2 {
-					modelRenderer.tesselateBlock(output, offsetX + dx, offsetY + dy + lift, offsetZ + dz,
+					(anchor.field && touchesOtherThanLeaves(level, pos) ? uncullingRenderer : modelRenderer)
+							.tesselateBlock(output, offsetX + dx, offsetY + dy + lift, offsetZ + dz,
 							level, pos, state, SnowRealMagicCompat.snowyVariant(GpuFoliageSplit.modelFor(state,
 									models.get(state)), state, level, pos, inSnow),
 							state.getSeed(pos));
@@ -3476,15 +3531,16 @@ public final class GpuFoliageRenderer {
 					poseStack.pushPose();
 					poseStack.translate(offsetX + dx, offsetY + dy + lift, offsetZ + dz);
 					output.beginBlock(offsetY + dy + lift);
-					modelRenderer.tesselateBlock(level, parts, state, pos, poseStack, output, true,
-							OverlayTexture.NO_OVERLAY);
+					modelRenderer.tesselateBlock(level, parts, state, pos, poseStack, output,
+							!(anchor.field && touchesOtherThanLeaves(level, pos)), OverlayTexture.NO_OVERLAY);
 					poseStack.popPose();
 					//?} else {
 					/^poseStack.pushPose();
 					poseStack.translate(offsetX + dx, offsetY + dy + lift, offsetZ + dz);
 					output.beginBlock(offsetY + dy + lift);
 					tesselate(level, SnowRealMagicCompat.snowyVariant(GpuFoliageSplit.modelFor(state,
-							models.getBlockModel(state)), state, level, pos, inSnow), state, pos, poseStack, output, random);
+							models.getBlockModel(state)), state, level, pos, inSnow), state, pos, poseStack, output, random,
+							!(anchor.field && touchesOtherThanLeaves(level, pos)));
 					poseStack.popPose();
 					^///?}
 					*///?}
@@ -3569,7 +3625,7 @@ public final class GpuFoliageRenderer {
 	 * left alone by both, and read the model's plain quads, which Sway's wrapper hands over untouched.
 	 ^/
 	private static void tesselate(ClientLevel level, BakedModel model, BlockState state, BlockPos pos,
-			PoseStack poseStack, VertexConsumer output, RandomSource random) {
+			PoseStack poseStack, VertexConsumer output, RandomSource random, boolean cull) {
 		//? neoforge {
 		/^// NeoForge lets a model decide, and only falls back to the block's light where it does not.
 		boolean smoothLighting = Minecraft.useAmbientOcclusion()
@@ -3591,10 +3647,10 @@ public final class GpuFoliageRenderer {
 		poseStack.translate(offset.x, offset.y, offset.z);
 		long seed = state.getSeed(pos);
 		if (smoothLighting) {
-			modelRenderer.tesselateWithAO(level, model, state, pos, poseStack, output, true, random, seed,
+			modelRenderer.tesselateWithAO(level, model, state, pos, poseStack, output, cull, random, seed,
 					OverlayTexture.NO_OVERLAY);
 		} else {
-			modelRenderer.tesselateWithoutAO(level, model, state, pos, poseStack, output, true, random, seed,
+			modelRenderer.tesselateWithoutAO(level, model, state, pos, poseStack, output, cull, random, seed,
 					OverlayTexture.NO_OVERLAY);
 		}
 	}

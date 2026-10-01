@@ -2,7 +2,9 @@ package net.karto.mc2.mc2_interactivefoliage.gpu;
 
 //? >=1.20.1 {
 
-import it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap;
+import it.unimi.dsi.fastutil.longs.Long2FloatOpenHashMap;
+import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
+import net.karto.mc2.mc2_interactivefoliage.WavingWhitelist;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -92,19 +94,33 @@ final class WindShelter {
 	private static Set<Block> windWalls = Set.of();
 
 	private final ClientLevel level;
-	private final int originX;
-	private final int originZ;
 	/**
-	 * Along each row the section's plants stand on, by row: for each block of the section, west to east, the tallest wall
-	 * sheltering it (0 for none) and whether a wall sealing it under a roof does.
+	 * Whether this one is for a field -- a tree's leaves -- rather than for plants: leaves are then neither walls nor
+	 * roofs, so a tree does not shelter itself, and its rows reach a block past the section on either side, for the
+	 * corners on its edges.
 	 */
-	private final Int2ObjectOpenHashMap<byte[]> rows = new Int2ObjectOpenHashMap<>();
+	private final boolean field;
+	/** The first block of a row, west, and how many it holds. */
+	private final int firstX;
+	private final int width;
+	/**
+	 * Along each row the section's plants stand on, by height and z: for each block of the row, west to east, the tallest
+	 * wall sheltering it (0 for none) and whether a wall sealing it under a roof does.
+	 */
+	private final Long2ObjectOpenHashMap<byte[]> rows = new Long2ObjectOpenHashMap<>();
+	/** For a field: how much of the wind reaches each corner asked for so far; see cornerExposure. */
+	private final Long2FloatOpenHashMap corners = new Long2FloatOpenHashMap();
 	private final BlockPos.MutableBlockPos cursor = new BlockPos.MutableBlockPos();
 
 	WindShelter(ClientLevel level, BlockPos sectionOrigin) {
+		this(level, sectionOrigin, false);
+	}
+
+	WindShelter(ClientLevel level, BlockPos sectionOrigin, boolean field) {
 		this.level = level;
-		this.originX = sectionOrigin.getX();
-		this.originZ = sectionOrigin.getZ();
+		this.field = field;
+		this.firstX = sectionOrigin.getX() - (field ? 1 : 0);
+		this.width = SectionPos.SECTION_SIZE + (field ? 2 : 0);
 		// Once a section rather than for every block looked at: a change to the list applies to states already measured.
 		refreshWindWalls();
 	}
@@ -123,7 +139,7 @@ final class WindShelter {
 				: ROOF_SHELTER + (1.0F - ROOF_SHELTER) * ease((float) (SKY_ROOF - sky) / (SKY_ROOF - SKY_ENCLOSED));
 		// A roof takes its half whatever light comes in beside it.
 		float roof = Math.max(covered ? ROOF_SHELTER : 0.0F, bySky);
-		int wall = row(y, z - originZ)[x - originX];
+		int wall = row(y, z)[x - firstX];
 		// Under a roof a wall that seals the room leaves the wind no way down onto a taller plant.
 		boolean sheltered = (wall & TALLEST_MASK) >= plantHeight || ((wall & SEALED_FLAG) != 0 && covered);
 		float shelter = roof + (sheltered ? WALL_SHELTER : 0.0F);
@@ -135,14 +151,49 @@ final class WindShelter {
 		return t * t * (3.0F - 2.0F * t);
 	}
 
-	private byte[] row(int y, int localZ) {
-		int key = y * SectionPos.SECTION_SIZE + localZ;
+	private byte[] row(int y, int z) {
+		long key = (long) y << 32 | (z & 0xFFFFFFFFL);
 		byte[] row = rows.get(key);
 		if (row == null) {
-			row = sweep(y, originZ + localZ);
+			row = sweep(y, z);
 			rows.put(key, row);
 		}
 		return row;
+	}
+
+	/**
+	 * How much of the wind reaches a corner of a field's blocks, from 0 to 1: the same whichever block sharing the corner
+	 * asks, so neighbouring leaves move as one. The eight blocks around it count alike, but for those standing solid in
+	 * the wind's way, which only shelter the others. Each of them is sheltered half by a roof over it and half by a wall
+	 * upwind, as a plant a block tall is; the sky's light plays no part, since the leaves themselves dim it.
+	 */
+	float cornerExposure(int x, int y, int z) {
+		long key = BlockPos.asLong(x, y, z);
+		if (corners.containsKey(key)) {
+			return corners.get(key);
+		}
+		float sum = 0.0F;
+		int counted = 0;
+		for (int dy = -1; dy <= 0; dy++) {
+			for (int dz = -1; dz <= 0; dz++) {
+				for (int dx = -1; dx <= 0; dx++) {
+					int bx = x + dx;
+					int by = y + dy;
+					int bz = z + dz;
+					if (stopsWind(bx, by, bz)) {
+						continue;
+					}
+					int wall = row(by, bz)[Mth.clamp(bx - firstX, 0, width - 1)];
+					boolean covered = isCovered(bx, by, bz);
+					boolean sheltered = (wall & TALLEST_MASK) >= 1 || ((wall & SEALED_FLAG) != 0 && covered);
+					sum += 1.0F - Math.min(1.0F, (covered ? ROOF_SHELTER : 0.0F) + (sheltered ? WALL_SHELTER : 0.0F));
+					counted++;
+				}
+			}
+		}
+		float exposure = counted == 0 ? 1.0F : sum / counted;
+		corners.put(key, exposure);
+		return exposure;
 	}
 
 	/**
@@ -152,11 +203,11 @@ final class WindShelter {
 	 * every block; behind a wall sealing a room only where the sky is open, so covered blocks do not count towards it.
 	 */
 	private byte[] sweep(int y, int z) {
-		byte[] row = new byte[SectionPos.SECTION_SIZE];
+		byte[] row = new byte[width];
 		int[] behind = new int[MAX_WALL_HEIGHT + 1];
 		boolean[] sealed = new boolean[MAX_WALL_HEIGHT + 1];
 		Arrays.fill(behind, Integer.MAX_VALUE / 2);
-		for (int x = originX + SectionPos.SECTION_SIZE - 1 + REACH; x >= originX; x--) {
+		for (int x = firstX + width - 1 + REACH; x >= firstX; x--) {
 			int height = wallHeight(x, y, z);
 			if (height > 0) {
 				behind[height] = 0;
@@ -172,14 +223,14 @@ final class WindShelter {
 					behind[h]++;
 				}
 			}
-			if (x < originX + SectionPos.SECTION_SIZE) {
+			if (x < firstX + width) {
 				int entry = 0;
 				for (int h = MAX_WALL_HEIGHT; h >= 1; h--) {
 					if (behind[h] <= h * SHADOW_PER_BLOCK) {
 						entry = Math.max(entry & TALLEST_MASK, h) | (entry & SEALED_FLAG) | (sealed[h] ? SEALED_FLAG : 0);
 					}
 				}
-				row[x - originX] = (byte) entry;
+				row[x - firstX] = (byte) entry;
 			}
 		}
 		return row;
@@ -242,6 +293,10 @@ final class WindShelter {
 		cursor.set(x, y, z);
 		BlockState state = level.getBlockState(cursor);
 		if (state.isAir()) {
+			return 0;
+		}
+		// A tree's leaves shelter the plants below them, but not one another.
+		if (field && WavingWhitelist.isLeaves(state.getBlock())) {
 			return 0;
 		}
 		if (COVERAGE.containsKey(state)) {
