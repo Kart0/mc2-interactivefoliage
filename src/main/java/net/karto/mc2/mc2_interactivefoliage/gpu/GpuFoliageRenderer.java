@@ -78,6 +78,7 @@ import org.lwjgl.opengl.GL31;
 import org.lwjgl.opengl.GL32;
 *///?}
 import com.mojang.blaze3d.vertex.BufferBuilder;
+import it.unimi.dsi.fastutil.longs.Long2FloatOpenHashMap;
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 //? >=1.21.1 {
 import com.mojang.blaze3d.vertex.ByteBufferBuilder;
@@ -1139,8 +1140,18 @@ public final class GpuFoliageRenderer {
 		private float deformationScale;
 		private BlockState state;
 		private BlockPos pos;
+		private ClientLevel level;
+		/**
+		 * Whether a field's corners touching a solid block other than leaves stand still: while the leaves are drawn solid,
+		 * as the game's Fast leaves are, which would show a trunk cutting through them as they wave against it.
+		 */
+		private boolean pinField;
+		/** For a field: whether each corner asked for so far stands still, 0, or waves, 1; see pinAt. */
+		private final Long2FloatOpenHashMap fieldPins = new Long2FloatOpenHashMap();
+		private final BlockPos.MutableBlockPos pinCursor = new BlockPos.MutableBlockPos();
 
 		void prepare(BlockState state, BlockPos pos, ClientLevel level) {
+			this.level = level;
 			hanging = HangingVineMultiblockBehavior.isHangingVine(state);
 			BlockPos anchor = pos;
 			MultiBlockContributor multiblock = null;
@@ -1253,6 +1264,41 @@ public final class GpuFoliageRenderer {
 				return exposure;
 			}
 			return fieldShelter.cornerExposure(Math.round(worldX), Math.round(worldY), Math.round(worldZ));
+		}
+
+		/**
+		 * How much of its wave a field's vertex at this position keeps: none at a corner touching a full block other than
+		 * leaves -- a trunk, the ground -- while the leaves are drawn solid, so they never sink into it as they wave; all of
+		 * it otherwise. Worked out from the corner alone, the eight blocks around it, so every block sharing it reads alike
+		 * and neighbouring leaves never part. A block hanging on the leaves still moves at their full weight there.
+		 */
+		float pinAt(float worldX, float worldY, float worldZ) {
+			if (!field || !pinField) {
+				return 1.0F;
+			}
+			int x = Math.round(worldX);
+			int y = Math.round(worldY);
+			int z = Math.round(worldZ);
+			long key = BlockPos.asLong(x, y, z);
+			if (fieldPins.containsKey(key)) {
+				return fieldPins.get(key);
+			}
+			float pin = 1.0F;
+			for (int dy = -1; dy <= 0 && pin > 0.0F; dy++) {
+				for (int dz = -1; dz <= 0 && pin > 0.0F; dz++) {
+					for (int dx = -1; dx <= 0; dx++) {
+						pinCursor.set(x + dx, y + dy, z + dz);
+						BlockState around = level.getBlockState(pinCursor);
+						if (!(around.getBlock() instanceof LeavesBlock)
+								&& around.isCollisionShapeFullBlock(level, pinCursor)) {
+							pin = 0.0F;
+							break;
+						}
+					}
+				}
+			}
+			fieldPins.put(key, pin);
+			return pin;
 		}
 
 		/** How far a push moves a vertex at this height, as meshed: Sway's own weight, none for a block Sway does not push. */
@@ -3547,9 +3593,10 @@ public final class GpuFoliageRenderer {
 				float localY = quad.position(vertex).y();
 				float worldY = regionOrigin.getY() + y + localY;
 				weightScratch.putFloat(cell);
-				weightScratch.putFloat(packWeights(anchor.waveAt(worldY), anchor.pushAt(localY), anchor.still,
-						anchor.steady, anchor.exposureAt(regionOrigin.getX() + x + quad.position(vertex).x(), worldY,
-								regionOrigin.getZ() + z + quad.position(vertex).z())));
+				float worldX = regionOrigin.getX() + x + quad.position(vertex).x();
+				float worldZ = regionOrigin.getZ() + z + quad.position(vertex).z();
+				weightScratch.putFloat(packWeights(anchor.waveAt(worldY) * anchor.pinAt(worldX, worldY, worldZ),
+						anchor.pushAt(localY), anchor.still, anchor.steady, anchor.exposureAt(worldX, worldY, worldZ)));
 			}
 		};
 
@@ -3573,6 +3620,7 @@ public final class GpuFoliageRenderer {
 		// compiler does (ModelBlockRenderer.forceOpaque): every LeavesBlock. Their faces against one another are hidden by
 		// the culling renderer as the chunk mesh's are, since LeavesBlock hides them while its leaves are not cut out.
 		boolean opaqueLeaves = WavingWhitelist.opaqueLeaves();
+		anchor.pinField = opaqueLeaves;
 		int cutoutVertices = 0;
 		for (int walk = 0; walk < 2; walk++) {
 			if (walk == 1) {
