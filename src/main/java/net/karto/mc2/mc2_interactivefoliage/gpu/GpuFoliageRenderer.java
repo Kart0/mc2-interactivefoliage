@@ -202,6 +202,11 @@ public final class GpuFoliageRenderer {
 	 */
 	private static final long REGION_UPLOAD_MAX_WAIT_MILLIS = 500L;
 	/**
+	 * Regions are uploaded nearest first, so one further out could wait for as long as nearer ones keep coming in; past
+	 * this it is uploaded before them.
+	 */
+	private static final long REGION_UPLOAD_STARVE_MILLIS = 2_000L;
+	/**
 	 * And only for this long a frame, after the first one, so a frame is never held up by meshing: a heavy resource pack,
 	 * a slow processor or rain starting -- which meshes every section again -- would otherwise stall a frame for as long
 	 * as all of them take. A section not yet meshed again keeps what it showed, so this only spreads the work out.
@@ -840,6 +845,14 @@ public final class GpuFoliageRenderer {
 					origin.getX() + REGION_WIDTH * SECTION_SIZE - 1,
 					origin.getY() + REGION_HEIGHT * SECTION_SIZE - 1,
 					origin.getZ() + REGION_WIDTH * SECTION_SIZE - 1);
+		}
+
+		/** Squared distance from the camera to the region's centre. */
+		double distanceSqTo(Vec3 camera) {
+			double x = origin.getX() + REGION_WIDTH * SECTION_SIZE / 2.0D - camera.x;
+			double y = origin.getY() + REGION_HEIGHT * SECTION_SIZE / 2.0D - camera.y;
+			double z = origin.getZ() + REGION_WIDTH * SECTION_SIZE / 2.0D - camera.z;
+			return x * x + y * y + z * z;
 		}
 
 		void put(int slot, Section section) {
@@ -1718,7 +1731,7 @@ public final class GpuFoliageRenderer {
 		buildNearest(minecraft, camera);
 		// One region is uploaded a frame, and each is drawn as last uploaded meanwhile, so its buffers and the layout used
 		// to draw from them always agree.
-		uploadDueRegion();
+		uploadDueRegion(camera);
 
 		//? <26.1.2 {
 		/*if (frustum == null) {
@@ -2734,30 +2747,45 @@ public final class GpuFoliageRenderer {
 	private static final LongOpenHashSet REGIONS_WITH_QUEUED_SECTIONS = new LongOpenHashSet();
 
 	/**
-	 * Uploads at most one region this frame: the one waiting longest among those with nothing left in the queue, or
+	 * Uploads at most one region this frame: the one nearest the camera among those with nothing left in the queue, or
 	 * that have waited too long. A region upload can be tens of megabytes with a detailed resource pack or waving
 	 * leaves, and uploading a region for every section built into it, every frame, was most of what the renderer cost.
+	 * <p>
+	 * Nearest first, as sections are built, so the foliage at your feet is not held up behind a region further out; one
+	 * left waiting past {@link #REGION_UPLOAD_STARVE_MILLIS} goes first, so walking on never keeps the far ones off screen.
 	 */
-	private static void uploadDueRegion() {
+	private static void uploadDueRegion(Vec3 camera) {
 		if (DIRTY_REGIONS.isEmpty()) {
+			return;
+		}
+		long now = System.currentTimeMillis();
+		// The set keeps the order regions started waiting in, so the first is the one waiting longest.
+		Region oldest = DIRTY_REGIONS.iterator().next();
+		if (now - oldest.pendingSince >= REGION_UPLOAD_STARVE_MILLIS) {
+			DIRTY_REGIONS.remove(oldest);
+			oldest.upload();
 			return;
 		}
 		REGIONS_WITH_QUEUED_SECTIONS.clear();
 		for (long key : DIRTY) {
 			REGIONS_WITH_QUEUED_SECTIONS.add(regionKeyOf(key));
 		}
-		long now = System.currentTimeMillis();
-		// Oldest first: the set keeps the order regions started waiting in.
-		var waiting = DIRTY_REGIONS.iterator();
-		while (waiting.hasNext()) {
-			Region region = waiting.next();
+		Region nearest = null;
+		double nearestDistance = Double.MAX_VALUE;
+		for (Region region : DIRTY_REGIONS) {
 			if (now - region.pendingSince < REGION_UPLOAD_MAX_WAIT_MILLIS
 					&& REGIONS_WITH_QUEUED_SECTIONS.contains(region.key)) {
 				continue;
 			}
-			waiting.remove();
-			region.upload();
-			return;
+			double distance = region.distanceSqTo(camera);
+			if (distance < nearestDistance) {
+				nearestDistance = distance;
+				nearest = region;
+			}
+		}
+		if (nearest != null) {
+			DIRTY_REGIONS.remove(nearest);
+			nearest.upload();
 		}
 	}
 
