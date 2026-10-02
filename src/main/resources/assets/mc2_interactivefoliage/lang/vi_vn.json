@@ -13,6 +13,8 @@
     "config.mc2_interactivefoliage.gpu.half": "Một Nửa",
     "config.mc2_interactivefoliage.gpu.full": "Toàn Bộ",
     "config.mc2_interactivefoliage.waving_foliage": "Cây Cối Đung Đưa",
+    "config.mc2_interactivefoliage.waving_leaves": "Lá Cây Đung Đưa",
+    "config.mc2_interactivefoliage.waving_leaves.needs_fancy": "Lá cây chỉ đung đưa với lá Đẹp (Cài đặt video).",
     "config.mc2_interactivefoliage.weather_wind": "Gió Thời Tiết",
     "config.mc2_interactivefoliage.distance": "Khoảng Cách",
     "config.mc2_interactivefoliage.preset.classic": "Cổ Điển",

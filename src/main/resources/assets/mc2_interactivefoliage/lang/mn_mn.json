@@ -13,6 +13,8 @@
     "config.mc2_interactivefoliage.gpu.half": "Хагас",
     "config.mc2_interactivefoliage.gpu.full": "Бүтэн",
     "config.mc2_interactivefoliage.waving_foliage": "Найгалзах Ургамал",
+    "config.mc2_interactivefoliage.waving_leaves": "Найгалзах Навч",
+    "config.mc2_interactivefoliage.waving_leaves.needs_fancy": "Навч зөвхөн Гоё навчтай үед найгална (Видео тохиргоо).",
     "config.mc2_interactivefoliage.weather_wind": "Цаг Агаарын Салхи",
     "config.mc2_interactivefoliage.distance": "Зай",
     "config.mc2_interactivefoliage.preset.classic": "Сонгодог",

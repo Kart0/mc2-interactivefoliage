@@ -13,6 +13,8 @@
     "config.mc2_interactivefoliage.gpu.half": "Połowa",
     "config.mc2_interactivefoliage.gpu.full": "Pełny",
     "config.mc2_interactivefoliage.waving_foliage": "Falujące Rośliny",
+    "config.mc2_interactivefoliage.waving_leaves": "Falujące Liście",
+    "config.mc2_interactivefoliage.waving_leaves.needs_fancy": "Liście falują tylko przy Szczegółowych liściach (Ustawienia graficzne).",
     "config.mc2_interactivefoliage.weather_wind": "Wiatr Burzowy",
     "config.mc2_interactivefoliage.distance": "Dystans",
     "config.mc2_interactivefoliage.preset.classic": "Klasyczne",

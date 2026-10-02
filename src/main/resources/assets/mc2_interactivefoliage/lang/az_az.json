@@ -13,6 +13,8 @@
     "config.mc2_interactivefoliage.gpu.half": "Yarım",
     "config.mc2_interactivefoliage.gpu.full": "Tam",
     "config.mc2_interactivefoliage.waving_foliage": "Dalğalanan Bitkilər",
+    "config.mc2_interactivefoliage.waving_leaves": "Dalğalanan Yarpaqlar",
+    "config.mc2_interactivefoliage.waving_leaves.needs_fancy": "Yarpaqlar yalnız Gözəl yarpaqlarla dalğalanır (Video Parametrləri).",
     "config.mc2_interactivefoliage.weather_wind": "Hava Küləyi",
     "config.mc2_interactivefoliage.distance": "Məsafə",
     "config.mc2_interactivefoliage.preset.classic": "Klassik",

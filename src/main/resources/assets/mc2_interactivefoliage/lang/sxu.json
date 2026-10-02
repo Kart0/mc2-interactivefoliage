@@ -13,6 +13,8 @@
     "config.mc2_interactivefoliage.gpu.half": "Halb",
     "config.mc2_interactivefoliage.gpu.full": "Voll",
     "config.mc2_interactivefoliage.waving_foliage": "Wabbelnde Flanzn",
+    "config.mc2_interactivefoliage.waving_leaves": "Wabbelnde Bläddr",
+    "config.mc2_interactivefoliage.waving_leaves.needs_fancy": "Bläddr wabbln nur mit scheene Bläddr (Videoeinstellungn).",
     "config.mc2_interactivefoliage.weather_wind": "Weddorwind",
     "config.mc2_interactivefoliage.distance": "Weide",
     "config.mc2_interactivefoliage.preset.classic": "Glassisch",

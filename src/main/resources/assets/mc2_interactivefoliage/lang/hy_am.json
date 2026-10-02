@@ -13,6 +13,8 @@
     "config.mc2_interactivefoliage.gpu.half": "Կես",
     "config.mc2_interactivefoliage.gpu.full": "Լրիվ",
     "config.mc2_interactivefoliage.waving_foliage": "Օրորվող Բույսեր",
+    "config.mc2_interactivefoliage.waving_leaves": "Օրորվող Տերևներ",
+    "config.mc2_interactivefoliage.waving_leaves.needs_fancy": "Տերևները օրորվում են միայն Գեղեցիկ տերևներով (Տեսանյութի կարգավորումներ)։",
     "config.mc2_interactivefoliage.weather_wind": "Եղանակային Քամի",
     "config.mc2_interactivefoliage.distance": "Հեռավորություն",
     "config.mc2_interactivefoliage.preset.classic": "Դասական",

@@ -13,6 +13,8 @@
     "config.mc2_interactivefoliage.gpu.half": "Hálvt",
     "config.mc2_interactivefoliage.gpu.full": "Fult",
     "config.mc2_interactivefoliage.waving_foliage": "Vaggandi Plantur",
+    "config.mc2_interactivefoliage.waving_leaves": "Vaggandi Bløð",
+    "config.mc2_interactivefoliage.waving_leaves.needs_fancy": "Bløð vagga bara við Fínum bløðum (Myndstillingar).",
     "config.mc2_interactivefoliage.weather_wind": "Veðurvindur",
     "config.mc2_interactivefoliage.distance": "Fjarstøða",
     "config.mc2_interactivefoliage.preset.classic": "Klassiskt",

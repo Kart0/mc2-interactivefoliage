@@ -13,6 +13,8 @@
     "config.mc2_interactivefoliage.gpu.half": "Setengah",
     "config.mc2_interactivefoliage.gpu.full": "Penoeh",
     "config.mc2_interactivefoliage.waving_foliage": "Dedaoenan Bergojang",
+    "config.mc2_interactivefoliage.waving_leaves": "Daoen Bergojang",
+    "config.mc2_interactivefoliage.waving_leaves.needs_fancy": "Daoen tjoema bergojang dengan daoen Mewah (Pengatoeran Video).",
     "config.mc2_interactivefoliage.weather_wind": "Angin Tjoeatja",
     "config.mc2_interactivefoliage.distance": "Djarak",
     "config.mc2_interactivefoliage.preset.classic": "Klasik",

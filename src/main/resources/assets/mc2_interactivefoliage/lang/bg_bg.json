@@ -13,6 +13,8 @@
     "config.mc2_interactivefoliage.gpu.half": "Половина",
     "config.mc2_interactivefoliage.gpu.full": "Пълна",
     "config.mc2_interactivefoliage.waving_foliage": "Полюшващи Се Растения",
+    "config.mc2_interactivefoliage.waving_leaves": "Полюшващи Се Листа",
+    "config.mc2_interactivefoliage.waving_leaves.needs_fancy": "Листата се полюшват само при Красиви листа (Видео настройки).",
     "config.mc2_interactivefoliage.weather_wind": "Вятър при Буря",
     "config.mc2_interactivefoliage.distance": "Разстояние",
     "config.mc2_interactivefoliage.preset.classic": "Класически",

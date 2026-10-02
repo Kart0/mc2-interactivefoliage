@@ -13,6 +13,8 @@
     "config.mc2_interactivefoliage.gpu.half": "Pool",
     "config.mc2_interactivefoliage.gpu.full": "Täis",
     "config.mc2_interactivefoliage.waving_foliage": "Õõtsuvad Taimed",
+    "config.mc2_interactivefoliage.waving_leaves": "Õõtsuvad Lehed",
+    "config.mc2_interactivefoliage.waving_leaves.needs_fancy": "Lehed õõtsuvad ainult Uhkete lehtedega (Videoseaded).",
     "config.mc2_interactivefoliage.weather_wind": "Ilmatuul",
     "config.mc2_interactivefoliage.distance": "Kaugus",
     "config.mc2_interactivefoliage.preset.classic": "Klassikaline",

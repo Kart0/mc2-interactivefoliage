@@ -13,6 +13,8 @@
     "config.mc2_interactivefoliage.gpu.half": "Polovina",
     "config.mc2_interactivefoliage.gpu.full": "Plna",
     "config.mc2_interactivefoliage.waving_foliage": "Kolyhanje Trav",
+    "config.mc2_interactivefoliage.waving_leaves": "Kolyhanje Listja",
+    "config.mc2_interactivefoliage.waving_leaves.needs_fancy": "Listje kolyhaje se jedino s Krasnym listjem (Video-nastavjenja).",
     "config.mc2_interactivefoliage.weather_wind": "Větr Nepogody",
     "config.mc2_interactivefoliage.distance": "Daljina",
     "config.mc2_interactivefoliage.preset.classic": "Klasičny",

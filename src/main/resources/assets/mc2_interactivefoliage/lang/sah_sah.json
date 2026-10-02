@@ -13,6 +13,8 @@
     "config.mc2_interactivefoliage.gpu.half": "Аҥаар",
     "config.mc2_interactivefoliage.gpu.full": "Толору",
     "config.mc2_interactivefoliage.waving_foliage": "Хамсыыр Үүнээйилэр",
+    "config.mc2_interactivefoliage.waving_leaves": "Хамсыыр Сэбирдэх",
+    "config.mc2_interactivefoliage.waving_leaves.needs_fancy": "Сэбирдэх Кэрэ сэбирдэхтээх эрэ хамсыыр (Видео туруоруулара).",
     "config.mc2_interactivefoliage.weather_wind": "Ардах Тыала",
     "config.mc2_interactivefoliage.distance": "Ыраах",
     "config.mc2_interactivefoliage.preset.classic": "Классика",

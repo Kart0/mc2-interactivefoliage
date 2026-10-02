@@ -13,6 +13,8 @@
     "config.mc2_interactivefoliage.gpu.half": "Halv",
     "config.mc2_interactivefoliage.gpu.full": "Full",
     "config.mc2_interactivefoliage.waving_foliage": "Vajande Växter",
+    "config.mc2_interactivefoliage.waving_leaves": "Vajande Löv",
+    "config.mc2_interactivefoliage.waving_leaves.needs_fancy": "Löv vajar bara med Snygga löv (Videoinställningar).",
     "config.mc2_interactivefoliage.weather_wind": "Vädervind",
     "config.mc2_interactivefoliage.distance": "Avstånd",
     "config.mc2_interactivefoliage.preset.classic": "Klassisk",

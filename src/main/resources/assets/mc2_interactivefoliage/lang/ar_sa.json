@@ -13,6 +13,8 @@
     "config.mc2_interactivefoliage.gpu.half": "النصف",
     "config.mc2_interactivefoliage.gpu.full": "كامل",
     "config.mc2_interactivefoliage.waving_foliage": "نباتات متمايلة",
+    "config.mc2_interactivefoliage.waving_leaves": "أوراق متمايلة",
+    "config.mc2_interactivefoliage.waving_leaves.needs_fancy": "تتمايل الأوراق فقط مع الأوراق الفاخرة (إعدادات الفيديو).",
     "config.mc2_interactivefoliage.weather_wind": "رياح الطقس",
     "config.mc2_interactivefoliage.distance": "المسافة",
     "config.mc2_interactivefoliage.preset.classic": "كلاسيكي",

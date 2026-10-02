@@ -13,6 +13,8 @@
     "config.mc2_interactivefoliage.gpu.half": "Leth",
     "config.mc2_interactivefoliage.gpu.full": "Làn",
     "config.mc2_interactivefoliage.waving_foliage": "Duilleach a' Luasgadh",
+    "config.mc2_interactivefoliage.waving_leaves": "Duilleagan a' Luasgadh",
+    "config.mc2_interactivefoliage.waving_leaves.needs_fancy": "Cha luaisg na duilleagan ach le duilleagan Spaideil (Roghainnean Video).",
     "config.mc2_interactivefoliage.weather_wind": "Gaoth na h-Aimsire",
     "config.mc2_interactivefoliage.distance": "Astar",
     "config.mc2_interactivefoliage.preset.classic": "Clasaigeach",

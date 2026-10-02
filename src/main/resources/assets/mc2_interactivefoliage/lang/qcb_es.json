@@ -13,6 +13,8 @@
     "config.mc2_interactivefoliage.gpu.half": "Metá",
     "config.mc2_interactivefoliage.gpu.full": "Completu",
     "config.mc2_interactivefoliage.waving_foliage": "Vegetación Ondulanti",
+    "config.mc2_interactivefoliage.waving_leaves": "Hojah Ondulanteh",
+    "config.mc2_interactivefoliage.waving_leaves.needs_fancy": "Lah hojah zolo ondulan con hojah Detallâh (Opzionê de bídeo).",
     "config.mc2_interactivefoliage.weather_wind": "Vientu de Lluvia",
     "config.mc2_interactivefoliage.distance": "Distancia",
     "config.mc2_interactivefoliage.preset.classic": "Clásicu",

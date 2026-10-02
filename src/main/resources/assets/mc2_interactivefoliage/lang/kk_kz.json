@@ -13,6 +13,8 @@
     "config.mc2_interactivefoliage.gpu.half": "Жарты",
     "config.mc2_interactivefoliage.gpu.full": "Толық",
     "config.mc2_interactivefoliage.waving_foliage": "Шөп Тербелісі",
+    "config.mc2_interactivefoliage.waving_leaves": "Жапырақ Тербелісі",
+    "config.mc2_interactivefoliage.waving_leaves.needs_fancy": "Жапырақтар тек Әдемі жапырақтармен тербеледі (Бейне баптаулары).",
     "config.mc2_interactivefoliage.weather_wind": "Ауа Райы Желі",
     "config.mc2_interactivefoliage.distance": "Қашықтық",
     "config.mc2_interactivefoliage.preset.classic": "Классикалық",

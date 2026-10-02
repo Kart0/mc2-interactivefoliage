@@ -13,6 +13,8 @@
     "config.mc2_interactivefoliage.gpu.half": "Puolikas",
     "config.mc2_interactivefoliage.gpu.full": "Täysi",
     "config.mc2_interactivefoliage.waving_foliage": "Huojuvat Kasvit",
+    "config.mc2_interactivefoliage.waving_leaves": "Huojuvat Lehdet",
+    "config.mc2_interactivefoliage.waving_leaves.needs_fancy": "Lehdet huojuvat vain Hienoilla lehdillä (Videoasetukset).",
     "config.mc2_interactivefoliage.weather_wind": "Sadetuuli",
     "config.mc2_interactivefoliage.distance": "Etäisyys",
     "config.mc2_interactivefoliage.preset.classic": "Klassinen",

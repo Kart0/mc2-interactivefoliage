@@ -13,6 +13,8 @@
     "config.mc2_interactivefoliage.gpu.half": "Halb",
     "config.mc2_interactivefoliage.gpu.full": "Voll",
     "config.mc2_interactivefoliage.waving_foliage": "Wogende Pflanzen",
+    "config.mc2_interactivefoliage.waving_leaves": "Wogende Blätter",
+    "config.mc2_interactivefoliage.waving_leaves.needs_fancy": "Blätter wogen nur mit schönen Blättern (Grafikeinstellungen).",
     "config.mc2_interactivefoliage.weather_wind": "Wetterwind",
     "config.mc2_interactivefoliage.distance": "Distanz",
     "config.mc2_interactivefoliage.preset.classic": "Klassisch",

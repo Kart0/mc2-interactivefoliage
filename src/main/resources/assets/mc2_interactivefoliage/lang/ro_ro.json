@@ -13,6 +13,8 @@
     "config.mc2_interactivefoliage.gpu.half": "Jumătate",
     "config.mc2_interactivefoliage.gpu.full": "Completă",
     "config.mc2_interactivefoliage.waving_foliage": "Frunziș Unduitor",
+    "config.mc2_interactivefoliage.waving_leaves": "Frunze Unduitoare",
+    "config.mc2_interactivefoliage.waving_leaves.needs_fancy": "Frunzele se unduiesc doar cu frunze Elaborate (Setări video).",
     "config.mc2_interactivefoliage.weather_wind": "Vânt de Ploaie",
     "config.mc2_interactivefoliage.distance": "Distanță",
     "config.mc2_interactivefoliage.preset.classic": "Clasică",

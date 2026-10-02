@@ -13,6 +13,8 @@
     "config.mc2_interactivefoliage.gpu.half": "Meitat",
     "config.mc2_interactivefoliage.gpu.full": "Completa",
     "config.mc2_interactivefoliage.waving_foliage": "Vegetació Ondulant",
+    "config.mc2_interactivefoliage.waving_leaves": "Fulles Ondulants",
+    "config.mc2_interactivefoliage.waving_leaves.needs_fancy": "Les fulles només onegen amb fulles Detallades (Configuració de vídeo).",
     "config.mc2_interactivefoliage.weather_wind": "Vent de Pluja",
     "config.mc2_interactivefoliage.distance": "Distància",
     "config.mc2_interactivefoliage.preset.classic": "Clàssic",

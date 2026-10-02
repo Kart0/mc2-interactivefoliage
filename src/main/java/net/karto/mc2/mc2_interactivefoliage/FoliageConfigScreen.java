@@ -272,15 +272,8 @@ public class FoliageConfigScreen extends Screen {
 		// then its text.
 		Component wavingLeavesLabel = Component.translatable("config.mc2_interactivefoliage.waving_leaves");
 		int wavingLeavesWidth = 20 + 4 + this.font.width(wavingLeavesLabel);
-		wavingLeavesBox = new Checkbox(cx - wavingLeavesWidth / 2, y, wavingLeavesWidth, 20, wavingLeavesLabel,
-				FoliageSettings.wavingLeaves()) {
-			@Override
-			public void onPress() {
-				super.onPress();
-				FoliageSettings.setWavingLeaves(selected());
-				GpuFoliageRenderer.foliageListChanged();
-			}
-		};
+		wavingLeavesBox = new WavingLeavesCheckbox(cx - wavingLeavesWidth / 2, y, wavingLeavesWidth, wavingLeavesLabel,
+				FoliageSettings.wavingLeaves());
 		*///?}
 		this.addRenderableWidget(wavingLeavesBox);
 		updateGpuOptions();
@@ -736,4 +729,25 @@ public class FoliageConfigScreen extends Screen {
 		}
 	}
 	//?}
+
+	//? <1.21.1 {
+	/*/^*
+	 * The leaves' checkbox before 1.20.3, which only says it was pressed. A class of its own rather than an anonymous one:
+	 * an anonymous subclass takes the constructor's parameter names from the mappings, and those of this version's
+	 * Checkbox clash when compiled on newer JDKs.
+	 ^/
+	private static final class WavingLeavesCheckbox extends Checkbox {
+
+		WavingLeavesCheckbox(int x, int y, int width, Component label, boolean selected) {
+			super(x, y, width, 20, label, selected);
+		}
+
+		@Override
+		public void onPress() {
+			super.onPress();
+			FoliageSettings.setWavingLeaves(selected());
+			GpuFoliageRenderer.foliageListChanged();
+		}
+	}
+	*///?}
 }

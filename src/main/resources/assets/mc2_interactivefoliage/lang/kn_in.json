@@ -13,6 +13,8 @@
     "config.mc2_interactivefoliage.gpu.half": "ಅರ್ಧ",
     "config.mc2_interactivefoliage.gpu.full": "ಪೂರ್ಣ",
     "config.mc2_interactivefoliage.waving_foliage": "ತೂಗಾಡುವ ಸಸ್ಯಗಳು",
+    "config.mc2_interactivefoliage.waving_leaves": "ತೂಗಾಡುವ ಎಲೆಗಳು",
+    "config.mc2_interactivefoliage.waving_leaves.needs_fancy": "ಎಲೆಗಳು ಅಲಂಕಾರಿಕ ಎಲೆಗಳೊಂದಿಗೆ ಮಾತ್ರ ತೂಗಾಡುತ್ತವೆ (ವೀಡಿಯೊ ಸೆಟ್ಟಿಂಗ್‌ಗಳು).",
     "config.mc2_interactivefoliage.weather_wind": "ಹವಾಮಾನ ಗಾಳಿ",
     "config.mc2_interactivefoliage.distance": "ದೂರ",
     "config.mc2_interactivefoliage.preset.classic": "ಕ್ಲಾಸಿಕ್",

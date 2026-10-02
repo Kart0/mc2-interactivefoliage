@@ -550,7 +550,18 @@ public final class GpuFoliageSplit {
 	 * leaves while they wave -- snow on a tree -- which is foliage only there.
 	 */
 	public static boolean isFoliageAt(BlockGetter level, BlockPos pos, BlockState state) {
-		return isFoliage(state) || restsOnWavingLeaves(level, pos, state);
+		if (isFoliage(state)) {
+			return true;
+		}
+		// Snow is everywhere in a cold biome, and is only ever the renderer's while the leaves wave and near the player:
+		// the block under it is only looked at then, and there.
+		if (!WavingWhitelist.leavesWave() || !WavingWhitelist.restsOnLeaves(state.getBlock())) {
+			return false;
+		}
+		Area current = area;
+		return current != null
+				&& current.contains(SectionPos.blockToSectionCoord(pos.getX()), SectionPos.blockToSectionCoord(pos.getZ()))
+				&& WavingWhitelist.isLeaves(level.getBlockState(pos.below()).getBlock());
 	}
 
 	/** Whether this is a block resting on a leaf while the leaves wave, drawn and waved with them; see isFoliageAt. */

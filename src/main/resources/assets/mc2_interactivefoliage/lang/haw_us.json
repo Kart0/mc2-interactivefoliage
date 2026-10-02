@@ -13,6 +13,8 @@
     "config.mc2_interactivefoliage.gpu.half": "Hapalua",
     "config.mc2_interactivefoliage.gpu.full": "Piha",
     "config.mc2_interactivefoliage.waving_foliage": "Lau Lūlū",
+    "config.mc2_interactivefoliage.waving_leaves": "Lau Lūlū",
+    "config.mc2_interactivefoliage.waving_leaves.needs_fancy": "Lūlū wale nō nā lau me nā lau Nani (Nā Hoʻonohonoho Wikiō).",
     "config.mc2_interactivefoliage.weather_wind": "Makani ʻIno",
     "config.mc2_interactivefoliage.distance": "Kaʻawale",
     "config.mc2_interactivefoliage.preset.classic": "Kahiko",

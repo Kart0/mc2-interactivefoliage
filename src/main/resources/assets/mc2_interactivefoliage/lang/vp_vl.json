@@ -13,6 +13,8 @@
     "config.mc2_interactivefoliage.gpu.half": "Hanbun",
     "config.mc2_interactivefoliage.gpu.full": "Al",
     "config.mc2_interactivefoliage.waving_foliage": "Kiplanta Ugoki",
+    "config.mc2_interactivefoliage.waving_leaves": "Kiplahi Ugoki",
+    "config.mc2_interactivefoliage.waving_leaves.needs_fancy": "Plahi ugokas nur kun Bel plahi (Videotaskes).",
     "config.mc2_interactivefoliage.weather_wind": "Pogodakaze",
     "config.mc2_interactivefoliage.distance": "Pitkatai",
     "config.mc2_interactivefoliage.preset.classic": "Vanha",

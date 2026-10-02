@@ -13,6 +13,8 @@
     "config.mc2_interactivefoliage.gpu.half": "Setengah",
     "config.mc2_interactivefoliage.gpu.full": "Penuh",
     "config.mc2_interactivefoliage.waving_foliage": "Dedaunan Bergoyang",
+    "config.mc2_interactivefoliage.waving_leaves": "Daun Bergoyang",
+    "config.mc2_interactivefoliage.waving_leaves.needs_fancy": "Daun hanya bergoyang dengan daun Mewah (Pengaturan Video).",
     "config.mc2_interactivefoliage.weather_wind": "Angin Cuaca",
     "config.mc2_interactivefoliage.distance": "Jarak",
     "config.mc2_interactivefoliage.preset.classic": "Klasik",

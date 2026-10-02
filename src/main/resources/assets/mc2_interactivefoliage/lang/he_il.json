@@ -13,6 +13,8 @@
     "config.mc2_interactivefoliage.gpu.half": "חצי",
     "config.mc2_interactivefoliage.gpu.full": "מלא",
     "config.mc2_interactivefoliage.waving_foliage": "צמחייה מתנועעת",
+    "config.mc2_interactivefoliage.waving_leaves": "עלים מתנועעים",
+    "config.mc2_interactivefoliage.waving_leaves.needs_fancy": "העלים מתנועעים רק עם עלים מהודרים (הגדרות וידאו).",
     "config.mc2_interactivefoliage.weather_wind": "רוח סערה",
     "config.mc2_interactivefoliage.distance": "מרחק",
     "config.mc2_interactivefoliage.preset.classic": "קלאסי",

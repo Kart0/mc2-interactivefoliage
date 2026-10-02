@@ -13,6 +13,8 @@
     "config.mc2_interactivefoliage.gpu.half": "आधा",
     "config.mc2_interactivefoliage.gpu.full": "पूरा",
     "config.mc2_interactivefoliage.waving_foliage": "लहराती वनस्पति",
+    "config.mc2_interactivefoliage.waving_leaves": "लहराती पत्तियाँ",
+    "config.mc2_interactivefoliage.waving_leaves.needs_fancy": "पत्तियाँ केवल शानदार पत्तियों के साथ लहराती हैं (वीडियो सेटिंग्स)।",
     "config.mc2_interactivefoliage.weather_wind": "मौसमी हवा",
     "config.mc2_interactivefoliage.distance": "दूरी",
     "config.mc2_interactivefoliage.preset.classic": "क्लासिक",

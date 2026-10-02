@@ -13,6 +13,8 @@
     "config.mc2_interactivefoliage.gpu.half": "半",
     "config.mc2_interactivefoliage.gpu.full": "全",
     "config.mc2_interactivefoliage.waving_foliage": "草木搖曳",
+    "config.mc2_interactivefoliage.waving_leaves": "葉之搖曳",
+    "config.mc2_interactivefoliage.waving_leaves.needs_fancy": "葉唯於華葉時搖曳（影像設定）。",
     "config.mc2_interactivefoliage.weather_wind": "風雨",
     "config.mc2_interactivefoliage.distance": "距",
     "config.mc2_interactivefoliage.preset.classic": "古",

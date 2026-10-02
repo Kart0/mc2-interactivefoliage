@@ -13,6 +13,8 @@
     "config.mc2_interactivefoliage.gpu.half": "Badh",
     "config.mc2_interactivefoliage.gpu.full": "Buuxa",
     "config.mc2_interactivefoliage.waving_foliage": "Dhirta Ruxruxda",
+    "config.mc2_interactivefoliage.waving_leaves": "Caleemo Ruxruxda",
+    "config.mc2_interactivefoliage.waving_leaves.needs_fancy": "Caleemuhu waxay ruxmaan oo keliya marka caleemuhu Qurux yihiin (Dejinta Fiidiyowga).",
     "config.mc2_interactivefoliage.weather_wind": "Dabaysha Cimilada",
     "config.mc2_interactivefoliage.distance": "Masaafo",
     "config.mc2_interactivefoliage.preset.classic": "Qadiim",

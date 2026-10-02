@@ -13,6 +13,8 @@
     "config.mc2_interactivefoliage.gpu.half": "Çурри",
     "config.mc2_interactivefoliage.gpu.full": "Тулли",
     "config.mc2_interactivefoliage.waving_foliage": "Сулланакан Ӳсен-тӑран",
+    "config.mc2_interactivefoliage.waving_leaves": "Сулланакан Ҫулҫӑ",
+    "config.mc2_interactivefoliage.waving_leaves.needs_fancy": "Ҫулҫӑ Илемлӗ ҫулҫӑпа ҫеҫ сулланать (Видео ӗнерленӗвӗсем).",
     "config.mc2_interactivefoliage.weather_wind": "Çумăр Ҫилĕ",
     "config.mc2_interactivefoliage.distance": "Инçĕш",
     "config.mc2_interactivefoliage.preset.classic": "Классика",

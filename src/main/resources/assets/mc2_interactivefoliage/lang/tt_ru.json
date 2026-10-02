@@ -13,6 +13,8 @@
     "config.mc2_interactivefoliage.gpu.half": "Ярты",
     "config.mc2_interactivefoliage.gpu.full": "Тулы",
     "config.mc2_interactivefoliage.waving_foliage": "Үлән Тирбәлеше",
+    "config.mc2_interactivefoliage.waving_leaves": "Яфрак Тирбәлеше",
+    "config.mc2_interactivefoliage.waving_leaves.needs_fancy": "Яфраклар Матур яфраклар белән генә тирбәлә (Видео көйләүләре).",
     "config.mc2_interactivefoliage.weather_wind": "Яңгыр Җиле",
     "config.mc2_interactivefoliage.distance": "Ара",
     "config.mc2_interactivefoliage.preset.classic": "Классик",

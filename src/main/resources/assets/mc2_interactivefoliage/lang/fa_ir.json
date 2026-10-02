@@ -13,6 +13,8 @@
     "config.mc2_interactivefoliage.gpu.half": "نیمه",
     "config.mc2_interactivefoliage.gpu.full": "کامل",
     "config.mc2_interactivefoliage.waving_foliage": "گیاهان مواج",
+    "config.mc2_interactivefoliage.waving_leaves": "برگ‌های مواج",
+    "config.mc2_interactivefoliage.waving_leaves.needs_fancy": "برگ‌ها فقط با برگ‌های زیبا موج می‌زنند (تنظیمات ویدیو).",
     "config.mc2_interactivefoliage.weather_wind": "باد طوفانی",
     "config.mc2_interactivefoliage.distance": "فاصله",
     "config.mc2_interactivefoliage.preset.classic": "کلاسیک",

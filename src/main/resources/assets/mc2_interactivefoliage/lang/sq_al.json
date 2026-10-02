@@ -13,6 +13,8 @@
     "config.mc2_interactivefoliage.gpu.half": "Gjysmë",
     "config.mc2_interactivefoliage.gpu.full": "E Plotë",
     "config.mc2_interactivefoliage.waving_foliage": "Bimë në Erë",
+    "config.mc2_interactivefoliage.waving_leaves": "Gjethe në Erë",
+    "config.mc2_interactivefoliage.waving_leaves.needs_fancy": "Gjethet lëkunden vetëm me gjethe të Bukura (Cilësimet e videos).",
     "config.mc2_interactivefoliage.weather_wind": "Erë Moti",
     "config.mc2_interactivefoliage.distance": "Distanca",
     "config.mc2_interactivefoliage.preset.classic": "Klasik",

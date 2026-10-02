@@ -13,6 +13,8 @@
     "config.mc2_interactivefoliage.gpu.half": "Hanner",
     "config.mc2_interactivefoliage.gpu.full": "Llawn",
     "config.mc2_interactivefoliage.waving_foliage": "Dail yn Siglo",
+    "config.mc2_interactivefoliage.waving_leaves": "Dail yn Chwifio",
+    "config.mc2_interactivefoliage.waving_leaves.needs_fancy": "Dim ond gyda dail Crand mae'r dail yn chwifio (Gosodiadau Fideo).",
     "config.mc2_interactivefoliage.weather_wind": "Gwynt Tywydd",
     "config.mc2_interactivefoliage.distance": "Pellter",
     "config.mc2_interactivefoliage.preset.classic": "Clasurol",

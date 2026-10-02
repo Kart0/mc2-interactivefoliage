@@ -13,6 +13,8 @@
   "config.mc2_interactivefoliage.gpu.half": "Half",
   "config.mc2_interactivefoliage.gpu.full": "Volledig",
   "config.mc2_interactivefoliage.waving_foliage": "Wuivende Planten",
+  "config.mc2_interactivefoliage.waving_leaves": "Wuivende Bladeren",
+  "config.mc2_interactivefoliage.waving_leaves.needs_fancy": "Bladeren wuiven alleen met Mooie bladeren (Video-instellingen).",
   "config.mc2_interactivefoliage.weather_wind": "Weerwind",
   "config.mc2_interactivefoliage.distance": "Afstand",
   "config.mc2_interactivefoliage.preset.classic": "Klassiek",

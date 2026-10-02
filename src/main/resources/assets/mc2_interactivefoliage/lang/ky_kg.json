@@ -13,6 +13,8 @@
     "config.mc2_interactivefoliage.gpu.half": "Жарым",
     "config.mc2_interactivefoliage.gpu.full": "Толук",
     "config.mc2_interactivefoliage.waving_foliage": "Термелген Өсүмдүктөр",
+    "config.mc2_interactivefoliage.waving_leaves": "Термелген Жалбырактар",
+    "config.mc2_interactivefoliage.waving_leaves.needs_fancy": "Жалбырактар Кооз жалбырактар менен гана термелет (Видео жөндөөлөрү).",
     "config.mc2_interactivefoliage.weather_wind": "Аба Ырайы Шамалы",
     "config.mc2_interactivefoliage.distance": "Аралык",
     "config.mc2_interactivefoliage.preset.classic": "Классикалык",

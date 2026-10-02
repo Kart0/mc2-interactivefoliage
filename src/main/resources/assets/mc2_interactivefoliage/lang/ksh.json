@@ -13,6 +13,8 @@
     "config.mc2_interactivefoliage.gpu.half": "Halv",
     "config.mc2_interactivefoliage.gpu.full": "Voll",
     "config.mc2_interactivefoliage.waving_foliage": "Wabbelije Planze",
+    "config.mc2_interactivefoliage.waving_leaves": "Wabbelije Blädder",
+    "config.mc2_interactivefoliage.waving_leaves.needs_fancy": "De Blädder wabbele nur met schöne Blädder (Grafik-Enstellunge).",
     "config.mc2_interactivefoliage.weather_wind": "Wedderwind",
     "config.mc2_interactivefoliage.distance": "Wick",
     "config.mc2_interactivefoliage.preset.classic": "Klassisch",

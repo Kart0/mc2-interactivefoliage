@@ -13,6 +13,8 @@
     "config.mc2_interactivefoliage.gpu.half": "Μισή",
     "config.mc2_interactivefoliage.gpu.full": "Πλήρης",
     "config.mc2_interactivefoliage.waving_foliage": "Κούνημα Φυτών",
+    "config.mc2_interactivefoliage.waving_leaves": "Κούνημα Φύλλων",
+    "config.mc2_interactivefoliage.waving_leaves.needs_fancy": "Τα φύλλα κουνιούνται μόνο με Φανταχτερά φύλλα (Ρυθμίσεις βίντεο).",
     "config.mc2_interactivefoliage.weather_wind": "Άνεμος Καιρού",
     "config.mc2_interactivefoliage.distance": "Απόσταση",
     "config.mc2_interactivefoliage.preset.classic": "Κλασική",

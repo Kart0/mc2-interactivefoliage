@@ -13,6 +13,8 @@
     "config.mc2_interactivefoliage.gpu.half": "절반",
     "config.mc2_interactivefoliage.gpu.full": "전체",
     "config.mc2_interactivefoliage.waving_foliage": "식물 흔들림",
+    "config.mc2_interactivefoliage.waving_leaves": "나뭇잎 흔들림",
+    "config.mc2_interactivefoliage.waving_leaves.needs_fancy": "나뭇잎은 '화려하게' 나뭇잎에서만 흔들립니다 (비디오 설정).",
     "config.mc2_interactivefoliage.weather_wind": "날씨 바람",
     "config.mc2_interactivefoliage.distance": "거리",
     "config.mc2_interactivefoliage.preset.classic": "클래식",

@@ -13,6 +13,8 @@
     "config.mc2_interactivefoliage.gpu.half": "ნახევარი",
     "config.mc2_interactivefoliage.gpu.full": "სრული",
     "config.mc2_interactivefoliage.waving_foliage": "მცენარის რხევა",
+    "config.mc2_interactivefoliage.waving_leaves": "ფოთლების რხევა",
+    "config.mc2_interactivefoliage.waving_leaves.needs_fancy": "ფოთლები ირხევა მხოლოდ ლამაზი ფოთლებით (ვიდეოს პარამეტრები).",
     "config.mc2_interactivefoliage.weather_wind": "ამინდის ქარი",
     "config.mc2_interactivefoliage.distance": "მანძილი",
     "config.mc2_interactivefoliage.preset.classic": "კლასიკური",

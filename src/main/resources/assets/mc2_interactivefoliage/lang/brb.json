@@ -13,6 +13,8 @@
     "config.mc2_interactivefoliage.gpu.half": "Half",
     "config.mc2_interactivefoliage.gpu.full": "Vol",
     "config.mc2_interactivefoliage.waving_foliage": "Wuivende Plant'n",
+    "config.mc2_interactivefoliage.waving_leaves": "Wuivende Blaojer",
+    "config.mc2_interactivefoliage.waving_leaves.needs_fancy": "Blaojer wuive allinnig mi Mooie blaojer (Video-instellinge).",
     "config.mc2_interactivefoliage.weather_wind": "Weerwind",
     "config.mc2_interactivefoliage.distance": "Afstand",
     "config.mc2_interactivefoliage.preset.classic": "Klassiek",

@@ -13,6 +13,8 @@
     "config.mc2_interactivefoliage.gpu.half": "ครึ่งหนึ่ง",
     "config.mc2_interactivefoliage.gpu.full": "เต็ม",
     "config.mc2_interactivefoliage.waving_foliage": "พืชไหวตามลม",
+    "config.mc2_interactivefoliage.waving_leaves": "ใบไม้ไหวตามลม",
+    "config.mc2_interactivefoliage.waving_leaves.needs_fancy": "ใบไม้จะไหวเฉพาะเมื่อใช้ใบไม้แบบสวยงาม (การตั้งค่าวิดีโอ)",
     "config.mc2_interactivefoliage.weather_wind": "ลมพายุฝน",
     "config.mc2_interactivefoliage.distance": "ระยะ",
     "config.mc2_interactivefoliage.preset.classic": "คลาสสิก",

@@ -13,6 +13,8 @@
     "config.mc2_interactivefoliage.gpu.half": "Pusė",
     "config.mc2_interactivefoliage.gpu.full": "Pilnas",
     "config.mc2_interactivefoliage.waving_foliage": "Augalų Siūbavimas",
+    "config.mc2_interactivefoliage.waving_leaves": "Lapų Siūbavimas",
+    "config.mc2_interactivefoliage.waving_leaves.needs_fancy": "Lapai siūbuoja tik su Gražiais lapais (Vaizdo nustatymai).",
     "config.mc2_interactivefoliage.weather_wind": "Audros Vėjas",
     "config.mc2_interactivefoliage.distance": "Atstumas",
     "config.mc2_interactivefoliage.preset.classic": "Klasikinis",

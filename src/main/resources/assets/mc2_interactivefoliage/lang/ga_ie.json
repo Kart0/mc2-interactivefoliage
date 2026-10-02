@@ -13,6 +13,8 @@
     "config.mc2_interactivefoliage.gpu.half": "Leath",
     "config.mc2_interactivefoliage.gpu.full": "Iomlán",
     "config.mc2_interactivefoliage.waving_foliage": "Duilliúr ar Luascadh",
+    "config.mc2_interactivefoliage.waving_leaves": "Duilleoga ar Luascadh",
+    "config.mc2_interactivefoliage.waving_leaves.needs_fancy": "Ní luascann na duilleoga ach le duilleoga Galánta (Socruithe Físe).",
     "config.mc2_interactivefoliage.weather_wind": "Gaoth Aimsire",
     "config.mc2_interactivefoliage.distance": "Fad",
     "config.mc2_interactivefoliage.preset.classic": "Clasaiceach",

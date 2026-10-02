@@ -13,6 +13,8 @@
     "config.mc2_interactivefoliage.gpu.half": "Erdia",
     "config.mc2_interactivefoliage.gpu.full": "Osoa",
     "config.mc2_interactivefoliage.waving_foliage": "Hosto-kulunka",
+    "config.mc2_interactivefoliage.waving_leaves": "Hosto-kulunka",
+    "config.mc2_interactivefoliage.waving_leaves.needs_fancy": "Hostoak hosto Dotoreekin soilik kulunkatzen dira (Bideo-ezarpenak).",
     "config.mc2_interactivefoliage.weather_wind": "Ekaitz-haizea",
     "config.mc2_interactivefoliage.distance": "Distantzia",
     "config.mc2_interactivefoliage.preset.classic": "Klasikoa",

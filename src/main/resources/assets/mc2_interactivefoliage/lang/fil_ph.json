@@ -13,6 +13,8 @@
     "config.mc2_interactivefoliage.gpu.half": "Kalahati",
     "config.mc2_interactivefoliage.gpu.full": "Buo",
     "config.mc2_interactivefoliage.waving_foliage": "Umiindayog na Halaman",
+    "config.mc2_interactivefoliage.waving_leaves": "Umiindayog na Dahon",
+    "config.mc2_interactivefoliage.waving_leaves.needs_fancy": "Umiindayog lang ang mga dahon kapag Magarbo ang mga dahon (Mga Setting ng Video).",
     "config.mc2_interactivefoliage.weather_wind": "Hangin ng Panahon",
     "config.mc2_interactivefoliage.distance": "Layo",
     "config.mc2_interactivefoliage.preset.classic": "Klasiko",

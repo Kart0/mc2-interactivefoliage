@@ -13,6 +13,8 @@
     "config.mc2_interactivefoliage.gpu.half": "העלפֿט",
     "config.mc2_interactivefoliage.gpu.full": "פֿול",
     "config.mc2_interactivefoliage.waving_foliage": "שאָקלדיקע געוויקסן",
+    "config.mc2_interactivefoliage.waving_leaves": "שאָקלדיקע בלעטער",
+    "config.mc2_interactivefoliage.waving_leaves.needs_fancy": "בלעטער שאָקלען זיך נאָר מיט שיינע בלעטער (ווידעאָ־איינשטעלונגען).",
     "config.mc2_interactivefoliage.weather_wind": "וועטער־ווינט",
     "config.mc2_interactivefoliage.distance": "ווײַטקייט",
     "config.mc2_interactivefoliage.preset.classic": "קלאַסיש",

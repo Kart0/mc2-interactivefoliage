@@ -13,6 +13,8 @@
     "config.mc2_interactivefoliage.gpu.half": "Nofs",
     "config.mc2_interactivefoliage.gpu.full": "Sħiħa",
     "config.mc2_interactivefoliage.waving_foliage": "Weraq Jixxengel",
+    "config.mc2_interactivefoliage.waving_leaves": "Weraq Jixxengel",
+    "config.mc2_interactivefoliage.waving_leaves.needs_fancy": "Il-weraq jixxengel biss b'weraq Sbieħ (Settings tal-Vidjo).",
     "config.mc2_interactivefoliage.weather_wind": "Riħ Tat-Temp",
     "config.mc2_interactivefoliage.distance": "Distanza",
     "config.mc2_interactivefoliage.preset.classic": "Klassika",

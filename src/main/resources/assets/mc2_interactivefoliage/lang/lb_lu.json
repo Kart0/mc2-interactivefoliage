@@ -13,6 +13,8 @@
     "config.mc2_interactivefoliage.gpu.half": "Hallef",
     "config.mc2_interactivefoliage.gpu.full": "Voll",
     "config.mc2_interactivefoliage.waving_foliage": "Wibbeleg Planzen",
+    "config.mc2_interactivefoliage.waving_leaves": "Wibbeleg Blieder",
+    "config.mc2_interactivefoliage.waving_leaves.needs_fancy": "Blieder wibbelen nëmme mat schéine Blieder (Video-Astellungen).",
     "config.mc2_interactivefoliage.weather_wind": "Wiederwand",
     "config.mc2_interactivefoliage.distance": "Distanz",
     "config.mc2_interactivefoliage.preset.classic": "Klassesch",

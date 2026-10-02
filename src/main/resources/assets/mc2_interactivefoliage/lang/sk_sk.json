@@ -13,6 +13,8 @@
     "config.mc2_interactivefoliage.gpu.half": "Polovičná",
     "config.mc2_interactivefoliage.gpu.full": "Plná",
     "config.mc2_interactivefoliage.waving_foliage": "Vlniace sa Rastliny",
+    "config.mc2_interactivefoliage.waving_leaves": "Vlniace sa Lístie",
+    "config.mc2_interactivefoliage.waving_leaves.needs_fancy": "Lístie sa vlní len s Pekným lístím (Nastavenia videa).",
     "config.mc2_interactivefoliage.weather_wind": "Dažďový Vietor",
     "config.mc2_interactivefoliage.distance": "Vzdialenosť",
     "config.mc2_interactivefoliage.preset.classic": "Klasická",

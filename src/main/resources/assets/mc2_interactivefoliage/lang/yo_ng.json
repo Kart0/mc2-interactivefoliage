@@ -13,6 +13,8 @@
     "config.mc2_interactivefoliage.gpu.half": "Ìdajì",
     "config.mc2_interactivefoliage.gpu.full": "Kíkún",
     "config.mc2_interactivefoliage.waving_foliage": "Ewéko Tí Ń Jó",
+    "config.mc2_interactivefoliage.waving_leaves": "Ewé Tí Ń Jó",
+    "config.mc2_interactivefoliage.waving_leaves.needs_fancy": "Ewé máa ń jó nìkan pẹ̀lú ewé Ẹlẹ́wà (Ètò Fídíò).",
     "config.mc2_interactivefoliage.weather_wind": "Afẹ́Fẹ́ Ojú Ọjọ́",
     "config.mc2_interactivefoliage.distance": "Ijinna",
     "config.mc2_interactivefoliage.preset.classic": "Àtijọ́",

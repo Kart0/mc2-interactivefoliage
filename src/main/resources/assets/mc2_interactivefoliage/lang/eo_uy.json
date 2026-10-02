@@ -13,6 +13,8 @@
     "config.mc2_interactivefoliage.gpu.half": "Duono",
     "config.mc2_interactivefoliage.gpu.full": "Plena",
     "config.mc2_interactivefoliage.waving_foliage": "Ondantaj Plantoj",
+    "config.mc2_interactivefoliage.waving_leaves": "Ondantaj Folioj",
+    "config.mc2_interactivefoliage.waving_leaves.needs_fancy": "Folioj ondas nur kun Belaj folioj (Videaj agordoj).",
     "config.mc2_interactivefoliage.weather_wind": "Vetera Vento",
     "config.mc2_interactivefoliage.distance": "Distanco",
     "config.mc2_interactivefoliage.preset.classic": "Klasika",

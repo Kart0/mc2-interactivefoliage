@@ -13,6 +13,8 @@
     "config.mc2_interactivefoliage.gpu.half": "Halv",
     "config.mc2_interactivefoliage.gpu.full": "Fuld",
     "config.mc2_interactivefoliage.waving_foliage": "Vajende Planter",
+    "config.mc2_interactivefoliage.waving_leaves": "Vajende Blade",
+    "config.mc2_interactivefoliage.waving_leaves.needs_fancy": "Blade vajer kun med Flotte blade (Videoindstillinger).",
     "config.mc2_interactivefoliage.weather_wind": "Vejrvind",
     "config.mc2_interactivefoliage.distance": "Afstand",
     "config.mc2_interactivefoliage.preset.classic": "Klassisk",

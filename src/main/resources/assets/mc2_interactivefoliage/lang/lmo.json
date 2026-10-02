@@ -13,6 +13,8 @@
     "config.mc2_interactivefoliage.gpu.half": "Mità",
     "config.mc2_interactivefoliage.gpu.full": "Completa",
     "config.mc2_interactivefoliage.waving_foliage": "Foiamm Ondulant",
+    "config.mc2_interactivefoliage.waving_leaves": "Foeuj Ondulant",
+    "config.mc2_interactivefoliage.waving_leaves.needs_fancy": "I foeuj ondulen domà cont i foeuj Detajaa (Impostazion video).",
     "config.mc2_interactivefoliage.weather_wind": "Vent del Temp Gram",
     "config.mc2_interactivefoliage.distance": "Distanza",
     "config.mc2_interactivefoliage.preset.classic": "Classega",

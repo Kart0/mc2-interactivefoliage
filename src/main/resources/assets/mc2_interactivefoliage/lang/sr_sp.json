@@ -13,6 +13,8 @@
     "config.mc2_interactivefoliage.gpu.half": "Пола",
     "config.mc2_interactivefoliage.gpu.full": "Пуна",
     "config.mc2_interactivefoliage.waving_foliage": "Њихање Биљака",
+    "config.mc2_interactivefoliage.waving_leaves": "Њихање Лишћа",
+    "config.mc2_interactivefoliage.waving_leaves.needs_fancy": "Лишће се њише само уз Лепо лишће (Видео подешавања).",
     "config.mc2_interactivefoliage.weather_wind": "Ветар Невремена",
     "config.mc2_interactivefoliage.distance": "Удаљеност",
     "config.mc2_interactivefoliage.preset.classic": "Класични",

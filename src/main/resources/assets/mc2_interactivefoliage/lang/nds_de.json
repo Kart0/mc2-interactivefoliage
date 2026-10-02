@@ -13,6 +13,8 @@
     "config.mc2_interactivefoliage.gpu.half": "Halv",
     "config.mc2_interactivefoliage.gpu.full": "Vull",
     "config.mc2_interactivefoliage.waving_foliage": "Wogende Planten",
+    "config.mc2_interactivefoliage.waving_leaves": "Wogende Blööd",
+    "config.mc2_interactivefoliage.waving_leaves.needs_fancy": "Blööd wogt bloots mit smucke Blööd (Videoinstellen).",
     "config.mc2_interactivefoliage.weather_wind": "Weederwind",
     "config.mc2_interactivefoliage.distance": "Wiet",
     "config.mc2_interactivefoliage.preset.classic": "Klassisch",

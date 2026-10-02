@@ -13,6 +13,8 @@
     "config.mc2_interactivefoliage.gpu.half": "Hanter",
     "config.mc2_interactivefoliage.gpu.full": "Leun",
     "config.mc2_interactivefoliage.waving_foliage": "Plant o Luskellat",
+    "config.mc2_interactivefoliage.waving_leaves": "Delioù o Luskellat",
+    "config.mc2_interactivefoliage.waving_leaves.needs_fancy": "Ne luskell an delioù nemet gant delioù Kaer (Arventennoù video).",
     "config.mc2_interactivefoliage.weather_wind": "Avel an Amzer",
     "config.mc2_interactivefoliage.distance": "Pellder",
     "config.mc2_interactivefoliage.preset.classic": "Klasel",

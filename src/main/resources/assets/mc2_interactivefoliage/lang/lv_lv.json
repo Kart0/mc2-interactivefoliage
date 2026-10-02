@@ -13,6 +13,8 @@
     "config.mc2_interactivefoliage.gpu.half": "Puse",
     "config.mc2_interactivefoliage.gpu.full": "Pilns",
     "config.mc2_interactivefoliage.waving_foliage": "Šūpojoši Augi",
+    "config.mc2_interactivefoliage.waving_leaves": "Šūpojošas Lapas",
+    "config.mc2_interactivefoliage.waving_leaves.needs_fancy": "Lapas šūpojas tikai ar Skaistām lapām (Video iestatījumi).",
     "config.mc2_interactivefoliage.weather_wind": "Laikapstākļu Vējš",
     "config.mc2_interactivefoliage.distance": "Attālums",
     "config.mc2_interactivefoliage.preset.classic": "Klasisks",

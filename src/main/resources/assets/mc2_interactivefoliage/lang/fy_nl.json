@@ -13,6 +13,8 @@
     "config.mc2_interactivefoliage.gpu.half": "Heal",
     "config.mc2_interactivefoliage.gpu.full": "Fol",
     "config.mc2_interactivefoliage.waving_foliage": "Weagjende Planten",
+    "config.mc2_interactivefoliage.waving_leaves": "Weagjende Blêden",
+    "config.mc2_interactivefoliage.waving_leaves.needs_fancy": "Blêden weagje allinnich mei Moaie blêden (Fideo-ynstellingen).",
     "config.mc2_interactivefoliage.weather_wind": "Waarwyn",
     "config.mc2_interactivefoliage.distance": "Ôfstân",
     "config.mc2_interactivefoliage.preset.classic": "Klassyk",

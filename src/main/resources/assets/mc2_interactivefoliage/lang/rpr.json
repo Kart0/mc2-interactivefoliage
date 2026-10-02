@@ -13,6 +13,8 @@
     "config.mc2_interactivefoliage.gpu.half": "Половина",
     "config.mc2_interactivefoliage.gpu.full": "Полная",
     "config.mc2_interactivefoliage.waving_foliage": "Колыханіе Растеній",
+    "config.mc2_interactivefoliage.waving_leaves": "Колыханіе Листвы",
+    "config.mc2_interactivefoliage.waving_leaves.needs_fancy": "Листва колышется лишь при Красивой листвѣ (Настройки видео).",
     "config.mc2_interactivefoliage.weather_wind": "Вѣтеръ Непогоды",
     "config.mc2_interactivefoliage.distance": "Дальность",
     "config.mc2_interactivefoliage.preset.classic": "Классическій",

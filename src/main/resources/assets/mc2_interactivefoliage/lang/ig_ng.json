@@ -13,6 +13,8 @@
     "config.mc2_interactivefoliage.gpu.half": "Ọkara",
     "config.mc2_interactivefoliage.gpu.full": "Zuru Ezu",
     "config.mc2_interactivefoliage.waving_foliage": "Ahịhịa Na-efegharị",
+    "config.mc2_interactivefoliage.waving_leaves": "Akwụkwọ Na-efegharị",
+    "config.mc2_interactivefoliage.waving_leaves.needs_fancy": "Akwụkwọ na-efegharị naanị na akwụkwọ Mara Mma (Ntọala Vidiyo).",
     "config.mc2_interactivefoliage.weather_wind": "Ifufe Ihu Igwe",
     "config.mc2_interactivefoliage.distance": "Anya",
     "config.mc2_interactivefoliage.preset.classic": "Ochie",

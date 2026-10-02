@@ -13,6 +13,8 @@
     "config.mc2_interactivefoliage.gpu.half": "Палова",
     "config.mc2_interactivefoliage.gpu.full": "Поўная",
     "config.mc2_interactivefoliage.waving_foliage": "Хістанне Раслін",
+    "config.mc2_interactivefoliage.waving_leaves": "Хістанне Лісця",
+    "config.mc2_interactivefoliage.waving_leaves.needs_fancy": "Лісце хістаецца толькі з Прыгожым лісцем (Налады відэа).",
     "config.mc2_interactivefoliage.weather_wind": "Вецер Непагадзі",
     "config.mc2_interactivefoliage.distance": "Адлегласць",
     "config.mc2_interactivefoliage.preset.classic": "Класічны",

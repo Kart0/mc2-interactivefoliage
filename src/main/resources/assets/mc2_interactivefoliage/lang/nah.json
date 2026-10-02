@@ -13,6 +13,8 @@
     "config.mc2_interactivefoliage.gpu.half": "Tlahco",
     "config.mc2_interactivefoliage.gpu.full": "Tlamic",
     "config.mc2_interactivefoliage.waving_foliage": "Xihuitl Mohuihuixoa",
+    "config.mc2_interactivefoliage.waving_leaves": "Xiuhquilitl Mohuihuixoa",
+    "config.mc2_interactivefoliage.waving_leaves.needs_fancy": "In xiuhquilitl zan mohuihuixoa ica cualli xiuhquilitl (Tlaixpohualiztli).",
     "config.mc2_interactivefoliage.weather_wind": "Quiyauhehecatl",
     "config.mc2_interactivefoliage.distance": "Huehca",
     "config.mc2_interactivefoliage.preset.classic": "Huehcauh",

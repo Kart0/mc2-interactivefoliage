@@ -3,6 +3,7 @@ package net.karto.mc2.mc2_interactivefoliage.platform.forge;
 //? forge {
 
 /*import com.github.razorplay01.sway.platform.forge.util.SwayModel;
+import net.karto.mc2.mc2_interactivefoliage.WavingWhitelist;
 import net.karto.mc2.mc2_interactivefoliage.gpu.GpuFoliageSplit;
 import net.karto.mc2.mc2_interactivefoliage.gpu.SnowRealMagicCompat;
 import net.minecraft.client.renderer.RenderType;
@@ -63,16 +64,24 @@ public final class ForgeFoliageModel extends BakedModelWrapper<BakedModel> {
 
 	/^*
 	 * Whether the GPU renderer draws this plant: decided in getModelData for a plant of its own, and as Indigo started
-	 * on the snow for a plant held in Snow! Real Magic's snow, which is handed the snow's data instead.
+	 * on the snow for a plant held in Snow! Real Magic's snow, which is handed the snow's data instead. Never so for the
+	 * snow layer itself: Snow! Real Magic draws the snow around its plants with the snow layer's model -- this wrapper,
+	 * since snow on leaves is wrapped -- and the snow's data, and the snow stays the chunk mesh's.
 	 ^/
-	private static boolean leftToGpu(ModelData data) {
-		return data.has(LEFT_TO_GPU) || SnowRealMagicCompat.drawnInSnow(data) && GpuFoliageSplit.snowPlantLeftToGpu();
+	private static boolean leftToGpu(BlockState state, ModelData data) {
+		return data.has(LEFT_TO_GPU) || !restsOnLeaves(state) && SnowRealMagicCompat.drawnInSnow(data)
+				&& GpuFoliageSplit.snowPlantLeftToGpu();
+	}
+
+	/^* Whether this is the model of a block resting on leaves -- the snow layer -- rather than of a plant. ^/
+	private static boolean restsOnLeaves(BlockState state) {
+		return state != null && WavingWhitelist.restsOnLeaves(state.getBlock());
 	}
 
 	/^* No layer at all for a block left to the GPU renderer, so a mesher skips it outright. ^/
 	@Override
 	public ChunkRenderTypeSet getRenderTypes(BlockState state, RandomSource rand, ModelData data) {
-		if (leftToGpu(data)) {
+		if (leftToGpu(state, data)) {
 			return ChunkRenderTypeSet.none();
 		}
 		return super.getRenderTypes(state, rand, data);
@@ -82,13 +91,14 @@ public final class ForgeFoliageModel extends BakedModelWrapper<BakedModel> {
 	@Override
 	public List<BakedQuad> getQuads(BlockState state, Direction side, RandomSource rand, ModelData extraData,
 			RenderType renderType) {
-		if (leftToGpu(extraData)) {
+		if (leftToGpu(state, extraData)) {
 			return List.of();
 		}
 		// Where Snow! Real Magic draws the plant snowy. It picks its snowy variant only when asked through Fabric's
 		// rendering API, which Sway's wrapper and this one do not pass on, so the variant is drawn from here -- through
 		// Sway's own wrapper, so it bends as the plant would.
-		if (state != null && (extraData.has(ON_SNOW) || SnowRealMagicCompat.drawnInSnow(extraData))) {
+		if (state != null && !restsOnLeaves(state)
+				&& (extraData.has(ON_SNOW) || SnowRealMagicCompat.drawnInSnow(extraData))) {
 			BakedModel variant = SnowRealMagicCompat.snowyVariantOf(this);
 			if (variant != null) {
 				if (variant != snowyVariant) {

@@ -13,6 +13,8 @@
     "config.mc2_interactivefoliage.gpu.half": "ເຄິ່ງໜຶ່ງ",
     "config.mc2_interactivefoliage.gpu.full": "ເຕັມ",
     "config.mc2_interactivefoliage.waving_foliage": "ພືດແກວ່ງໄປມາ",
+    "config.mc2_interactivefoliage.waving_leaves": "ໃບໄມ້ແກວ່ງໄປມາ",
+    "config.mc2_interactivefoliage.waving_leaves.needs_fancy": "ໃບໄມ້ຈະແກວ່ງສະເພາະເມື່ອໃຊ້ໃບໄມ້ແບບສວຍງາມ (ການຕັ້ງຄ່າວິດີໂອ).",
     "config.mc2_interactivefoliage.weather_wind": "ລົມສະພາບອາກາດ",
     "config.mc2_interactivefoliage.distance": "ໄລຍະທາງ",
     "config.mc2_interactivefoliage.preset.classic": "ຄລາສສິກ",

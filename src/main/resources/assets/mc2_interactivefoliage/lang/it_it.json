@@ -13,6 +13,8 @@
     "config.mc2_interactivefoliage.gpu.half": "Metà",
     "config.mc2_interactivefoliage.gpu.full": "Completa",
     "config.mc2_interactivefoliage.waving_foliage": "Piante al Vento",
+    "config.mc2_interactivefoliage.waving_leaves": "Foglie al Vento",
+    "config.mc2_interactivefoliage.waving_leaves.needs_fancy": "Le foglie ondeggiano solo con le foglie Dettagliate (Impostazioni video).",
     "config.mc2_interactivefoliage.weather_wind": "Vento del Maltempo",
     "config.mc2_interactivefoliage.distance": "Distanza",
     "config.mc2_interactivefoliage.preset.classic": "Classica",

@@ -13,6 +13,8 @@
   "config.mc2_interactivefoliage.gpu.half": "bID",
   "config.mc2_interactivefoliage.gpu.full": "Hoch",
   "config.mc2_interactivefoliage.waving_foliage": "tI vIHbogh",
+  "config.mc2_interactivefoliage.waving_leaves": "tI'pu' vIHbogh",
+  "config.mc2_interactivefoliage.waving_leaves.needs_fancy": "tI'pu' Dun neH vIH tI'pu' (HaSta wIv).",
   "config.mc2_interactivefoliage.weather_wind": "muD SuS",
   "config.mc2_interactivefoliage.distance": "chuq",
   "config.mc2_interactivefoliage.preset.classic": "ngo'",

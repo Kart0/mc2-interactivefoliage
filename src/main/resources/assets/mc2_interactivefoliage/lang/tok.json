@@ -13,6 +13,8 @@
     "config.mc2_interactivefoliage.gpu.half": "wan tu",
     "config.mc2_interactivefoliage.gpu.full": "ale",
     "config.mc2_interactivefoliage.waving_foliage": "kasi tawa",
+    "config.mc2_interactivefoliage.waving_leaves": "lipu kasi tawa",
+    "config.mc2_interactivefoliage.waving_leaves.needs_fancy": "lipu kasi li tawa lon tenpo pi lipu kasi pona taso (nasin lukin).",
     "config.mc2_interactivefoliage.weather_wind": "kon telo",
     "config.mc2_interactivefoliage.distance": "weka",
     "config.mc2_interactivefoliage.preset.classic": "nasin majuna",

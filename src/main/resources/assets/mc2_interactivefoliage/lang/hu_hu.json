@@ -13,6 +13,8 @@
     "config.mc2_interactivefoliage.gpu.half": "Fél",
     "config.mc2_interactivefoliage.gpu.full": "Teljes",
     "config.mc2_interactivefoliage.waving_foliage": "Hullámzó Növényzet",
+    "config.mc2_interactivefoliage.waving_leaves": "Hullámzó Levelek",
+    "config.mc2_interactivefoliage.waving_leaves.needs_fancy": "A levelek csak Szép levelekkel hullámzanak (Videóbeállítások).",
     "config.mc2_interactivefoliage.weather_wind": "Viharos Szél",
     "config.mc2_interactivefoliage.distance": "Távolság",
     "config.mc2_interactivefoliage.preset.classic": "Klasszikus",

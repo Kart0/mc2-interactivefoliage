@@ -13,6 +13,8 @@
     "config.mc2_interactivefoliage.gpu.half": "Dimidia",
     "config.mc2_interactivefoliage.gpu.full": "Plena",
     "config.mc2_interactivefoliage.waving_foliage": "Frondes Motae",
+    "config.mc2_interactivefoliage.waving_leaves": "Folia Mota",
+    "config.mc2_interactivefoliage.waving_leaves.needs_fancy": "Folia moventur tantum cum foliis Ornatis (Optiones Imaginum).",
     "config.mc2_interactivefoliage.weather_wind": "Ventus Pluvius",
     "config.mc2_interactivefoliage.distance": "Spatium",
     "config.mc2_interactivefoliage.preset.classic": "Classica",

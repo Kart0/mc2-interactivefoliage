@@ -13,6 +13,8 @@
     "config.mc2_interactivefoliage.gpu.half": "Hálft",
     "config.mc2_interactivefoliage.gpu.full": "Fullt",
     "config.mc2_interactivefoliage.waving_foliage": "Sveiflandi Gróður",
+    "config.mc2_interactivefoliage.waving_leaves": "Sveiflandi Lauf",
+    "config.mc2_interactivefoliage.waving_leaves.needs_fancy": "Lauf sveiflast aðeins með Flottu laufi (Myndstillingar).",
     "config.mc2_interactivefoliage.weather_wind": "Veðurvindur",
     "config.mc2_interactivefoliage.distance": "Fjarlægð",
     "config.mc2_interactivefoliage.preset.classic": "Klassískt",

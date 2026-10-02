@@ -13,6 +13,8 @@
     "config.mc2_interactivefoliage.gpu.half": "Metade",
     "config.mc2_interactivefoliage.gpu.full": "Completo",
     "config.mc2_interactivefoliage.waving_foliage": "Folhagem Ondulante",
+    "config.mc2_interactivefoliage.waving_leaves": "Folhas Ondulantes",
+    "config.mc2_interactivefoliage.waving_leaves.needs_fancy": "As folhas só ondulam com folhas Detalhadas (Definições de Vídeo).",
     "config.mc2_interactivefoliage.weather_wind": "Vento de Chuva",
     "config.mc2_interactivefoliage.distance": "Distância",
     "config.mc2_interactivefoliage.preset.classic": "Clássica",

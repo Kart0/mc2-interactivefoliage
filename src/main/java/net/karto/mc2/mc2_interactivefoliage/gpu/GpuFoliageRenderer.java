@@ -1245,6 +1245,10 @@ public final class GpuFoliageRenderer {
 
 		/** Whether the strand hangs on leaves (1 or 0), the top of its free part and how long it is; see hangOnLeaves. */
 		private float[] measureHang(ClientLevel level, BlockPos anchor, boolean strictly) {
+			// Strictly, only what is above decides: a strand not hanging from leaves is not walked at all.
+			if (strictly && !WavingWhitelist.isLeaves(level.getBlockState(anchor.above()).getBlock())) {
+				return new float[] {0.0F, 0.0F, 0.0F};
+			}
 			int tipY = cellY - length + 1;
 			BlockPos.MutableBlockPos at = new BlockPos.MutableBlockPos();
 			int onLeaves = 0;
@@ -1326,16 +1330,25 @@ public final class GpuFoliageRenderer {
 	 * Whether a block has anything but air or leaves beside it, on any side. A field's faces against such a neighbour are
 	 * drawn all the same: the leaves move and it does not, so a culled face would leave a hole between them.
 	 */
-	private static boolean touchesOtherThanLeaves(ClientLevel level, BlockPos pos) {
-		BlockPos.MutableBlockPos at = new BlockPos.MutableBlockPos();
-		for (Direction side : Direction.values()) {
-			BlockState beside = level.getBlockState(at.setWithOffset(pos, side));
+	private static boolean touchesOtherThanLeaves(ClientLevel level, LevelChunkSection blocks, int dx, int dy, int dz,
+			BlockPos pos, BlockPos.MutableBlockPos at) {
+		for (Direction side : SIDES) {
+			int x = dx + side.getStepX();
+			int y = dy + side.getStepY();
+			int z = dz + side.getStepZ();
+			// Inside the section it is read from the section itself, as the mesher reads every block; only the sides on
+			// its faces go through the level.
+			BlockState beside = (x | y | z) >= 0 && x < SECTION_SIZE && y < SECTION_SIZE && z < SECTION_SIZE
+					? blocks.getBlockState(x, y, z) : level.getBlockState(at.setWithOffset(pos, side));
 			if (!beside.isAir() && !WavingWhitelist.isLeaves(beside.getBlock())) {
 				return true;
 			}
 		}
 		return false;
 	}
+
+	/** Every side of a block, made once: Direction.values() hands out a new array every time. */
+	private static final Direction[] SIDES = Direction.values();
 
 	/** Whether this renderer is drawing the near foliage, which is while it is switched on in a world. */
 	static boolean isActive() {
@@ -3448,6 +3461,7 @@ public final class GpuFoliageRenderer {
 		LevelChunkSection blocks = level.getChunk(SectionPos.x(key), SectionPos.z(key))
 				.getSection(level.getSectionIndexFromSectionY(SectionPos.y(key)));
 		BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos();
+		BlockPos.MutableBlockPos neighbour = new BlockPos.MutableBlockPos();
 		for (int dx = 0; dx < SECTION_SIZE; dx++) {
 			for (int dy = 0; dy < SECTION_SIZE; dy++) {
 				for (int dz = 0; dz < SECTION_SIZE; dz++) {
@@ -3500,7 +3514,8 @@ public final class GpuFoliageRenderer {
 					anchor.hangsOnLeaves = false;
 					anchor.pushless = false;
 					boolean follows = WavingWhitelist.followsLeaves(state.getBlock());
-					if (follows || anchor.hanging) {
+					// Any other hanging plant only changes while the leaves wave: it is not measured otherwise.
+					if (follows || anchor.hanging && WavingWhitelist.leavesWave()) {
 						boolean onLeaves = anchor.hangOnLeaves(level, !follows);
 						if (onLeaves && WavingWhitelist.leavesWave()) {
 							anchor.hangsOnLeaves = true;
@@ -3530,7 +3545,8 @@ public final class GpuFoliageRenderer {
 					}
 					//?}
 					//? >=26.1.2 {
-					(anchor.field && touchesOtherThanLeaves(level, pos) ? uncullingRenderer : modelRenderer)
+					(anchor.field && touchesOtherThanLeaves(level, blocks, dx, dy, dz, pos, neighbour)
+							? uncullingRenderer : modelRenderer)
 							.tesselateBlock(output, offsetX + dx, offsetY + dy + lift, offsetZ + dz,
 							level, pos, state, SnowRealMagicCompat.snowyVariant(GpuFoliageSplit.modelFor(state,
 									models.get(state)), state, level, pos, inSnow),
@@ -3548,7 +3564,8 @@ public final class GpuFoliageRenderer {
 					poseStack.translate(offsetX + dx, offsetY + dy + lift, offsetZ + dz);
 					output.beginBlock(offsetY + dy + lift);
 					modelRenderer.tesselateBlock(level, parts, state, pos, poseStack, output,
-							!(anchor.field && touchesOtherThanLeaves(level, pos)), OverlayTexture.NO_OVERLAY);
+							!(anchor.field && touchesOtherThanLeaves(level, blocks, dx, dy, dz, pos, neighbour)),
+							OverlayTexture.NO_OVERLAY);
 					poseStack.popPose();
 					//?} else {
 					/^poseStack.pushPose();
@@ -3556,7 +3573,7 @@ public final class GpuFoliageRenderer {
 					output.beginBlock(offsetY + dy + lift);
 					tesselate(level, SnowRealMagicCompat.snowyVariant(GpuFoliageSplit.modelFor(state,
 							models.getBlockModel(state)), state, level, pos, inSnow), state, pos, poseStack, output, random,
-							!(anchor.field && touchesOtherThanLeaves(level, pos)));
+							!(anchor.field && touchesOtherThanLeaves(level, blocks, dx, dy, dz, pos, neighbour)));
 					poseStack.popPose();
 					^///?}
 					*///?}

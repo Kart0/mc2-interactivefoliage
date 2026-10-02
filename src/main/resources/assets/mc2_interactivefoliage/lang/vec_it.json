@@ -13,6 +13,8 @@
     "config.mc2_interactivefoliage.gpu.half": "Metà",
     "config.mc2_interactivefoliage.gpu.full": "Conpleta",
     "config.mc2_interactivefoliage.waving_foliage": "Fojame Ondexante",
+    "config.mc2_interactivefoliage.waving_leaves": "Foje Ondexanti",
+    "config.mc2_interactivefoliage.waving_leaves.needs_fancy": "Łe foje łe ondexa soło co łe foje Detajàe (Inpostasion video).",
     "config.mc2_interactivefoliage.weather_wind": "Vento de Piova",
     "config.mc2_interactivefoliage.distance": "Distansa",
     "config.mc2_interactivefoliage.preset.classic": "Clàsego",

@@ -13,6 +13,8 @@
     "config.mc2_interactivefoliage.gpu.half": "Separuh",
     "config.mc2_interactivefoliage.gpu.full": "Penuh",
     "config.mc2_interactivefoliage.waving_foliage": "Dedaun Beralun",
+    "config.mc2_interactivefoliage.waving_leaves": "Daun Beralun",
+    "config.mc2_interactivefoliage.waving_leaves.needs_fancy": "Daun hanya beralun dengan daun Mewah (Tetapan Video).",
     "config.mc2_interactivefoliage.weather_wind": "Angin Cuaca",
     "config.mc2_interactivefoliage.distance": "Jarak",
     "config.mc2_interactivefoliage.preset.classic": "Klasik",

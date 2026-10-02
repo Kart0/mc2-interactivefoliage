@@ -13,6 +13,8 @@
     "config.mc2_interactivefoliage.gpu.half": "سڤاروه",
     "config.mc2_interactivefoliage.gpu.full": "ڤنوه",
     "config.mc2_interactivefoliage.waving_foliage": "دداون برالون",
+    "config.mc2_interactivefoliage.waving_leaves": "داون برالون",
+    "config.mc2_interactivefoliage.waving_leaves.needs_fancy": "داون هاڽ برالون دڠن داون مواه (تتاڤن ۏيديو).",
     "config.mc2_interactivefoliage.weather_wind": "اڠين چواچ",
     "config.mc2_interactivefoliage.distance": "جارق",
     "config.mc2_interactivefoliage.preset.classic": "کلاسيک",

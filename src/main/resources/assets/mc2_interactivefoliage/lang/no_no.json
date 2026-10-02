@@ -13,6 +13,8 @@
     "config.mc2_interactivefoliage.gpu.half": "Halv",
     "config.mc2_interactivefoliage.gpu.full": "Full",
     "config.mc2_interactivefoliage.waving_foliage": "Vaiende Planter",
+    "config.mc2_interactivefoliage.waving_leaves": "Vaiende Løv",
+    "config.mc2_interactivefoliage.waving_leaves.needs_fancy": "Løv vaier bare med Fine løv (Videoinnstillinger).",
     "config.mc2_interactivefoliage.weather_wind": "Værvind",
     "config.mc2_interactivefoliage.distance": "Avstand",
     "config.mc2_interactivefoliage.preset.classic": "Klassisk",

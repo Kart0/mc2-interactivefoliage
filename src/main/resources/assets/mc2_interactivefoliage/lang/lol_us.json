@@ -13,6 +13,8 @@
   "config.mc2_interactivefoliage.gpu.half": "Haf",
   "config.mc2_interactivefoliage.gpu.full": "Allz",
   "config.mc2_interactivefoliage.waving_foliage": "Wavey Leefs",
+  "config.mc2_interactivefoliage.waving_leaves": "Wavey Leefz",
+  "config.mc2_interactivefoliage.waving_leaves.needs_fancy": "Leefz onli wavez wif Fancee leefz (Videoh Setinz).",
   "config.mc2_interactivefoliage.weather_wind": "Rainy Windz",
   "config.mc2_interactivefoliage.distance": "How Far",
   "config.mc2_interactivefoliage.preset.classic": "Ol Skool",

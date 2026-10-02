@@ -13,6 +13,8 @@
     "config.mc2_interactivefoliage.gpu.half": "Halv",
     "config.mc2_interactivefoliage.gpu.full": "Full",
     "config.mc2_interactivefoliage.waving_foliage": "Vaggande Vokstrar",
+    "config.mc2_interactivefoliage.waving_leaves": "Vaggande Lauv",
+    "config.mc2_interactivefoliage.waving_leaves.needs_fancy": "Lauv vaggar berre med Fine lauv (Videoinnstillingar).",
     "config.mc2_interactivefoliage.weather_wind": "Vêrvind",
     "config.mc2_interactivefoliage.distance": "Fjerd",
     "config.mc2_interactivefoliage.preset.classic": "Klassisk",

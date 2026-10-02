@@ -13,6 +13,8 @@
     "config.mc2_interactivefoliage.gpu.half": "pa fi re",
     "config.mc2_interactivefoliage.gpu.full": "mulno",
     "config.mc2_interactivefoliage.waving_foliage": "slilu spati",
+    "config.mc2_interactivefoliage.waving_leaves": "slilu pezli",
+    "config.mc2_interactivefoliage.waving_leaves.needs_fancy": "lo pezli cu slilu ganai lo pezli cu melbi (lo vidni tcimi'e)",
     "config.mc2_interactivefoliage.weather_wind": "tcima brife",
     "config.mc2_interactivefoliage.distance": "darno",
     "config.mc2_interactivefoliage.preset.classic": "tolnau",

@@ -13,6 +13,8 @@
     "config.mc2_interactivefoliage.gpu.half": "Polovična",
     "config.mc2_interactivefoliage.gpu.full": "Polna",
     "config.mc2_interactivefoliage.waving_foliage": "Valovanje Rastlin",
+    "config.mc2_interactivefoliage.waving_leaves": "Valovanje Listja",
+    "config.mc2_interactivefoliage.waving_leaves.needs_fancy": "Listje valuje le z Lepim listjem (Video nastavitve).",
     "config.mc2_interactivefoliage.weather_wind": "Vremenski Veter",
     "config.mc2_interactivefoliage.distance": "Razdalja",
     "config.mc2_interactivefoliage.preset.classic": "Klasično",

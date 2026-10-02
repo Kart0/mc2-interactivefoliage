@@ -13,6 +13,8 @@
     "config.mc2_interactivefoliage.gpu.half": "Poloviční",
     "config.mc2_interactivefoliage.gpu.full": "Plná",
     "config.mc2_interactivefoliage.waving_foliage": "Vlnící Se Rostliny",
+    "config.mc2_interactivefoliage.waving_leaves": "Vlnící Se Listí",
+    "config.mc2_interactivefoliage.waving_leaves.needs_fancy": "Listí se vlní jen s Pěkným listím (Nastavení grafiky).",
     "config.mc2_interactivefoliage.weather_wind": "Vítr za Deště",
     "config.mc2_interactivefoliage.distance": "Vzdálenost",
     "config.mc2_interactivefoliage.preset.classic": "Klasická",

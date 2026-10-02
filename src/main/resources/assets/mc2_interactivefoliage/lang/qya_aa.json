@@ -13,6 +13,8 @@
   "config.mc2_interactivefoliage.gpu.half": "Perta",
   "config.mc2_interactivefoliage.gpu.full": "Quanta",
   "config.mc2_interactivefoliage.waving_foliage": "Lasseli Hwinyala",
+  "config.mc2_interactivefoliage.waving_leaves": "Lasseli Hwinyala",
+  "config.mc2_interactivefoliage.waving_leaves.needs_fancy": "Lassi hwinyar eryave as Vanye lassi (Tercenyer Emmion).",
   "config.mc2_interactivefoliage.weather_wind": "Hríve Súrë",
   "config.mc2_interactivefoliage.distance": "Haurë",
   "config.mc2_interactivefoliage.preset.classic": "Yára",

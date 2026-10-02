@@ -13,6 +13,8 @@
     "config.mc2_interactivefoliage.gpu.half": "Połowa",
     "config.mc2_interactivefoliage.gpu.full": "Połny",
     "config.mc2_interactivefoliage.waving_foliage": "Fałujōnce Rośliny",
+    "config.mc2_interactivefoliage.waving_leaves": "Fałujōnce Liście",
+    "config.mc2_interactivefoliage.waving_leaves.needs_fancy": "Liście fałujōm ino przi Szumnych liściach (Sztelōnki grafiki).",
     "config.mc2_interactivefoliage.weather_wind": "Wiater Burzowy",
     "config.mc2_interactivefoliage.distance": "Ôdlygłość",
     "config.mc2_interactivefoliage.preset.classic": "Klasyczne",

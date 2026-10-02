@@ -13,6 +13,8 @@
     "config.mc2_interactivefoliage.gpu.half": "Половина",
     "config.mc2_interactivefoliage.gpu.full": "Целосна",
     "config.mc2_interactivefoliage.waving_foliage": "Нишање Растенија",
+    "config.mc2_interactivefoliage.waving_leaves": "Нишање Лисја",
+    "config.mc2_interactivefoliage.waving_leaves.needs_fancy": "Лисјата се нишаат само со Убави лисја (Видео поставки).",
     "config.mc2_interactivefoliage.weather_wind": "Ветер Од Невреме",
     "config.mc2_interactivefoliage.distance": "Растојание",
     "config.mc2_interactivefoliage.preset.classic": "Класичен",

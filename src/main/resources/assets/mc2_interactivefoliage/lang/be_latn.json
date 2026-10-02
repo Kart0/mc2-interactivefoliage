@@ -13,6 +13,8 @@
     "config.mc2_interactivefoliage.gpu.half": "Palova",
     "config.mc2_interactivefoliage.gpu.full": "Poŭnaja",
     "config.mc2_interactivefoliage.waving_foliage": "Chistannie Raslin",
+    "config.mc2_interactivefoliage.waving_leaves": "Chistannie Liscia",
+    "config.mc2_interactivefoliage.waving_leaves.needs_fancy": "Lisce chistajecca tolki z Pryhožym liscem (Nalady videa).",
     "config.mc2_interactivefoliage.weather_wind": "Viecier Niepahadzi",
     "config.mc2_interactivefoliage.distance": "Adlehłasć",
     "config.mc2_interactivefoliage.preset.classic": "Kłasičny",

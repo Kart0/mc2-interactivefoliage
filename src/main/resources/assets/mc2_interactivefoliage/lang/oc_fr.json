@@ -13,6 +13,8 @@
     "config.mc2_interactivefoliage.gpu.half": "Mitat",
     "config.mc2_interactivefoliage.gpu.full": "Completa",
     "config.mc2_interactivefoliage.waving_foliage": "Fuelhas al Vent",
+    "config.mc2_interactivefoliage.waving_leaves": "Fuelhas Ondejantas",
+    "config.mc2_interactivefoliage.waving_leaves.needs_fancy": "Las fuelhas ondejan sonque amb de fuelhas Detalhadas (Paramètres vidèo).",
     "config.mc2_interactivefoliage.weather_wind": "Vent de Pluèja",
     "config.mc2_interactivefoliage.distance": "Distància",
     "config.mc2_interactivefoliage.preset.classic": "Classic",

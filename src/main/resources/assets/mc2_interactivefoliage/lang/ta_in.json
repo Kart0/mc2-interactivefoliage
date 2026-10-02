@@ -13,6 +13,8 @@
     "config.mc2_interactivefoliage.gpu.half": "பாதி",
     "config.mc2_interactivefoliage.gpu.full": "முழு",
     "config.mc2_interactivefoliage.waving_foliage": "அசையும் தாவரங்கள்",
+    "config.mc2_interactivefoliage.waving_leaves": "அசையும் இலைகள்",
+    "config.mc2_interactivefoliage.waving_leaves.needs_fancy": "இலைகள் அழகான இலைகளுடன் மட்டுமே அசையும் (காணொளி அமைப்புகள்).",
     "config.mc2_interactivefoliage.weather_wind": "வானிலைக் காற்று",
     "config.mc2_interactivefoliage.distance": "தூரம்",
     "config.mc2_interactivefoliage.preset.classic": "கிளாசிக்",

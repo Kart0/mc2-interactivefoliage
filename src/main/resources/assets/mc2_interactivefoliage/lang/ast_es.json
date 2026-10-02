@@ -13,6 +13,8 @@
     "config.mc2_interactivefoliage.gpu.half": "Metá",
     "config.mc2_interactivefoliage.gpu.full": "Completa",
     "config.mc2_interactivefoliage.waving_foliage": "Follaxe Ondulante",
+    "config.mc2_interactivefoliage.waving_leaves": "Fueyes Ondulantes",
+    "config.mc2_interactivefoliage.waving_leaves.needs_fancy": "Les fueyes namái ondulen coles fueyes Detallaes (Axustes de videu).",
     "config.mc2_interactivefoliage.weather_wind": "Vientu de Lluvia",
     "config.mc2_interactivefoliage.distance": "Distancia",
     "config.mc2_interactivefoliage.preset.classic": "Clásicu",

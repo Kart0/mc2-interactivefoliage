@@ -13,6 +13,8 @@
     "config.mc2_interactivefoliage.gpu.half": "Oy O'lol",
     "config.mc2_interactivefoliage.gpu.full": "Oy Skotol",
     "config.mc2_interactivefoliage.waving_foliage": "Vegetación Ondulante",
+    "config.mc2_interactivefoliage.waving_leaves": "Hojas Ondulantes",
+    "config.mc2_interactivefoliage.waving_leaves.needs_fancy": "Las hojas solo ondulan con hojas Detalladas (Opciones de video).",
     "config.mc2_interactivefoliage.weather_wind": "Ik' Ta Vo'",
     "config.mc2_interactivefoliage.distance": "Distancia",
     "config.mc2_interactivefoliage.preset.classic": "Clásico",

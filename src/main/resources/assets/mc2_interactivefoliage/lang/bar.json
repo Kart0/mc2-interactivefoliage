@@ -13,6 +13,8 @@
     "config.mc2_interactivefoliage.gpu.half": "Hoib",
     "config.mc2_interactivefoliage.gpu.full": "Voi",
     "config.mc2_interactivefoliage.waving_foliage": "Woagade Pflanzn",
+    "config.mc2_interactivefoliage.waving_leaves": "Woagade Blattln",
+    "config.mc2_interactivefoliage.waving_leaves.needs_fancy": "De Blattln woagn nua mit schicke Blattln (Video-Eistellunga).",
     "config.mc2_interactivefoliage.weather_wind": "Wetterwind",
     "config.mc2_interactivefoliage.distance": "Weitn",
     "config.mc2_interactivefoliage.preset.classic": "Klassisch",

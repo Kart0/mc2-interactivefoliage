@@ -13,6 +13,8 @@
     "config.mc2_interactivefoliage.gpu.half": "Hanter",
     "config.mc2_interactivefoliage.gpu.full": "Leun",
     "config.mc2_interactivefoliage.waving_foliage": "Plansow Ow Lesca",
+    "config.mc2_interactivefoliage.waving_leaves": "Delyow Ow Lesca",
+    "config.mc2_interactivefoliage.waving_leaves.needs_fancy": "Ny lesk an delyow marnas gans delyow Fethus (Settyansow Video).",
     "config.mc2_interactivefoliage.weather_wind": "Gwyns an Gewer",
     "config.mc2_interactivefoliage.distance": "Pellder",
     "config.mc2_interactivefoliage.preset.classic": "Klassek",

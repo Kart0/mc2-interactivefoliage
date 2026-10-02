@@ -13,6 +13,8 @@
   "config.mc2_interactivefoliage.gpu.half": "一半",
   "config.mc2_interactivefoliage.gpu.full": "完整",
   "config.mc2_interactivefoliage.waving_foliage": "植物搖曳",
+  "config.mc2_interactivefoliage.waving_leaves": "樹葉搖曳",
+  "config.mc2_interactivefoliage.waving_leaves.needs_fancy": "樹葉只會在「精緻」樹葉下搖曳（影片設定）。",
   "config.mc2_interactivefoliage.weather_wind": "風雨效果",
   "config.mc2_interactivefoliage.distance": "距離",
   "config.mc2_interactivefoliage.preset.classic": "經典",

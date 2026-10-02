@@ -13,6 +13,8 @@
     "config.mc2_interactivefoliage.gpu.half": "Alv",
     "config.mc2_interactivefoliage.gpu.full": "Full",
     "config.mc2_interactivefoliage.waving_foliage": "Vaggend Wekster",
+    "config.mc2_interactivefoliage.waving_leaves": "Vaggend Låv",
+    "config.mc2_interactivefoliage.waving_leaves.needs_fancy": "Låv vaggar bara min Fin låv (Videoinstellningger).",
     "config.mc2_interactivefoliage.weather_wind": "Wedervind",
     "config.mc2_interactivefoliage.distance": "Avstånd",
     "config.mc2_interactivefoliage.preset.classic": "Klassisk",

@@ -13,6 +13,8 @@
     "config.mc2_interactivefoliage.gpu.half": "Half",
     "config.mc2_interactivefoliage.gpu.full": "Vol",
     "config.mc2_interactivefoliage.waving_foliage": "Wuiwende Plante",
+    "config.mc2_interactivefoliage.waving_leaves": "Wuiwende Blare",
+    "config.mc2_interactivefoliage.waving_leaves.needs_fancy": "Blare wuif net met Spoggerige blare (Video-instellings).",
     "config.mc2_interactivefoliage.weather_wind": "Weerwind",
     "config.mc2_interactivefoliage.distance": "Afstand",
     "config.mc2_interactivefoliage.preset.classic": "Klassiek",

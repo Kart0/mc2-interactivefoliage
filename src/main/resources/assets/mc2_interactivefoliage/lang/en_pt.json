@@ -13,6 +13,8 @@
   "config.mc2_interactivefoliage.gpu.half": "Half Mast",
   "config.mc2_interactivefoliage.gpu.full": "Full Sail",
   "config.mc2_interactivefoliage.waving_foliage": "Swayin' Shrubbery",
+  "config.mc2_interactivefoliage.waving_leaves": "Swayin' Leaves",
+  "config.mc2_interactivefoliage.waving_leaves.needs_fancy": "Th' leaves only sway when they be Fancy, matey (Video Settin's).",
   "config.mc2_interactivefoliage.weather_wind": "Storm Gales",
   "config.mc2_interactivefoliage.distance": "Reach",
   "config.mc2_interactivefoliage.preset.classic": "Olde Ways",

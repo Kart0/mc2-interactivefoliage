@@ -13,6 +13,8 @@
     "config.mc2_interactivefoliage.gpu.half": "Bealli",
     "config.mc2_interactivefoliage.gpu.full": "Ollislaš",
     "config.mc2_interactivefoliage.waving_foliage": "Lihkadeaddji Šattut",
+    "config.mc2_interactivefoliage.waving_leaves": "Lihkadeaddji Lasttat",
+    "config.mc2_interactivefoliage.waving_leaves.needs_fancy": "Lasttat lihkadit dušše Čáppa lasttaiguin (Video-heivehusat).",
     "config.mc2_interactivefoliage.weather_wind": "Dálkebiegga",
     "config.mc2_interactivefoliage.distance": "Gaska",
     "config.mc2_interactivefoliage.preset.classic": "Klassihkalaš",

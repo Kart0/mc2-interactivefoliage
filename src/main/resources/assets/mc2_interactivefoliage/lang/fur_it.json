@@ -13,6 +13,8 @@
     "config.mc2_interactivefoliage.gpu.half": "Metât",
     "config.mc2_interactivefoliage.gpu.full": "Complete",
     "config.mc2_interactivefoliage.waving_foliage": "Vegjetazion Ondulant",
+    "config.mc2_interactivefoliage.waving_leaves": "Fueis Ondulantis",
+    "config.mc2_interactivefoliage.waving_leaves.needs_fancy": "Lis fueis a ondulin dome cu lis fueis Detaiadis (Impostazions video).",
     "config.mc2_interactivefoliage.weather_wind": "Vint dal Timp",
     "config.mc2_interactivefoliage.distance": "Distance",
     "config.mc2_interactivefoliage.preset.classic": "Classic",

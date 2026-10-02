@@ -13,6 +13,8 @@
     "config.mc2_interactivefoliage.gpu.half": "Duimo",
     "config.mc2_interactivefoliage.gpu.full": "Plena",
     "config.mc2_interactivefoliage.waving_foliage": "Ondanta Planti",
+    "config.mc2_interactivefoliage.waving_leaves": "Ondanta Folii",
+    "config.mc2_interactivefoliage.waving_leaves.needs_fancy": "Folii ondas nur kun Bela folii (Video-ajusti).",
     "config.mc2_interactivefoliage.weather_wind": "Vetero-vento",
     "config.mc2_interactivefoliage.distance": "Disto",
     "config.mc2_interactivefoliage.preset.classic": "Klasika",
