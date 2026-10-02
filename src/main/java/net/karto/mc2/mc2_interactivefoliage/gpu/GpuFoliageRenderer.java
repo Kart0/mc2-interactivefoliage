@@ -78,9 +78,7 @@ import org.lwjgl.opengl.GL31;
 import org.lwjgl.opengl.GL32;
 *///?}
 import com.mojang.blaze3d.vertex.BufferBuilder;
-//? <1.21.11 {
-/*import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
-*///?}
+import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 //? >=1.21.1 {
 import com.mojang.blaze3d.vertex.ByteBufferBuilder;
 import com.mojang.blaze3d.vertex.MeshData;
@@ -197,14 +195,12 @@ public final class GpuFoliageRenderer {
 
 	/** Rebuilds run on the render thread, so only a few are allowed per frame. */
 	private static final int REBUILD_BUDGET = 6;
-	//? <1.21.11 {
-	/*/^*
+	/**
 	 * A region is uploaded once the sections queued for it are built, so one whose sections arrive over several frames
 	 * is uploaded once rather than once a frame. If sections keep arriving for longer than this -- flying over new
 	 * ground -- it is uploaded anyway, so what is built reaches the screen.
-	 ^/
+	 */
 	private static final long REGION_UPLOAD_MAX_WAIT_MILLIS = 500L;
-	*///?}
 	/**
 	 * And only for this long a frame, after the first one, so a frame is never held up by meshing: a heavy resource pack,
 	 * a slow processor or rain starting -- which meshes every section again -- would otherwise stall a frame for as long
@@ -802,9 +798,7 @@ public final class GpuFoliageRenderer {
 	 * region's corner, which keeps them small enough for float precision however far out it sits.
 	 */
 	private static final class Region {
-		//? <1.21.11 {
-		/*final long key;
-		*///?}
+		final long key;
 		final BlockPos origin;
 		final AABB bounds;
 		/** The region's blocks without padding, for asking whether it lies wholly inside the frustum. */
@@ -816,15 +810,13 @@ public final class GpuFoliageRenderer {
 		final int[] occupied = new int[SECTIONS_PER_REGION];
 		int occupiedCount;
 		int sectionCount;
-		//? <1.21.11 {
-		/*/^*
+		/**
 		 * The sections as they were when the region was last uploaded, which is what its buffer holds and what is drawn
 		 * from. A section rebuilt since keeps its old counterpart here until the region is uploaded again.
-		 ^/
+		 */
 		final Section[] uploadedSections = new Section[SECTIONS_PER_REGION];
-		/^* When the region first had a change waiting to be uploaded. ^/
+		/** When the region first had a change waiting to be uploaded. */
 		long pendingSince;
-		*///?}
 		//? >=1.21.11 {
 		GpuBuffer vertices;
 		//?} else {
@@ -832,9 +824,7 @@ public final class GpuFoliageRenderer {
 		*///?}
 
 		Region(long regionKey) {
-			//? <1.21.11 {
-			/*key = regionKey;
-			*///?}
+			key = regionKey;
 			origin = regionOrigin(regionKey);
 			bounds = new AABB(
 					origin.getX() - SWAY_MARGIN,
@@ -882,9 +872,7 @@ public final class GpuFoliageRenderer {
 			int vertexCount = 0;
 			occupiedCount = 0;
 			for (int slot = 0; slot < SECTIONS_PER_REGION; slot++) {
-				//? <1.21.11 {
-				/*uploadedSections[slot] = sections[slot];
-				*///?}
+				uploadedSections[slot] = sections[slot];
 				if (sections[slot] != null) {
 					firstVertex[slot] = vertexCount;
 					vertexCount += sections[slot].vertexCount;
@@ -892,7 +880,7 @@ public final class GpuFoliageRenderer {
 				}
 			}
 			// Its sections are already interleaved, so each one is a single copy. A region is rebuilt
-			// whenever any of its sections changes, and there are up to sixteen of them, so doing the
+			// whenever any of its sections changes, and there are up to 256 of them, so doing the
 			// per-vertex work here instead would repeat it for every section that did not change. Every section
 			// in a region was meshed the same way: switching to or from a shader pack meshes everything again.
 			int stride = occupiedCount == 0 ? VERTEX_BYTES + WEIGHT_BYTES : sections[occupied[0]].stride;
@@ -1443,9 +1431,9 @@ public final class GpuFoliageRenderer {
 		shelterCheckedX = x;
 		shelterCheckedZ = z;
 		for (Region region : REGIONS.values()) {
-			for (int i = 0; i < region.occupiedCount; i++) {
-				Section section = region.sections[region.occupied[i]];
-				if (!section.sheltered && withinReach(section.origin, x, z, reach)) {
+			// Every section held now, not the layout last uploaded: one built or removed since is not in that yet.
+			for (Section section : region.sections) {
+				if (section != null && !section.sheltered && withinReach(section.origin, x, z, reach)) {
 					DIRTY.add(section.key);
 				}
 			}
@@ -1606,13 +1594,9 @@ public final class GpuFoliageRenderer {
 	private static void putSection(long key, Section section) {
 		Region region = REGIONS.computeIfAbsent(regionKeyOf(key), Region::new);
 		region.put(slotOf(key), section);
-		//? <1.21.11 {
-		/*if (DIRTY_REGIONS.add(region)) {
+		if (DIRTY_REGIONS.add(region)) {
 			region.pendingSince = System.currentTimeMillis();
 		}
-		*///?} else {
-		DIRTY_REGIONS.add(region);
-		//?}
 	}
 
 	private static void removeSection(long key) {
@@ -1625,14 +1609,8 @@ public final class GpuFoliageRenderer {
 			region.free();
 			REGIONS.remove(regionKey);
 			DIRTY_REGIONS.remove(region);
-		} else {
-			//? <1.21.11 {
-			/*if (DIRTY_REGIONS.add(region)) {
-				region.pendingSince = System.currentTimeMillis();
-			}
-			*///?} else {
-			DIRTY_REGIONS.add(region);
-			//?}
+		} else if (DIRTY_REGIONS.add(region)) {
+			region.pendingSince = System.currentTimeMillis();
 		}
 	}
 
@@ -1738,14 +1716,9 @@ public final class GpuFoliageRenderer {
 			reseedLoadedChunks(minecraft, minecraft.level);
 		}
 		buildNearest(minecraft, camera);
-		// Every change is folded into its region before anything is drawn, so a region's buffers and
-		// the layout used to draw from them always agree.
-		//? <1.21.11 {
-		/*uploadDueRegion();
-		*///?} else {
-		DIRTY_REGIONS.forEach(Region::upload);
-		DIRTY_REGIONS.clear();
-		//?}
+		// One region is uploaded a frame, and each is drawn as last uploaded meanwhile, so its buffers and the layout used
+		// to draw from them always agree.
+		uploadDueRegion();
 
 		//? <26.1.2 {
 		/*if (frustum == null) {
@@ -1759,9 +1732,7 @@ public final class GpuFoliageRenderer {
 			if (!regionWithinRange(minecraft, entry.getKey())) {
 				entry.getValue().free();
 				regions.remove();
-				//? <1.21.11 {
-				/*DIRTY_REGIONS.remove(entry.getValue());
-				*///?}
+				DIRTY_REGIONS.remove(entry.getValue());
 			}
 		}
 		if (!collectDraws(frustum, SodiumBridge.renderer())) {
@@ -1964,12 +1935,8 @@ public final class GpuFoliageRenderer {
 			int runEnd = -1;
 			for (int i = 0; i < region.occupiedCount; i++) {
 				int slot = region.occupied[i];
-				//? <1.21.11 {
-				/*// Drawn as uploaded: a section rebuilt since is not in the buffer yet.
+				// Drawn as uploaded: a section rebuilt since is not in the buffer yet.
 				Section section = region.uploadedSections[slot];
-				*///?} else {
-				Section section = region.sections[slot];
-				//?}
 				if (!isVisible(section, sectionFrustum, sodium)) {
 					if (runStart >= 0) {
 						addDraw(regionIndex, runStart, runEnd - runStart);
@@ -2764,14 +2731,13 @@ public final class GpuFoliageRenderer {
 				(float) (WIND_EDGE[3] - camera.z));
 	}
 
-	//? <1.21.11 {
-	/*private static final LongOpenHashSet REGIONS_WITH_QUEUED_SECTIONS = new LongOpenHashSet();
+	private static final LongOpenHashSet REGIONS_WITH_QUEUED_SECTIONS = new LongOpenHashSet();
 
-	/^*
+	/**
 	 * Uploads at most one region this frame: the one waiting longest among those with nothing left in the queue, or
-	 * that have waited too long. A region upload can be tens of megabytes with a detailed resource pack, and uploading
-	 * a region for every section built into it, every frame, was most of what the renderer cost.
-	 ^/
+	 * that have waited too long. A region upload can be tens of megabytes with a detailed resource pack or waving
+	 * leaves, and uploading a region for every section built into it, every frame, was most of what the renderer cost.
+	 */
 	private static void uploadDueRegion() {
 		if (DIRTY_REGIONS.isEmpty()) {
 			return;
@@ -2794,7 +2760,6 @@ public final class GpuFoliageRenderer {
 			return;
 		}
 	}
-	*///?}
 
 	private static boolean isVisible(Section section, Frustum frustum, Object sodium) {
 		// Only the sections whose chunk mesh on screen went without their foliage are drawn here; every
