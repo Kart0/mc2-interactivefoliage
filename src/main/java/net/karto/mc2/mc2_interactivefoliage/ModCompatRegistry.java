@@ -296,6 +296,11 @@ public class ModCompatRegistry {
 	// ------------------------------------------------------------------
 
 	private static void registerExtraVanilla() {
+		registerPlant(
+				"minecraft:red_shrub",
+				"minecraft:poplar_sapling"
+		);
+
 		registerHanging(
 				"minecraft:pale_hanging_moss",
 				"minecraft:hanging_roots"
