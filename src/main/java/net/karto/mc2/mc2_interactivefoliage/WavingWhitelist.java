@@ -71,9 +71,15 @@ public final class WavingWhitelist {
 	private static final Set<Block> FOLLOWERS = Collections.newSetFromMap(new IdentityHashMap<>());
 	/**
 	 * Whether the game draws leaves see-through, as its Fancy leaves do, as the renderer last saw: Fast leaves are drawn
-	 * solid, and leaves the renderer waved would show their holes, so they are left to the game then.
+	 * solid, and leaves the renderer waved would show their holes, so they are left to the game then -- unless the
+	 * renderer can draw them solid too; see {@link #opaqueLeavesDrawn}.
 	 */
 	private static volatile boolean cutoutLeaves = true;
+	/**
+	 * Whether the renderer can draw leaves solid, as the game's Fast leaves are, with what draws the chunks now: only where
+	 * it has a pipeline that keeps every pixel for each way it may draw them. As the renderer last saw.
+	 */
+	private static volatile boolean opaqueLeavesDrawn;
 	/** The blocks that rest on the leaves; see restOnLeaves(). */
 	private static final Set<Block> RESTING = Collections.newSetFromMap(new IdentityHashMap<>());
 	/** Set once the lists are read; models are baked on several threads at once, so they are read under a lock. */
@@ -161,9 +167,22 @@ public final class WavingWhitelist {
 		return RESTING.contains(block);
 	}
 
-	/** Whether the leaves wave now: the player has them on, and the game draws them see-through (Fancy leaves). */
+	/**
+	 * Whether the leaves wave now: the player has them on, and the game draws them see-through (Fancy leaves) or the
+	 * renderer can draw them solid as the game does (Fast leaves).
+	 */
 	public static boolean leavesWave() {
-		return FoliageSettings.wavingLeaves() && cutoutLeaves;
+		return FoliageSettings.wavingLeaves() && (cutoutLeaves || opaqueLeavesDrawn);
+	}
+
+	/** Whether the leaves the renderer draws are drawn solid, as the game's Fast leaves are: every pixel kept. */
+	public static boolean opaqueLeaves() {
+		return !cutoutLeaves && opaqueLeavesDrawn;
+	}
+
+	/** Whether the leaves can wave with the game's leaves as they are now: Fancy, or Fast where the renderer draws them. */
+	public static boolean leavesCanWave() {
+		return gameCutoutLeaves() || opaqueLeavesDrawn;
 	}
 
 	/** Whether the game draws leaves see-through now, as its Fancy leaves do. Read on the render thread. */
@@ -225,15 +244,16 @@ public final class WavingWhitelist {
 	*///?}
 
 	/**
-	 * Follows the game's leaves, Fancy or Fast, once a frame; returns whether that changed, and with it which leaves
-	 * the renderer draws.
+	 * Follows the game's leaves, Fancy or Fast, and whether the renderer can draw them solid, once a frame; returns whether
+	 * either changed, and with it which leaves the renderer draws, or how.
 	 */
-	public static boolean followGameLeaves() {
+	public static boolean followGameLeaves(boolean canDrawOpaque) {
 		boolean cutout = gameCutoutLeaves();
-		if (cutout == cutoutLeaves) {
+		if (cutout == cutoutLeaves && canDrawOpaque == opaqueLeavesDrawn) {
 			return false;
 		}
 		cutoutLeaves = cutout;
+		opaqueLeavesDrawn = canDrawOpaque;
 		return true;
 	}
 

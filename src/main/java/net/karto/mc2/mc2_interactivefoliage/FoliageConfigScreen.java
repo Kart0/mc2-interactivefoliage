@@ -496,9 +496,9 @@ public class FoliageConfigScreen extends Screen {
 		//? >=1.20.1 {
 		if (wavingLeavesBox != null) {
 			wavingLeavesBox.visible = wind;
-			// The game draws Fast leaves solid, so they only wave with Fancy leaves: the box says so rather than doing
-			// nothing, greyed out and keeping the player's choice for when leaves are Fancy again.
-			boolean fancyLeaves = WavingWhitelist.gameCutoutLeaves();
+			// The game draws Fast leaves solid, so where the renderer cannot draw them so too they only wave with Fancy
+			// leaves: the box says so rather than doing nothing, greyed out and keeping the player's choice for then.
+			boolean fancyLeaves = WavingWhitelist.leavesCanWave();
 			wavingLeavesBox.active = fancyLeaves;
 			wavingLeavesBox.setAlpha(fancyLeaves ? 1.0F : 0.5F);
 			wavingLeavesBox.setTooltip(fancyLeaves ? null

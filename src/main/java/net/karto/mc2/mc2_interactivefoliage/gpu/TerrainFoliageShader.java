@@ -15,6 +15,8 @@ import org.apache.commons.io.IOUtils;
 import java.io.IOException;
 import java.io.Reader;
 import java.util.HashSet;
+import java.util.IdentityHashMap;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 //?} else {
@@ -91,11 +93,16 @@ final class TerrainFoliageShader {
 	private static final String VERTEX_FILE = "minecraft:shaders/core/terrain.vsh";
 	private static final String FRAGMENT_FILE = "minecraft:shaders/core/terrain.fsh";
 
-	/** The pipeline as last compiled, or null where it could not be; built again once the shaders reload. */
-	private static CompiledRenderPipeline compiled;
-	/** Vanilla's terrain pipeline as compiled when this one was last built, which a shader reload replaces. */
+	/**
+	 * Each pipeline as last compiled -- cut out, and solid for Fast leaves -- or null where it could not be; built again
+	 * once the shaders reload.
+	 */
+	private static final Map<RenderPipeline, CompiledRenderPipeline> COMPILED = new IdentityHashMap<>();
+	/** Vanilla's terrain pipeline as compiled when these were last built, which a shader reload replaces. */
 	private static CompiledRenderPipeline compiledFor;
-	private static boolean built;
+	/** Both shaders, spliced and written out whole, as last read; null where they could not be. */
+	private static BuiltSource source;
+	private static boolean sourceRead;
 
 	/** Both shaders, already written out whole; nothing is left for the compiler to include. */
 	private record BuiltSource(String vertex, String fragment) implements ShaderSource {
@@ -139,20 +146,46 @@ final class TerrainFoliageShader {
 	//? >=26.3 {
 	/**
 	 * The pipeline compiled from the terrain shaders in use, or null where they could not be read that way or did not
-	 * compile. Built once after each shader reload -- which shows as vanilla's own terrain pipeline coming back as a
-	 * different compiled one -- when the one before is closed. Called while the frame is prepared, with no pass open.
+	 * compile. Each pipeline asked for is built once after each shader reload -- which shows as vanilla's own terrain
+	 * pipeline coming back as a different compiled one -- when the ones before are closed. Called while the frame is
+	 * prepared, with no pass open.
 	 */
 	static CompiledRenderPipeline compiled(RenderPipeline pipeline) {
 		CompiledRenderPipeline terrain = RenderSystem.getCompiledPipelineNullable(RenderPipelines.SOLID_TERRAIN);
-		if (built && terrain == compiledFor) {
-			return compiled;
+		if (terrain != compiledFor) {
+			compiledFor = terrain;
+			for (CompiledRenderPipeline compiled : COMPILED.values()) {
+				if (compiled != null) {
+					compiled.close();
+				}
+			}
+			COMPILED.clear();
+			sourceRead = false;
 		}
-		built = true;
-		compiledFor = terrain;
-		if (compiled != null) {
-			compiled.close();
-			compiled = null;
+		if (COMPILED.containsKey(pipeline)) {
+			return COMPILED.get(pipeline);
 		}
+		if (!sourceRead) {
+			sourceRead = true;
+			source = readSource();
+		}
+		CompiledRenderPipeline compiled = null;
+		if (source != null) {
+			try {
+				compiled = RenderSystem.getDevice().compilePipeline(pipeline, source, Util.backgroundExecutor()).join()
+						.finishCompile();
+			} catch (RuntimeException e) {
+				// A shader that does not compile comes back as an exception rather than as nothing.
+				ModTemplate.LOGGER.warn("The terrain shaders in use did not compile with the GPU foliage renderer's sway; "
+						+ "foliage near the player is drawn with the renderer's own shaders", e);
+			}
+		}
+		COMPILED.put(pipeline, compiled);
+		return compiled;
+	}
+
+	/** Both terrain shaders, the vertex one spliced, written out whole; null where they could not be read that way. */
+	private static BuiltSource readSource() {
 		// Written out before it is spliced, as the game hands shaders over up to 26.2: what the new main reads from the
 		// terrain's includes -- the camera and the time -- has to be there to be found. The mod's own includes, which the
 		// splicing adds, are written out after.
@@ -168,16 +201,7 @@ final class TerrainFoliageShader {
 					+ "the player is drawn with the renderer's own shaders, which may not match a resource pack's look");
 			return null;
 		}
-		try {
-			compiled = RenderSystem.getDevice().compilePipeline(pipeline, new BuiltSource(vertex, fragment),
-					Util.backgroundExecutor()).join().finishCompile();
-		} catch (RuntimeException e) {
-			// A shader that does not compile comes back as an exception rather than as nothing.
-			ModTemplate.LOGGER.warn("The terrain shaders in use did not compile with the GPU foliage renderer's sway; "
-					+ "foliage near the player is drawn with the renderer's own shaders", e);
-			compiled = null;
-		}
-		return compiled;
+		return new BuiltSource(vertex, fragment);
 	}
 
 	/** A shader file as the game reads it -- the topmost resource pack's -- by its full name, or null. */

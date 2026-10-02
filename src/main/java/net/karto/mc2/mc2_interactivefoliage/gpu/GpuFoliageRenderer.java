@@ -143,6 +143,7 @@ import net.minecraft.util.Mth;
 //? >=1.21.11 {
 import net.minecraft.resources.Identifier;
 //?}
+import net.minecraft.world.level.block.LeavesBlock;
 import net.minecraft.world.level.block.PipeBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.BooleanProperty;
@@ -409,24 +410,35 @@ public final class GpuFoliageRenderer {
 	// shaders read, the block format with the mod's two values, and the depth state every block pipeline uses. The
 	// foliage is drawn into vanilla's own pass, which writes one colour target; a pipeline whose targets do not match
 	// the pass is refused.
-	private static final RenderPipeline PIPELINE = RenderPipeline.builder()
-			.withLocation(Identifier.fromNamespaceAndPath(ModTemplate.MOD_ID, "pipeline/foliage"))
-			.withVertexShader(Identifier.fromNamespaceAndPath(ModTemplate.MOD_ID, "core/foliage_modern"))
-			.withFragmentShader(Identifier.fromNamespaceAndPath(ModTemplate.MOD_ID, "core/foliage_modern"))
-			.withVertexBinding(0, FOLIAGE_FORMAT)
-			.withPrimitiveTopology(PrimitiveTopology.QUADS)
-			.withDepthStencilState(DepthStencilState.DEFAULT)
-			.withColorTargetState(ColorTargetState.DEFAULT)
-			.withBindGroupLayout(BindGroupLayouts.GLOBALS)
-			.withBindGroupLayout(BindGroupLayouts.FOG)
-			.withBindGroupLayout(BindGroupLayouts.SAMPLER0)
-			.withBindGroupLayout(BindGroupLayouts.SAMPLER2)
-			.withBindGroupLayout(BindGroupLayouts.PROJECTION)
-			.withBindGroupLayout(BindGroupLayouts.DYNAMIC_TRANSFORMS)
-			.withBindGroupLayout(SWAY_SETTINGS)
-			.withBindGroupLayout(GpuFoliageInteraction.LAYOUT)
-			.withShaderDefine("ALPHA_CUTOUT", 0.5F)
-			.build();
+	private static final RenderPipeline PIPELINE = modernPipeline("pipeline/foliage", true);
+	/**
+	 * The same, keeping every pixel: for leaves drawn solid, as the game's Fast leaves are, the way vanilla's solid terrain
+	 * differs from its cutout terrain.
+	 */
+	private static final RenderPipeline OPAQUE_PIPELINE = modernPipeline("pipeline/foliage_opaque", false);
+
+	private static RenderPipeline modernPipeline(String location, boolean cutout) {
+		RenderPipeline.Builder builder = RenderPipeline.builder()
+				.withLocation(Identifier.fromNamespaceAndPath(ModTemplate.MOD_ID, location))
+				.withVertexShader(Identifier.fromNamespaceAndPath(ModTemplate.MOD_ID, "core/foliage_modern"))
+				.withFragmentShader(Identifier.fromNamespaceAndPath(ModTemplate.MOD_ID, "core/foliage_modern"))
+				.withVertexBinding(0, FOLIAGE_FORMAT)
+				.withPrimitiveTopology(PrimitiveTopology.QUADS)
+				.withDepthStencilState(DepthStencilState.DEFAULT)
+				.withColorTargetState(ColorTargetState.DEFAULT)
+				.withBindGroupLayout(BindGroupLayouts.GLOBALS)
+				.withBindGroupLayout(BindGroupLayouts.FOG)
+				.withBindGroupLayout(BindGroupLayouts.SAMPLER0)
+				.withBindGroupLayout(BindGroupLayouts.SAMPLER2)
+				.withBindGroupLayout(BindGroupLayouts.PROJECTION)
+				.withBindGroupLayout(BindGroupLayouts.DYNAMIC_TRANSFORMS)
+				.withBindGroupLayout(SWAY_SETTINGS)
+				.withBindGroupLayout(GpuFoliageInteraction.LAYOUT);
+		if (cutout) {
+			builder.withShaderDefine("ALPHA_CUTOUT", 0.5F);
+		}
+		return builder.build();
+	}
 	//?} elif >=26.2 {
 	/*private static final RenderPipeline PIPELINE = RenderPipeline.builder(RenderPipelines.BLOCK_SNIPPET)
 			.withLocation(Identifier.fromNamespaceAndPath(ModTemplate.MOD_ID, "pipeline/foliage"))
@@ -498,25 +510,33 @@ public final class GpuFoliageRenderer {
 	 * {@link TerrainFoliageShader}, which compiles it. Vanilla's terrain snippet is private, so what it holds is listed:
 	 * the section's block and the terrain's own, and no transform, which the terrain's shaders do not read.
 	 */
-	private static final RenderPipeline TERRAIN_PIPELINE = RenderPipeline.builder()
-			.withLocation(Identifier.fromNamespaceAndPath(ModTemplate.MOD_ID, "pipeline/foliage_terrain"))
-			.withVertexShader(TerrainFoliageShader.VERTEX)
-			.withFragmentShader(TerrainFoliageShader.TERRAIN)
-			.withVertexBinding(0, FOLIAGE_FORMAT)
-			.withPrimitiveTopology(PrimitiveTopology.QUADS)
-			.withDepthStencilState(DepthStencilState.DEFAULT)
-			.withColorTargetState(ColorTargetState.DEFAULT)
-			.withBindGroupLayout(BindGroupLayouts.GLOBALS)
-			.withBindGroupLayout(BindGroupLayouts.FOG)
-			.withBindGroupLayout(BindGroupLayouts.SAMPLER0)
-			.withBindGroupLayout(BindGroupLayouts.SAMPLER2)
-			.withBindGroupLayout(BindGroupLayouts.PROJECTION)
-			.withBindGroupLayout(BindGroupLayouts.CHUNK_SECTION)
-			.withBindGroupLayout(BindGroupLayouts.TERRAIN_INFO)
-			.withBindGroupLayout(SWAY_SETTINGS)
-			.withBindGroupLayout(GpuFoliageInteraction.LAYOUT)
-			.withShaderDefine("ALPHA_CUTOUT", 0.5F)
-			.build();
+	private static final RenderPipeline TERRAIN_PIPELINE = terrainPipeline("pipeline/foliage_terrain", true);
+	/** The same, keeping every pixel, as vanilla's solid terrain: for leaves drawn as the game's Fast leaves are. */
+	private static final RenderPipeline TERRAIN_OPAQUE_PIPELINE = terrainPipeline("pipeline/foliage_terrain_opaque", false);
+
+	private static RenderPipeline terrainPipeline(String location, boolean cutout) {
+		RenderPipeline.Builder builder = RenderPipeline.builder()
+				.withLocation(Identifier.fromNamespaceAndPath(ModTemplate.MOD_ID, location))
+				.withVertexShader(TerrainFoliageShader.VERTEX)
+				.withFragmentShader(TerrainFoliageShader.TERRAIN)
+				.withVertexBinding(0, FOLIAGE_FORMAT)
+				.withPrimitiveTopology(PrimitiveTopology.QUADS)
+				.withDepthStencilState(DepthStencilState.DEFAULT)
+				.withColorTargetState(ColorTargetState.DEFAULT)
+				.withBindGroupLayout(BindGroupLayouts.GLOBALS)
+				.withBindGroupLayout(BindGroupLayouts.FOG)
+				.withBindGroupLayout(BindGroupLayouts.SAMPLER0)
+				.withBindGroupLayout(BindGroupLayouts.SAMPLER2)
+				.withBindGroupLayout(BindGroupLayouts.PROJECTION)
+				.withBindGroupLayout(BindGroupLayouts.CHUNK_SECTION)
+				.withBindGroupLayout(BindGroupLayouts.TERRAIN_INFO)
+				.withBindGroupLayout(SWAY_SETTINGS)
+				.withBindGroupLayout(GpuFoliageInteraction.LAYOUT);
+		if (cutout) {
+			builder.withShaderDefine("ALPHA_CUTOUT", 0.5F);
+		}
+		return builder.build();
+	}
 	//?}
 
 	//? >=26.2 && <26.3 {
@@ -759,6 +779,9 @@ public final class GpuFoliageRenderer {
 	/** This frame's draw calls, three ints each: index into the drawn regions, first vertex, vertex count. */
 	private static int[] draws = new int[256 * 3];
 	private static int drawsSize;
+	/** The same, for the leaves drawn solid; see {@link Section#opaqueVertexCount}. */
+	private static int[] opaqueDraws = new int[64 * 3];
+	private static int opaqueDrawsSize;
 	/** Regions with at least one draw this frame, in the order their draws were queued. */
 	private static final List<Region> DRAWN = new ArrayList<>();
 
@@ -773,12 +796,18 @@ public final class GpuFoliageRenderer {
 		/** The block's attributes and ours, interleaved, ready to be copied into a region as it stands. */
 		final ByteBuffer data;
 		final int vertexCount;
+		/**
+		 * How many of its vertices, at the end of {@link #data}, are leaves drawn solid, as the game's Fast leaves are, with
+		 * a pipeline that keeps every pixel. The ones before them are drawn cut out.
+		 */
+		final int opaqueVertexCount;
 		/** Bytes per vertex in {@link #data}: wider while a shader pack is loaded, whose format carries more. */
 		final int stride;
 		/** Whether its plants were meshed with the wind shelter worked out; see {@link #followRain}. */
 		boolean sheltered;
 
-		Section(long key, BlockPos origin, ByteBuffer data, int vertexCount, int stride) {
+		Section(long key, BlockPos origin, ByteBuffer data, int vertexCount, int opaqueVertexCount, int stride) {
+			this.opaqueVertexCount = opaqueVertexCount;
 			this.stride = stride;
 			this.key = key;
 			this.origin = origin;
@@ -791,6 +820,11 @@ public final class GpuFoliageRenderer {
 					origin.getZ() + SECTION_SIZE + SWAY_MARGIN);
 			this.data = data;
 			this.vertexCount = vertexCount;
+		}
+
+		/** How many of its vertices, from the start of {@link #data}, are drawn cut out. */
+		int cutoutVertexCount() {
+			return vertexCount - opaqueVertexCount;
 		}
 
 		void free() {
@@ -811,6 +845,11 @@ public final class GpuFoliageRenderer {
 		final Section[] sections = new Section[SECTIONS_PER_REGION];
 		/** Where each section starts in the region's buffers, valid once uploaded. */
 		final int[] firstVertex = new int[SECTIONS_PER_REGION];
+		/**
+		 * Where each section's solid leaves start, valid once uploaded: after every section's cut out part, so each kind is
+		 * one stretch of the buffer and goes out in as few draw calls as the other.
+		 */
+		final int[] firstOpaqueVertex = new int[SECTIONS_PER_REGION];
 		/** The occupied slots in buffer order, so drawing never walks the empty ones. Valid once uploaded. */
 		final int[] occupied = new int[SECTIONS_PER_REGION];
 		int occupiedCount;
@@ -888,9 +927,15 @@ public final class GpuFoliageRenderer {
 				uploadedSections[slot] = sections[slot];
 				if (sections[slot] != null) {
 					firstVertex[slot] = vertexCount;
-					vertexCount += sections[slot].vertexCount;
+					vertexCount += sections[slot].cutoutVertexCount();
 					occupied[occupiedCount++] = slot;
 				}
+			}
+			// The solid leaves after all of it. Only drawn where the renderer can draw them so, which is never before 26.3,
+			// so the older uploads below, which copy each section whole, find none.
+			for (int i = 0; i < occupiedCount; i++) {
+				firstOpaqueVertex[occupied[i]] = vertexCount;
+				vertexCount += sections[occupied[i]].opaqueVertexCount;
 			}
 			// Its sections are already interleaved, so each one is a single copy. A region is rebuilt
 			// whenever any of its sections changes, and there are up to 256 of them, so doing the
@@ -905,7 +950,12 @@ public final class GpuFoliageRenderer {
 			for (int i = 0; i < occupiedCount; i++) {
 				int slot = occupied[i];
 				Section section = sections[slot];
-				vertexData.put(firstVertex[slot] * stride, section.data, 0, section.vertexCount * stride);
+				int cutoutBytes = section.cutoutVertexCount() * stride;
+				vertexData.put(firstVertex[slot] * stride, section.data, 0, cutoutBytes);
+				if (section.opaqueVertexCount > 0) {
+					vertexData.put(firstOpaqueVertex[slot] * stride, section.data, cutoutBytes,
+							section.opaqueVertexCount * stride);
+				}
 			}
 			vertices = RenderSystem.getDevice().createBuffer(
 					() -> "MC2 foliage vertices",
@@ -1665,6 +1715,18 @@ public final class GpuFoliageRenderer {
 	}
 	*///?}
 
+	/**
+	 * Whether leaves can be drawn solid now, as the game's Fast leaves are: with a pipeline that keeps every pixel, which
+	 * the renderer has for the terrain's shaders and its own on 26.3, and not yet for Sodium's or a shader pack's.
+	 */
+	private static boolean canDrawOpaqueLeaves() {
+		//? >=26.3 {
+		return !SodiumBridge.drawsChunks() && !IrisCompat.shaderPackInUse();
+		//?} else {
+		/*return false;
+		*///?}
+	}
+
 	private static void drawFrame(Vec3 camera, Frustum frustum) {
 		Minecraft minecraft = Minecraft.getInstance();
 		if (minecraft.level == null) {
@@ -1672,9 +1734,10 @@ public final class GpuFoliageRenderer {
 		}
 		// Decisions keep being applied while switched off, so the record is accurate when switched back on.
 		GpuFoliageSplit.applyMeshDecisions();
-		// Fast leaves are drawn solid by the game, and leaves the renderer waved would show their holes: switching between
-		// Fast and Fancy hands the leaves over, as the waving leaves setting does.
-		if (WavingWhitelist.followGameLeaves()) {
+		// Fast leaves are drawn solid by the game, and leaves the renderer waved cut out would show their holes: where it
+		// cannot draw them solid too, switching between Fast and Fancy hands the leaves over, as the waving leaves setting
+		// does. Where it can, they are meshed again to be drawn the other way.
+		if (WavingWhitelist.followGameLeaves(canDrawOpaqueLeaves())) {
 			foliageListChanged();
 		}
 		// Where the chunk mesher cannot be told to leave foliage out, the renderer stays out of the way too, or every
@@ -1926,6 +1989,7 @@ public final class GpuFoliageRenderer {
 		List<Region> drawn = DRAWN;
 		drawn.clear();
 		drawsSize = 0;
+		opaqueDrawsSize = 0;
 		for (Region region : REGIONS.values()) {
 			if (frustum != null && !frustum.isVisible(region.bounds)) {
 				continue;
@@ -1942,10 +2006,14 @@ public final class GpuFoliageRenderer {
 
 			// Walk the sections in buffer order, extending a run while they stay visible, so a region
 			// that is fully in view costs one draw call however many sections it holds.
+			// The solid leaves are a stretch of their own after the cut out part, walked alongside it as a run of its own.
 			int regionIndex = drawn.size();
 			int drawsBefore = drawsSize;
+			int opaqueDrawsBefore = opaqueDrawsSize;
 			int runStart = -1;
 			int runEnd = -1;
+			int opaqueStart = -1;
+			int opaqueEnd = -1;
 			for (int i = 0; i < region.occupiedCount; i++) {
 				int slot = region.occupied[i];
 				// Drawn as uploaded: a section rebuilt since is not in the buffer yet.
@@ -1955,17 +2023,28 @@ public final class GpuFoliageRenderer {
 						addDraw(regionIndex, runStart, runEnd - runStart);
 						runStart = -1;
 					}
+					if (opaqueStart >= 0) {
+						addOpaqueDraw(regionIndex, opaqueStart, opaqueEnd - opaqueStart);
+						opaqueStart = -1;
+					}
 					continue;
 				}
 				if (runStart < 0) {
 					runStart = region.firstVertex[slot];
 				}
-				runEnd = region.firstVertex[slot] + section.vertexCount;
+				runEnd = region.firstVertex[slot] + section.cutoutVertexCount();
+				if (opaqueStart < 0) {
+					opaqueStart = region.firstOpaqueVertex[slot];
+				}
+				opaqueEnd = region.firstOpaqueVertex[slot] + section.opaqueVertexCount;
 			}
 			if (runStart >= 0) {
 				addDraw(regionIndex, runStart, runEnd - runStart);
 			}
-			if (drawsSize > drawsBefore) {
+			if (opaqueStart >= 0) {
+				addOpaqueDraw(regionIndex, opaqueStart, opaqueEnd - opaqueStart);
+			}
+			if (drawsSize > drawsBefore || opaqueDrawsSize > opaqueDrawsBefore) {
 				drawn.add(region);
 			}
 		}
@@ -2003,6 +2082,12 @@ public final class GpuFoliageRenderer {
 		if (pipeline == null) {
 			return;
 		}
+		// Leaves drawn solid, as the game's Fast leaves are, go through the same shaders keeping every pixel, as vanilla's
+		// solid terrain does. Only meshed that way with the terrain's shaders or the mod's own; where that copy does not
+		// compile they are drawn cut out rather than not at all.
+		CompiledRenderPipeline solid = opaqueDrawsSize == 0 || shaderPack || sodiumShaders ? null
+				: terrainShaders ? TerrainFoliageShader.compiled(TERRAIN_OPAQUE_PIPELINE) : compiledPipeline(OPAQUE_PIPELINE);
+		CompiledRenderPipeline opaquePipeline = solid != null ? solid : pipeline;
 		Region[] regions = DRAWN.toArray(new Region[0]);
 		AbstractTexture atlas = minecraft.getTextureManager().getTexture(TextureAtlas.LOCATION_BLOCKS);
 		// Where each region is. The terrain's shaders read it from the section's block, and the terrain's own block holds
@@ -2040,6 +2125,7 @@ public final class GpuFoliageRenderer {
 		};
 		String regionUniform = terrainShaders ? "ChunkSection" : "DynamicTransforms";
 		int[] drawList = Arrays.copyOf(draws, drawsSize);
+		int[] opaqueList = Arrays.copyOf(opaqueDraws, opaqueDrawsSize);
 
 		// The shared index buffer is replaced, the old one closed, whenever it has to grow, so it may not grow inside the
 		// pass the terrain was just drawn from it in. It is asked for here, and vanilla grows every shared index buffer once,
@@ -2047,6 +2133,9 @@ public final class GpuFoliageRenderer {
 		int longestDraw = 0;
 		for (int i = 2; i < drawList.length; i += 3) {
 			longestDraw = Math.max(longestDraw, drawList[i]);
+		}
+		for (int i = 2; i < opaqueList.length; i += 3) {
+			longestDraw = Math.max(longestDraw, opaqueList[i]);
 		}
 		int indicesNeeded = indexCountFor(longestDraw);
 		RenderSystem.AutoStorageIndexBuffer indices = RenderSystem.getSequentialBuffer(PrimitiveTopology.QUADS);
@@ -2060,39 +2149,47 @@ public final class GpuFoliageRenderer {
 				// Not drawn where the level's uniforms were not written this frame.
 				return;
 			}
-			// Asked for again here, as the level is drawn, which is when Iris hands back the pack's program in its place;
-			// the mod's swaying copy of that program then takes its place in turn.
-			pass.setPipeline(shaderPack
-					? IrisCompat.withFoliageProgram(RenderSystem.getCompiledPipeline(shaderPackPipeline)) : pipeline);
-			// Projection, fog and the globals are bound by vanilla as it opens the pass. The chunk shaders pick mip levels
-			// themselves, so they sample the atlas as the chunk mesh does: smoothly, between mip levels. The mod's own shader
-			// reads it as the atlas is set to be read.
-			if (terrainBlock[0] != null) {
-				pass.setUniform("TerrainUniform", terrainBlock[0]);
-			}
-			pass.setUniform(sodiumShaders ? SodiumFoliageShader.BLOCK_TEXTURE : "Sampler0", atlas.getTextureView(),
-					sodiumShaders || terrainShaders
-							? RenderSystem.getSamplerCache().getClampToEdge(FilterMode.LINEAR, true) : atlas.getSampler());
-			pass.setUniform(sodiumShaders ? SodiumFoliageShader.LIGHT_TEXTURE : "Sampler2", minecraft.gameRenderer.lightmap(),
-					RenderSystem.getSamplerCache().getClampToEdge(FilterMode.LINEAR));
-			pass.setUniform(SWAY_SETTINGS_UNIFORM, settings);
-			pass.setUniform(GpuFoliageInteraction.UNIFORM, interaction);
-			pass.setIndexBuffer(indexBuffer, indices.type());
-			if (shaderPack) {
-				// The pack's program binds only the blocks Iris knows, so the sway's are bound where the copy reads them.
-				IrisCompat.bindSwayBlocks(settings, interaction);
-			}
-			int boundRegion = -1;
-			for (int i = 0; i < drawList.length; i += 3) {
-				int regionIndex = drawList[i];
-				if (regionIndex != boundRegion) {
-					pass.setUniform(regionUniform, regionBlocks[regionIndex]);
-					pass.setVertexBuffer(0, regions[regionIndex].vertices.slice());
-					boundRegion = regionIndex;
+			// The solid leaves first, as vanilla draws its solid terrain before its cut out terrain, then the rest; each
+			// with everything bound again for its pipeline.
+			for (int kind = 0; kind < 2; kind++) {
+				int[] list = kind == 0 ? opaqueList : drawList;
+				if (list.length == 0) {
+					continue;
 				}
-				// The sequential index buffer counts from zero, and the base vertex moves it to where this run of sections
-				// starts in the region's buffer.
-				pass.drawIndexed(indexCountFor(drawList[i + 2]), 1, 0, drawList[i + 1], 0);
+				// Asked for again here, as the level is drawn, which is when Iris hands back the pack's program in its
+				// place; the mod's swaying copy of that program then takes its place in turn.
+				pass.setPipeline(kind == 0 ? opaquePipeline : shaderPack
+						? IrisCompat.withFoliageProgram(RenderSystem.getCompiledPipeline(shaderPackPipeline)) : pipeline);
+				// Projection, fog and the globals are bound by vanilla as it opens the pass. The chunk shaders pick mip
+				// levels themselves, so they sample the atlas as the chunk mesh does: smoothly, between mip levels. The
+				// mod's own shader reads it as the atlas is set to be read.
+				if (terrainBlock[0] != null) {
+					pass.setUniform("TerrainUniform", terrainBlock[0]);
+				}
+				pass.setUniform(sodiumShaders ? SodiumFoliageShader.BLOCK_TEXTURE : "Sampler0", atlas.getTextureView(),
+						sodiumShaders || terrainShaders
+								? RenderSystem.getSamplerCache().getClampToEdge(FilterMode.LINEAR, true) : atlas.getSampler());
+				pass.setUniform(sodiumShaders ? SodiumFoliageShader.LIGHT_TEXTURE : "Sampler2",
+						minecraft.gameRenderer.lightmap(), RenderSystem.getSamplerCache().getClampToEdge(FilterMode.LINEAR));
+				pass.setUniform(SWAY_SETTINGS_UNIFORM, settings);
+				pass.setUniform(GpuFoliageInteraction.UNIFORM, interaction);
+				pass.setIndexBuffer(indexBuffer, indices.type());
+				if (shaderPack) {
+					// The pack's program binds only the blocks Iris knows, so the sway's are bound where the copy reads them.
+					IrisCompat.bindSwayBlocks(settings, interaction);
+				}
+				int boundRegion = -1;
+				for (int i = 0; i < list.length; i += 3) {
+					int regionIndex = list[i];
+					if (regionIndex != boundRegion) {
+						pass.setUniform(regionUniform, regionBlocks[regionIndex]);
+						pass.setVertexBuffer(0, regions[regionIndex].vertices.slice());
+						boundRegion = regionIndex;
+					}
+					// The sequential index buffer counts from zero, and the base vertex moves it to where this run of
+					// sections starts in the region's buffer.
+					pass.drawIndexed(indexCountFor(list[i + 2]), 1, 0, list[i + 1], 0);
+				}
 			}
 		};
 		// Drawn as the pack's cutout terrain, which some packs read to tell what they are drawing apart.
@@ -2809,12 +2906,28 @@ public final class GpuFoliageRenderer {
 	}
 
 	private static void addDraw(int regionIndex, int firstVertex, int vertexCount) {
+		// A run of sections holding only solid leaves has nothing cut out to draw, and the other way round.
+		if (vertexCount <= 0) {
+			return;
+		}
 		if (drawsSize + 3 > draws.length) {
 			draws = Arrays.copyOf(draws, draws.length * 2);
 		}
 		draws[drawsSize++] = regionIndex;
 		draws[drawsSize++] = firstVertex;
 		draws[drawsSize++] = vertexCount;
+	}
+
+	private static void addOpaqueDraw(int regionIndex, int firstVertex, int vertexCount) {
+		if (vertexCount <= 0) {
+			return;
+		}
+		if (opaqueDrawsSize + 3 > opaqueDraws.length) {
+			opaqueDraws = Arrays.copyOf(opaqueDraws, opaqueDraws.length * 2);
+		}
+		opaqueDraws[opaqueDrawsSize++] = regionIndex;
+		opaqueDraws[opaqueDrawsSize++] = firstVertex;
+		opaqueDraws[opaqueDrawsSize++] = vertexCount;
 	}
 
 	private static int indexCountFor(int vertexCount) {
@@ -3455,121 +3568,138 @@ public final class GpuFoliageRenderer {
 				.getSection(level.getSectionIndexFromSectionY(SectionPos.y(key)));
 		BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos();
 		BlockPos.MutableBlockPos neighbour = new BlockPos.MutableBlockPos();
-		for (int dx = 0; dx < SECTION_SIZE; dx++) {
-			for (int dy = 0; dy < SECTION_SIZE; dy++) {
-				for (int dz = 0; dz < SECTION_SIZE; dz++) {
-					BlockState state = blocks.getBlockState(dx, dy, dz);
-					// Snow! Real Magic's snow holding a plant: the plant is meshed, the snow stays with the chunk mesh.
-					float raised = 0.0F;
-					boolean inSnow = false;
-					pos.set(origin.getX() + dx, origin.getY() + dy, origin.getZ() + dz);
-					// Snow lying on a leaf, while the leaves wave, is meshed itself: it moves with the leaf, as a field.
-					if (!GpuFoliageSplit.isFoliage(state) && !GpuFoliageSplit.restsOnWavingLeaves(level, pos, state)) {
-						if (!SnowRealMagicCompat.isSnowBlock(state)) {
+		// Leaves drawn solid, as the game's Fast leaves are, go last, in a second walk over the section, so they are one
+		// stretch at the end of its vertices that a pipeline keeping every pixel draws. The game picks them as its section
+		// compiler does (ModelBlockRenderer.forceOpaque): every LeavesBlock. Their faces against one another are hidden by
+		// the culling renderer as the chunk mesh's are, since LeavesBlock hides them while its leaves are not cut out.
+		boolean opaqueLeaves = WavingWhitelist.opaqueLeaves();
+		int cutoutVertices = 0;
+		for (int walk = 0; walk < 2; walk++) {
+			if (walk == 1) {
+				cutoutVertices = weightScratch.position() / WEIGHT_BYTES;
+				if (!opaqueLeaves) {
+					break;
+				}
+			}
+			for (int dx = 0; dx < SECTION_SIZE; dx++) {
+				for (int dy = 0; dy < SECTION_SIZE; dy++) {
+					for (int dz = 0; dz < SECTION_SIZE; dz++) {
+						BlockState state = blocks.getBlockState(dx, dy, dz);
+						// Snow! Real Magic's snow holding a plant: the plant is meshed, the snow stays with the chunk mesh.
+						float raised = 0.0F;
+						boolean inSnow = false;
+						pos.set(origin.getX() + dx, origin.getY() + dy, origin.getZ() + dz);
+						// Snow lying on a leaf, while the leaves wave, is meshed itself: it moves with the leaf, as a field.
+						if (!GpuFoliageSplit.isFoliage(state) && !GpuFoliageSplit.restsOnWavingLeaves(level, pos, state)) {
+							if (!SnowRealMagicCompat.isSnowBlock(state)) {
+								continue;
+							}
+							BlockState plant = SnowRealMagicCompat.plantIn(level, pos, state);
+							if (plant == null || !GpuFoliageSplit.isFoliage(plant)) {
+								continue;
+							}
+							state = plant;
+							raised = SnowRealMagicCompat.liftOf(plant);
+							inSnow = true;
+						}
+						if (opaqueLeaves && (state.getBlock() instanceof LeavesBlock) != (walk == 1)) {
 							continue;
 						}
-						BlockState plant = SnowRealMagicCompat.plantIn(level, pos, state);
-						if (plant == null || !GpuFoliageSplit.isFoliage(plant)) {
-							continue;
-						}
-						state = plant;
-						raised = SnowRealMagicCompat.liftOf(plant);
-						inSnow = true;
-					}
-					pos.set(origin.getX() + dx, origin.getY() + dy, origin.getZ() + dz);
-					anchor.prepare(state, pos, level);
-					// Measured at the anchor, so every block of a tall plant bends as one piece; plants stand in a column,
-					// so the anchor shares the block's.
-					anchor.exposure = shelter == null ? 1.0F
-							: shelter.exposureAt(pos.getX(), anchor.cellY, pos.getZ(), anchor.length);
-					anchor.still = false;
-					// A plant under Snow! Real Magic's snow -- held in it, or the top half of one that is -- is weighed
-					// down, in calm weather and in the wind alike. Either still bends as far as any other when pushed.
-					anchor.waving = inSnow || SnowRealMagicCompat.standsOnSnow(level, pos, state) ? SNOW_LADEN_SWAY : 1.0F;
-					// A block of the waving whitelist waves as hard as its group says, and leaves as a field, which the wind
-					// reaches wherever it is so that neighbouring blocks never part.
-					anchor.waving *= WavingWhitelist.intensityOf(state.getBlock());
-					anchor.field = WavingWhitelist.wavesAsField(state.getBlock());
-					anchor.steady = anchor.field;
-					// A field's reach is worked out at each corner instead, the same for every block sharing it.
-					if (anchor.field) {
-						anchor.exposure = 1.0F;
-					}
-					// A block that follows the leaves -- a vine -- moves as the leaves it hangs on do. While they wave it moves
-					// with them all over, and sways as the plant it is on top of that, from where it hangs: marked still and
-					// steady at once, which nothing else is, the wind reaching it as far as it reaches the leaves at the same
-					// corner (see exposureAt). A push never calms it, so it keeps with them. While they stand still, what they
-					// hold stands still too and only the part hanging free sways, as a plant; a short strand, held all the way,
-					// is only pushed. One that clings mostly to anything else -- a trunk -- neither waves nor bends, as what
-					// it clings to.
-					// Any other hanging plant does the same while it literally hangs from leaves that wave, and is left a
-					// plant as any other otherwise.
-					anchor.hangsOnLeaves = false;
-					anchor.pushless = false;
-					boolean follows = WavingWhitelist.followsLeaves(state.getBlock());
-					// Any other hanging plant only changes while the leaves wave: it is not measured otherwise.
-					if (follows || anchor.hanging && WavingWhitelist.leavesWave()) {
-						boolean onLeaves = anchor.hangOnLeaves(level, !follows);
-						if (onLeaves && WavingWhitelist.leavesWave()) {
-							anchor.hangsOnLeaves = true;
-							anchor.still = true;
-							anchor.steady = true;
+						pos.set(origin.getX() + dx, origin.getY() + dy, origin.getZ() + dz);
+						anchor.prepare(state, pos, level);
+						// Measured at the anchor, so every block of a tall plant bends as one piece; plants stand in a column,
+						// so the anchor shares the block's.
+						anchor.exposure = shelter == null ? 1.0F
+								: shelter.exposureAt(pos.getX(), anchor.cellY, pos.getZ(), anchor.length);
+						anchor.still = false;
+						// A plant under Snow! Real Magic's snow -- held in it, or the top half of one that is -- is weighed
+						// down, in calm weather and in the wind alike. Either still bends as far as any other when pushed.
+						anchor.waving = inSnow || SnowRealMagicCompat.standsOnSnow(level, pos, state) ? SNOW_LADEN_SWAY : 1.0F;
+						// A block of the waving whitelist waves as hard as its group says, and leaves as a field, which the wind
+						// reaches wherever it is so that neighbouring blocks never part.
+						anchor.waving *= WavingWhitelist.intensityOf(state.getBlock());
+						anchor.field = WavingWhitelist.wavesAsField(state.getBlock());
+						anchor.steady = anchor.field;
+						// A field's reach is worked out at each corner instead, the same for every block sharing it.
+						if (anchor.field) {
 							anchor.exposure = 1.0F;
-						} else if (follows && onLeaves && anchor.freeLength > 0) {
-							// The leaves stand still -- switched off, or Fast -- and so does all of it they hold; the part
-							// hanging free below still sways as the plant it is, in calm weather and in the weather's wind.
-							anchor.hangsOnLeaves = true;
-							anchor.still = false;
-							anchor.steady = false;
-						} else if (follows) {
-							anchor.waving = 0.0F;
-							anchor.still = false;
-							anchor.steady = false;
-							anchor.pushless = !onLeaves;
 						}
+						// A block that follows the leaves -- a vine -- moves as the leaves it hangs on do. While they wave it moves
+						// with them all over, and sways as the plant it is on top of that, from where it hangs: marked still and
+						// steady at once, which nothing else is, the wind reaching it as far as it reaches the leaves at the same
+						// corner (see exposureAt). A push never calms it, so it keeps with them. While they stand still, what they
+						// hold stands still too and only the part hanging free sways, as a plant; a short strand, held all the way,
+						// is only pushed. One that clings mostly to anything else -- a trunk -- neither waves nor bends, as what
+						// it clings to.
+						// Any other hanging plant does the same while it literally hangs from leaves that wave, and is left a
+						// plant as any other otherwise.
+						anchor.hangsOnLeaves = false;
+						anchor.pushless = false;
+						boolean follows = WavingWhitelist.followsLeaves(state.getBlock());
+						// Any other hanging plant only changes while the leaves wave: it is not measured otherwise.
+						if (follows || anchor.hanging && WavingWhitelist.leavesWave()) {
+							boolean onLeaves = anchor.hangOnLeaves(level, !follows);
+							if (onLeaves && WavingWhitelist.leavesWave()) {
+								anchor.hangsOnLeaves = true;
+								anchor.still = true;
+								anchor.steady = true;
+								anchor.exposure = 1.0F;
+							} else if (follows && onLeaves && anchor.freeLength > 0) {
+								// The leaves stand still -- switched off, or Fast -- and so does all of it they hold; the part
+								// hanging free below still sways as the plant it is, in calm weather and in the weather's wind.
+								anchor.hangsOnLeaves = true;
+								anchor.still = false;
+								anchor.steady = false;
+							} else if (follows) {
+								anchor.waving = 0.0F;
+								anchor.still = false;
+								anchor.steady = false;
+								anchor.pushless = !onLeaves;
+							}
+						}
+						// Another mod may draw the plant lower than its block, as the chunk mesh shows it.
+						float lift = TerrainSlabsCompat.offsetY(level, pos, state) + raised;
+						//? iris {
+						if (meshedForShaderPack) {
+							// The pack reads which block each vertex belongs to, and where its centre is, as it does on the
+							// chunk mesh; Iris writes them as the vertices go in.
+							IrisCompat.beginBlock(builder, state, offsetX + dx, offsetY + dy, offsetZ + dz);
+						}
+						//?}
+						//? >=26.1.2 {
+						(anchor.field && touchesOtherThanLeaves(level, blocks, dx, dy, dz, pos, neighbour)
+								? uncullingRenderer : modelRenderer)
+								.tesselateBlock(output, offsetX + dx, offsetY + dy + lift, offsetZ + dz,
+								level, pos, state, SnowRealMagicCompat.snowyVariant(GpuFoliageSplit.modelFor(state,
+										models.get(state)), state, level, pos, inSnow),
+								state.getSeed(pos));
+						//?} else {
+						/*//? >=1.21.11 {
+						random.setSeed(state.getSeed(pos));
+						List<BlockModelPart> parts = GpuFoliageSplit
+								.modelFor(state, models.getBlockModel(state))
+								.collectParts(random);
+						// The pose carries what the newer call took as arguments: where the block sits in
+						// its region. The writer subtracts it again to recover each vertex's height in
+						// its own block, which is what a sway weight is measured against.
+						poseStack.pushPose();
+						poseStack.translate(offsetX + dx, offsetY + dy + lift, offsetZ + dz);
+						output.beginBlock(offsetY + dy + lift);
+						modelRenderer.tesselateBlock(level, parts, state, pos, poseStack, output,
+								!(anchor.field && touchesOtherThanLeaves(level, blocks, dx, dy, dz, pos, neighbour)),
+								OverlayTexture.NO_OVERLAY);
+						poseStack.popPose();
+						//?} else {
+						/^poseStack.pushPose();
+						poseStack.translate(offsetX + dx, offsetY + dy + lift, offsetZ + dz);
+						output.beginBlock(offsetY + dy + lift);
+						tesselate(level, SnowRealMagicCompat.snowyVariant(GpuFoliageSplit.modelFor(state,
+								models.getBlockModel(state)), state, level, pos, inSnow), state, pos, poseStack, output, random,
+								!(anchor.field && touchesOtherThanLeaves(level, blocks, dx, dy, dz, pos, neighbour)));
+						poseStack.popPose();
+						^///?}
+						*///?}
 					}
-					// Another mod may draw the plant lower than its block, as the chunk mesh shows it.
-					float lift = TerrainSlabsCompat.offsetY(level, pos, state) + raised;
-					//? iris {
-					if (meshedForShaderPack) {
-						// The pack reads which block each vertex belongs to, and where its centre is, as it does on the
-						// chunk mesh; Iris writes them as the vertices go in.
-						IrisCompat.beginBlock(builder, state, offsetX + dx, offsetY + dy, offsetZ + dz);
-					}
-					//?}
-					//? >=26.1.2 {
-					(anchor.field && touchesOtherThanLeaves(level, blocks, dx, dy, dz, pos, neighbour)
-							? uncullingRenderer : modelRenderer)
-							.tesselateBlock(output, offsetX + dx, offsetY + dy + lift, offsetZ + dz,
-							level, pos, state, SnowRealMagicCompat.snowyVariant(GpuFoliageSplit.modelFor(state,
-									models.get(state)), state, level, pos, inSnow),
-							state.getSeed(pos));
-					//?} else {
-					/*//? >=1.21.11 {
-					random.setSeed(state.getSeed(pos));
-					List<BlockModelPart> parts = GpuFoliageSplit
-							.modelFor(state, models.getBlockModel(state))
-							.collectParts(random);
-					// The pose carries what the newer call took as arguments: where the block sits in
-					// its region. The writer subtracts it again to recover each vertex's height in
-					// its own block, which is what a sway weight is measured against.
-					poseStack.pushPose();
-					poseStack.translate(offsetX + dx, offsetY + dy + lift, offsetZ + dz);
-					output.beginBlock(offsetY + dy + lift);
-					modelRenderer.tesselateBlock(level, parts, state, pos, poseStack, output,
-							!(anchor.field && touchesOtherThanLeaves(level, blocks, dx, dy, dz, pos, neighbour)),
-							OverlayTexture.NO_OVERLAY);
-					poseStack.popPose();
-					//?} else {
-					/^poseStack.pushPose();
-					poseStack.translate(offsetX + dx, offsetY + dy + lift, offsetZ + dz);
-					output.beginBlock(offsetY + dy + lift);
-					tesselate(level, SnowRealMagicCompat.snowyVariant(GpuFoliageSplit.modelFor(state,
-							models.getBlockModel(state)), state, level, pos, inSnow), state, pos, poseStack, output, random,
-							!(anchor.field && touchesOtherThanLeaves(level, blocks, dx, dy, dz, pos, neighbour)));
-					poseStack.popPose();
-					^///?}
-					*///?}
 				}
 			}
 		}
@@ -3628,7 +3758,7 @@ public final class GpuFoliageRenderer {
 				data.put(vertex * stride, meshVertices, meshBase + vertex * vertexBytes, vertexBytes);
 				data.put(vertex * stride + vertexBytes, weightScratch, vertex * WEIGHT_BYTES, WEIGHT_BYTES);
 			}
-			Section section = new Section(key, origin, data, vertexCount, stride);
+			Section section = new Section(key, origin, data, vertexCount, vertexCount - cutoutVertices, stride);
 			section.sheltered = shelter != null;
 			putSection(key, section);
 		//? >=1.21.1 {
