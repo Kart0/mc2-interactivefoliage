@@ -116,7 +116,9 @@ vec3 mc2_unpackCell(float bits) {
 // The first is the wind's own curve; the second is Sway's, so a pushed plant bends the same whoever draws it; the third is
 // set for the blocks the mod keeps from waving, which the weather's wind still moves; the fourth for a tree's leaves,
 // which wave together, and for what hangs on them; the fifth is 1 in the open and falls under roofs, in caves and behind walls upwind, as the
-// mod works out when it meshes the plant. x: the wind weight, y: the push, z: the wind's reach, w: how much of the calm
+// mod works out when it meshes the plant. A block hanging on leaves keeps three of those four bits for the wind and gives
+// the lowest to whether the leaves wave where the vertex is; mc2_sway takes z apart for it. x: the wind weight, y: the
+// push, z: the wind's reach, w: how much of the calm
 // sway the plant has, 1 or 0; steady: 1 for a block a push leaves swaying, 0 for a plant.
 vec4 mc2_unpackWeights(float bits, out float steady) {
     float exposure = bits - floor(bits / 16.0) * 16.0;
@@ -181,6 +183,14 @@ vec3 mc2_sway(vec3 pos, vec3 modelOffset, ivec3 cameraBlockPos, vec3 cameraOffse
     bool hanging = steady > 0.5 && weights.w < 0.5;
     float calmShare = hanging ? 1.0 : weights.w;
     float exposure = weights.z;
+    // It keeps three of the wind's bits, and the last says whether the leaves wave where this vertex is or stand still
+    // against a block holding them, as the leaf beside it was told: so it moves exactly as that leaf.
+    float leafWaves = 1.0;
+    if (hanging) {
+        float bits = floor(weights.z * 15.0 + 0.5);
+        leafWaves = bits - floor(bits / 2.0) * 2.0;
+        exposure = floor(bits / 2.0) / 7.0;
+    }
     // Where the edge's ease and rain's reach are measured: at a plant's anchor, so the whole plant eases together, or at
     // the vertex itself for the leaves, so the corners neighbouring leaves share move as one and they never part.
     vec3 easeAt = steady > 0.5 && !hanging ? pos - 0.5 : cell;
@@ -197,7 +207,7 @@ vec3 mc2_sway(vec3 pos, vec3 modelOffset, ivec3 cameraBlockPos, vec3 cameraOffse
     if (hanging) {
         // Where it hangs its own sway is nothing, and it moves exactly as the leaf beside it.
         vec3 atVertex = pos - 0.5;
-        float leafReach = MC2_LEAVES_WAVE * MC2_SWAY_STRENGTH * mc2_SwayIntensity * mc2_edgeEase(atVertex);
+        float leafReach = MC2_LEAVES_WAVE * leafWaves * MC2_SWAY_STRENGTH * mc2_SwayIntensity * mc2_edgeEase(atVertex);
         vec2 leafWind;
         offset += mc2_motion(world, phase, gameTime, leafReach, 1.0, 1.0, exposure, atVertex, leafWind);
         wind += leafWind;

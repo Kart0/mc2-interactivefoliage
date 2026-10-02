@@ -658,6 +658,11 @@ public final class GpuFoliageRenderer {
 	private static final float WEIGHT_SCALE = 1023.0F;
 	private static final float PUSH_SCALE = 255.0F;
 	private static final float EXPOSURE_SCALE = 15.0F;
+	/**
+	 * A block hanging on leaves gives the lowest of the wind's four bits to whether the leaves wave where it is, so it
+	 * keeps three for the wind's reach.
+	 */
+	private static final float HANGING_EXPOSURE_SCALE = 7.0F;
 
 	/**
 	 * The anchor block, relative to the region, as one float: a byte per axis. A region is 128 blocks wide
@@ -673,12 +678,17 @@ public final class GpuFoliageRenderer {
 	/**
 	 * The wind weight, the push weight, whether the plant stands still in calm weather, whether it keeps its sway while
 	 * pushed (a field, or what follows the leaves), and how much of rain's wind reaches the plant, as one float: ten
-	 * bits, eight, one, one and four. The weights are between 0 and 1.
+	 * bits, eight, one, one and four. The weights are between 0 and 1. A block hanging on leaves -- still and steady at
+	 * once -- keeps three bits for the wind and gives the last to whether the leaves wave where the vertex is, rather
+	 * than stand still against a block holding them (leafHeld), so it moves exactly as the leaf it hangs on.
 	 */
-	private static float packWeights(float wave, float push, boolean still, boolean steady, float exposure) {
+	private static float packWeights(float wave, float push, boolean still, boolean steady, float exposure,
+			boolean leafHeld) {
 		int w = Math.round(Mth.clamp(wave, 0.0F, 1.0F) * WEIGHT_SCALE);
 		int p = Math.round(Mth.clamp(push, 0.0F, 1.0F) * PUSH_SCALE);
-		int e = Math.round(Mth.clamp(exposure, 0.0F, 1.0F) * EXPOSURE_SCALE);
+		int e = still && steady
+				? Math.round(Mth.clamp(exposure, 0.0F, 1.0F) * HANGING_EXPOSURE_SCALE) * 2 + (leafHeld ? 0 : 1)
+				: Math.round(Mth.clamp(exposure, 0.0F, 1.0F) * EXPOSURE_SCALE);
 		return (((w * 256 + p) * 2 + (still ? 1 : 0)) * 2 + (steady ? 1 : 0)) * 16 + e;
 	}
 	private static final int INITIAL_SCRATCH_QUADS = 1024;
@@ -1266,13 +1276,23 @@ public final class GpuFoliageRenderer {
 		 * How much of its wave a field's vertex at this position keeps: none at a corner touching a block that holds the
 		 * leaves still (see holdsLeavesStill) -- a trunk, the ground -- so they never sink into it as they wave, nor part
 		 * from it; all of it otherwise. Worked out from the corner alone, the eight blocks around it, so every block sharing
-		 * it reads alike and neighbouring leaves never part. A block hanging on the leaves still moves at their full weight
-		 * there.
+		 * it reads alike and neighbouring leaves never part. A block hanging on the leaves is told the same; see leafHeldAt.
 		 */
 		float pinAt(float worldX, float worldY, float worldZ) {
-			if (!field) {
-				return 1.0F;
-			}
+			return field ? cornerPin(worldX, worldY, worldZ) : 1.0F;
+		}
+
+		/**
+		 * Whether the leaves a block hangs on stand still where this vertex of it is, against a block holding them (see
+		 * pinAt): read from the same corner they read, so it moves exactly as they do there. Only while it moves as the
+		 * leaves do -- still and steady at once.
+		 */
+		boolean leafHeldAt(float worldX, float worldY, float worldZ) {
+			return hangsOnLeaves && still && steady && cornerPin(worldX, worldY, worldZ) == 0.0F;
+		}
+
+		/** 0 where a block holding the leaves still is among the eight around the corner nearest this position, else 1. */
+		private float cornerPin(float worldX, float worldY, float worldZ) {
 			int x = Math.round(worldX);
 			int y = Math.round(worldY);
 			int z = Math.round(worldZ);
@@ -3295,6 +3315,7 @@ public final class GpuFoliageRenderer {
 			weightScratch.putFloat(packWeights(anchor.waveAt(regionOrigin.getY() + y)
 						* anchor.pinAt(regionOrigin.getX() + x, regionOrigin.getY() + y, regionOrigin.getZ() + z),
 					anchor.pushAt(localY), anchor.still, anchor.steady, anchor.exposureAt(regionOrigin.getX() + x,
+							regionOrigin.getY() + y, regionOrigin.getZ() + z), anchor.leafHeldAt(regionOrigin.getX() + x,
 							regionOrigin.getY() + y, regionOrigin.getZ() + z)));
 			return this;
 		}
@@ -3380,6 +3401,7 @@ public final class GpuFoliageRenderer {
 			weightScratch.putFloat(packWeights(anchor.waveAt(regionOrigin.getY() + y)
 						* anchor.pinAt(regionOrigin.getX() + x, regionOrigin.getY() + y, regionOrigin.getZ() + z),
 					anchor.pushAt(localY), anchor.still, anchor.steady, anchor.exposureAt(regionOrigin.getX() + x,
+							regionOrigin.getY() + y, regionOrigin.getZ() + z), anchor.leafHeldAt(regionOrigin.getX() + x,
 							regionOrigin.getY() + y, regionOrigin.getZ() + z)));
 		}
 
@@ -3606,7 +3628,8 @@ public final class GpuFoliageRenderer {
 				float worldX = regionOrigin.getX() + x + quad.position(vertex).x();
 				float worldZ = regionOrigin.getZ() + z + quad.position(vertex).z();
 				weightScratch.putFloat(packWeights(anchor.waveAt(worldY) * anchor.pinAt(worldX, worldY, worldZ),
-						anchor.pushAt(localY), anchor.still, anchor.steady, anchor.exposureAt(worldX, worldY, worldZ)));
+						anchor.pushAt(localY), anchor.still, anchor.steady, anchor.exposureAt(worldX, worldY, worldZ),
+						anchor.leafHeldAt(worldX, worldY, worldZ)));
 			}
 		};
 

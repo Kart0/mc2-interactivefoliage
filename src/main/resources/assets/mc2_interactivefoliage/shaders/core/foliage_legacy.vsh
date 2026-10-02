@@ -154,6 +154,13 @@ void main() {
     bool hanging = steady > 0.5 && weights.w < 0.5;
     float calmShare = hanging ? 1.0 : weights.w;
     float exposure = weights.z;
+    // Three of the wind's bits, and whether the leaves wave where this vertex is: so it moves as the leaf beside it. See sway.glsl.
+    float leafWaves = 1.0;
+    if (hanging) {
+        float bits = floor(weights.z * 15.0 + 0.5);
+        leafWaves = bits - floor(bits / 2.0) * 2.0;
+        exposure = floor(bits / 2.0) / 7.0;
+    }
     // The leaves ease where each vertex is, so blocks that touch never part. See sway.glsl.
     vec3 easeAt = steady > 0.5 && !hanging ? pos - 0.5 : cell;
     float calm = smoothstep(0.0, PUSH_FOR_CALM, length(force));
@@ -165,7 +172,7 @@ void main() {
     vec2 offset = motion(world, phase, reach, shake, calmShare, exposure, easeAt, windOffset);
     if (hanging) {
         vec3 atVertex = pos - 0.5;
-        float leafReach = LEAVES_WAVE * SWAY_STRENGTH * SwayIntensity * edgeEase(atVertex);
+        float leafReach = LEAVES_WAVE * leafWaves * SWAY_STRENGTH * SwayIntensity * edgeEase(atVertex);
         vec2 leafWind;
         offset += motion(world, phase, leafReach, 1.0, 1.0, exposure, atVertex, leafWind);
         windOffset += leafWind;
