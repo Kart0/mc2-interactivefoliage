@@ -450,13 +450,28 @@ public final class GpuFoliageRenderer {
 			.withBindGroupLayout(GpuFoliageInteraction.LAYOUT)
 			.withShaderDefine("ALPHA_CUTOUT", 0.5F)
 			.build();
+	// The same, keeping every pixel: for leaves drawn solid, as the game's Fast leaves are.
+	private static final RenderPipeline OPAQUE_PIPELINE = RenderPipeline.builder(RenderPipelines.BLOCK_SNIPPET)
+			.withLocation(Identifier.fromNamespaceAndPath(ModTemplate.MOD_ID, "pipeline/foliage_opaque"))
+			.withVertexShader(Identifier.fromNamespaceAndPath(ModTemplate.MOD_ID, "core/foliage"))
+			.withFragmentShader(Identifier.fromNamespaceAndPath(ModTemplate.MOD_ID, "core/foliage"))
+			.withVertexBinding(0, FOLIAGE_FORMAT)
+			.withBindGroupLayout(SWAY_SETTINGS)
+			.withBindGroupLayout(GpuFoliageInteraction.LAYOUT)
+			.build();
 	*///?} elif >=1.21.11 && <26.2 {
 	/*// Vanilla's block snippet is private before 26.2, so the same state is spelled out here: the samplers
 	// and uniforms its shaders read, one vertex format, and the depth state every block pipeline uses.
 	private static final RenderPipeline PIPELINE = blockPipeline("pipeline/foliage", FOLIAGE_FORMAT);
+	// The same, keeping every pixel: for leaves drawn solid, as the game's Fast leaves are.
+	private static final RenderPipeline OPAQUE_PIPELINE = blockPipeline("pipeline/foliage_opaque", FOLIAGE_FORMAT, false);
 
 	private static RenderPipeline blockPipeline(String location, VertexFormat format) {
-		return RenderPipeline.builder()
+		return blockPipeline(location, format, true);
+	}
+
+	private static RenderPipeline blockPipeline(String location, VertexFormat format, boolean cutout) {
+		RenderPipeline.Builder builder = RenderPipeline.builder()
 				.withLocation(Identifier.fromNamespaceAndPath(ModTemplate.MOD_ID, location))
 				.withVertexShader(Identifier.fromNamespaceAndPath(ModTemplate.MOD_ID, "core/foliage"))
 				.withFragmentShader(Identifier.fromNamespaceAndPath(ModTemplate.MOD_ID, "core/foliage"))
@@ -470,13 +485,15 @@ public final class GpuFoliageRenderer {
 				.withUniform(SWAY_SETTINGS_UNIFORM, UniformType.UNIFORM_BUFFER)
 				.withUniform(GpuFoliageInteraction.UNIFORM, UniformType.UNIFORM_BUFFER)
 				//? >=26.1.2 {
-				.withDepthStencilState(DepthStencilState.DEFAULT)
+				.withDepthStencilState(DepthStencilState.DEFAULT);
 				//?} else {
 				/^.withDepthWrite(true)
-				.withDepthTestFunction(DepthTestFunction.LESS_DEPTH_TEST)
+				.withDepthTestFunction(DepthTestFunction.LESS_DEPTH_TEST);
 				^///?}
-				.withShaderDefine("ALPHA_CUTOUT", 0.5F)
-				.build();
+		if (cutout) {
+			builder.withShaderDefine("ALPHA_CUTOUT", 0.5F);
+		}
+		return builder.build();
 	}
 	*///?}
 
@@ -564,6 +581,15 @@ public final class GpuFoliageRenderer {
 			.withBindGroupLayout(GpuFoliageInteraction.LAYOUT)
 			.withShaderDefine("ALPHA_CUTOUT", 0.5F)
 			.build();
+	// The same, keeping every pixel, as vanilla's solid terrain: for leaves drawn as the game's Fast leaves are.
+	private static final RenderPipeline TERRAIN_OPAQUE_PIPELINE = RenderPipeline.builder(RenderPipelines.TERRAIN_SNIPPET)
+			.withLocation(Identifier.fromNamespaceAndPath(ModTemplate.MOD_ID, "pipeline/foliage_terrain_opaque"))
+			.withVertexShader(TerrainFoliageShader.VERTEX)
+			.withFragmentShader(TerrainFoliageShader.TERRAIN)
+			.withVertexBinding(0, FOLIAGE_FORMAT)
+			.withBindGroupLayout(SWAY_SETTINGS)
+			.withBindGroupLayout(GpuFoliageInteraction.LAYOUT)
+			.build();
 
 	/^*
 	 * The pipeline foliage is drawn with while Sodium draws the chunks and its shaders compile with the mod's vertices
@@ -615,27 +641,35 @@ public final class GpuFoliageRenderer {
 
 	// Drawn with the terrain's shaders where they compile with the sway spliced in; see the newer pipeline. Vanilla's
 	// terrain snippet is private before 26.2, so the state it holds is spelled out, as for the block pipeline.
-	private static final RenderPipeline TERRAIN_PIPELINE = RenderPipeline.builder()
-			.withLocation(Identifier.fromNamespaceAndPath(ModTemplate.MOD_ID, "pipeline/foliage_terrain"))
-			.withVertexShader(TerrainFoliageShader.VERTEX)
-			.withFragmentShader(TerrainFoliageShader.TERRAIN)
-			.withVertexFormat(FOLIAGE_FORMAT, VertexFormat.Mode.QUADS)
-			.withSampler("Sampler0")
-			.withSampler("Sampler2")
-			.withUniform("Projection", UniformType.UNIFORM_BUFFER)
-			.withUniform("ChunkSection", UniformType.UNIFORM_BUFFER)
-			.withUniform("Fog", UniformType.UNIFORM_BUFFER)
-			.withUniform("Globals", UniformType.UNIFORM_BUFFER)
-			.withUniform(SWAY_SETTINGS_UNIFORM, UniformType.UNIFORM_BUFFER)
-			.withUniform(GpuFoliageInteraction.UNIFORM, UniformType.UNIFORM_BUFFER)
-			//? >=26.1.2 {
-			.withDepthStencilState(DepthStencilState.DEFAULT)
-			//?} else {
-			/^.withDepthWrite(true)
-			.withDepthTestFunction(DepthTestFunction.LESS_DEPTH_TEST)
-			^///?}
-			.withShaderDefine("ALPHA_CUTOUT", 0.5F)
-			.build();
+	private static final RenderPipeline TERRAIN_PIPELINE = terrainPipeline("pipeline/foliage_terrain", true);
+	// The same, keeping every pixel, as vanilla's solid terrain: for leaves drawn as the game's Fast leaves are.
+	private static final RenderPipeline TERRAIN_OPAQUE_PIPELINE = terrainPipeline("pipeline/foliage_terrain_opaque", false);
+
+	private static RenderPipeline terrainPipeline(String location, boolean cutout) {
+		RenderPipeline.Builder builder = RenderPipeline.builder()
+				.withLocation(Identifier.fromNamespaceAndPath(ModTemplate.MOD_ID, location))
+				.withVertexShader(TerrainFoliageShader.VERTEX)
+				.withFragmentShader(TerrainFoliageShader.TERRAIN)
+				.withVertexFormat(FOLIAGE_FORMAT, VertexFormat.Mode.QUADS)
+				.withSampler("Sampler0")
+				.withSampler("Sampler2")
+				.withUniform("Projection", UniformType.UNIFORM_BUFFER)
+				.withUniform("ChunkSection", UniformType.UNIFORM_BUFFER)
+				.withUniform("Fog", UniformType.UNIFORM_BUFFER)
+				.withUniform("Globals", UniformType.UNIFORM_BUFFER)
+				.withUniform(SWAY_SETTINGS_UNIFORM, UniformType.UNIFORM_BUFFER)
+				.withUniform(GpuFoliageInteraction.UNIFORM, UniformType.UNIFORM_BUFFER)
+				//? >=26.1.2 {
+				.withDepthStencilState(DepthStencilState.DEFAULT);
+				//?} else {
+				/^.withDepthWrite(true)
+				.withDepthTestFunction(DepthTestFunction.LESS_DEPTH_TEST);
+				^///?}
+		if (cutout) {
+			builder.withShaderDefine("ALPHA_CUTOUT", 0.5F);
+		}
+		return builder.build();
+	}
 	*///?}
 
 	private static final int VERTEX_BYTES = DefaultVertexFormat.BLOCK.getVertexSize();
@@ -1834,12 +1868,14 @@ public final class GpuFoliageRenderer {
 	/**
 	 * Whether leaves can be drawn solid now, as the game's Fast leaves are: with a pipeline that keeps every pixel, which
 	 * the renderer has on 26.3 for the terrain's shaders, Sodium's and its own, and for a shader pack whose solid programs
-	 * the mod could copy.
+	 * the mod could copy; from 1.21.11 to 26.2, for the terrain's shaders and its own so far.
 	 */
 	private static boolean canDrawOpaqueLeaves() {
 		//? >=26.3 {
 		return !IrisCompat.shaderPackInUse() || IrisCompat.hasOpaquePrograms();
-		//?} else {
+		//?} elif >=1.21.11 {
+		/*return !SodiumBridge.drawsChunks() && !IrisCompat.shaderPackInUse();
+		*///?} else {
 		/*return false;
 		*///?}
 	}
@@ -2519,6 +2555,18 @@ public final class GpuFoliageRenderer {
 		return TerrainFoliageShader.usable(TERRAIN_PIPELINE) ? TERRAIN_PIPELINE : PIPELINE;
 	}
 
+	/^*
+	 * The pipeline leaves drawn solid go through, as the game's Fast leaves are: the same shaders keeping every pixel, as
+	 * vanilla's solid terrain differs from its cutout terrain. Where there is none yet -- Sodium's copy, a shader pack's
+	 * program -- or it does not compile, the pipeline itself, so they are drawn cut out rather than not at all.
+	 ^/
+	private static RenderPipeline opaqueOf(RenderPipeline pipeline) {
+		if (pipeline == TERRAIN_PIPELINE) {
+			return TerrainFoliageShader.usable(TERRAIN_OPAQUE_PIPELINE) ? TERRAIN_OPAQUE_PIPELINE : pipeline;
+		}
+		return pipeline == PIPELINE ? OPAQUE_PIPELINE : pipeline;
+	}
+
 	//? <26.1.2 {
 	/^/^¹* Sodium 0.8's per-chunk fade-in times, all -1: no chunk the mod draws is fading in. Made once. ¹^/
 	private static GpuBuffer sodiumChunkData;
@@ -2605,6 +2653,11 @@ public final class GpuFoliageRenderer {
 		for (int i = 2; i < drawsSize; i += 3) {
 			longestDraw = Math.max(longestDraw, draws[i]);
 		}
+		for (int i = 2; i < opaqueDrawsSize; i += 3) {
+			longestDraw = Math.max(longestDraw, opaqueDraws[i]);
+		}
+		// Asked for before the pass opens, as it may be compiled on the way.
+		RenderPipeline opaquePipeline = opaqueDrawsSize > 0 ? opaqueOf(pipeline) : pipeline;
 		//? >=26.2 {
 		RenderSystem.AutoStorageIndexBuffer indices = RenderSystem.getSequentialBuffer(PrimitiveTopology.QUADS);
 		//?} else {
@@ -2639,53 +2692,62 @@ public final class GpuFoliageRenderer {
 						^///?}
 						depth,
 						OptionalDouble.empty())) {
-			pass.setPipeline(pipeline);
-			RenderSystem.bindDefaultUniforms(pass);
-			if (projection != null) {
-				pass.setUniform("Projection", projection);
-			}
-			// The chunk shaders pick mip levels themselves, so they sample the atlas the way the chunk mesh does: smoothly,
-			// between mip levels. The mod's own shader reads it as the atlas is set to be read.
-			boolean sodiumShaders = pipeline == SODIUM_PIPELINE;
-			pass.bindTexture(sodiumShaders ? SodiumFoliageShader.BLOCK_TEXTURE : "Sampler0", atlas.getTextureView(),
-					sodiumShaders || terrainShaders
-							? RenderSystem.getSamplerCache().getClampToEdge(FilterMode.LINEAR, true) : atlas.getSampler());
-			pass.bindTexture(sodiumShaders ? SodiumFoliageShader.LIGHT_TEXTURE : "Sampler2",
-					//? >=26.1.2 {
-					minecraft.gameRenderer.lightmap(),
-					//?} else {
-					/^minecraft.gameRenderer.lightTexture().getTextureView(),
-					^///?}
-					RenderSystem.getSamplerCache().getClampToEdge(FilterMode.LINEAR));
-			//? <26.1.2 {
-			/^if (sodiumShaders) {
-				pass.setUniform(SodiumFoliageShader.CHUNK_DATA, sodiumChunkData());
-			}
-			^///?}
-			pass.setIndexBuffer(indexBuffer, indices.type());
-			pass.setUniform(SWAY_SETTINGS_UNIFORM, settings);
-			pass.setUniform(GpuFoliageInteraction.UNIFORM, interaction);
-
-			int boundRegion = -1;
-			for (int i = 0; i < drawsSize; i += 3) {
-				int regionIndex = draws[i];
-				if (regionIndex != boundRegion) {
-					Region region = drawn.get(regionIndex);
-					pass.setUniform(regionUniform, offsets[regionIndex]);
-					//? >=26.2 {
-					pass.setVertexBuffer(0, region.vertices.slice());
-					//?} else {
-					/^pass.setVertexBuffer(0, region.vertices);
-					^///?}
-					boundRegion = regionIndex;
+			// The solid leaves first, as vanilla draws its solid terrain before its cut out terrain, then the rest; each
+			// with everything bound again for its pipeline.
+			for (int kind = 0; kind < 2; kind++) {
+				int[] list = kind == 0 ? opaqueDraws : draws;
+				int listSize = kind == 0 ? opaqueDrawsSize : drawsSize;
+				if (listSize == 0) {
+					continue;
 				}
-				// The sequential index buffer counts from zero, and the base vertex moves it to where
-				// this run of sections starts in the region's buffers.
-				//? >=26.2 {
-				pass.drawIndexed(indexCountFor(draws[i + 2]), 1, 0, draws[i + 1], 0);
-				//?} else {
-				/^pass.drawIndexed(draws[i + 1], 0, indexCountFor(draws[i + 2]), 1);
+				pass.setPipeline(kind == 0 ? opaquePipeline : pipeline);
+				RenderSystem.bindDefaultUniforms(pass);
+				if (projection != null) {
+					pass.setUniform("Projection", projection);
+				}
+				// The chunk shaders pick mip levels themselves, so they sample the atlas the way the chunk mesh does: smoothly,
+				// between mip levels. The mod's own shader reads it as the atlas is set to be read.
+				boolean sodiumShaders = pipeline == SODIUM_PIPELINE;
+				pass.bindTexture(sodiumShaders ? SodiumFoliageShader.BLOCK_TEXTURE : "Sampler0", atlas.getTextureView(),
+						sodiumShaders || terrainShaders
+								? RenderSystem.getSamplerCache().getClampToEdge(FilterMode.LINEAR, true) : atlas.getSampler());
+				pass.bindTexture(sodiumShaders ? SodiumFoliageShader.LIGHT_TEXTURE : "Sampler2",
+						//? >=26.1.2 {
+						minecraft.gameRenderer.lightmap(),
+						//?} else {
+						/^minecraft.gameRenderer.lightTexture().getTextureView(),
+						^///?}
+						RenderSystem.getSamplerCache().getClampToEdge(FilterMode.LINEAR));
+				//? <26.1.2 {
+				/^if (sodiumShaders) {
+					pass.setUniform(SodiumFoliageShader.CHUNK_DATA, sodiumChunkData());
+				}
 				^///?}
+				pass.setIndexBuffer(indexBuffer, indices.type());
+				pass.setUniform(SWAY_SETTINGS_UNIFORM, settings);
+				pass.setUniform(GpuFoliageInteraction.UNIFORM, interaction);
+
+				int boundRegion = -1;
+				for (int i = 0; i < listSize; i += 3) {
+					int regionIndex = list[i];
+					if (regionIndex != boundRegion) {
+						Region region = drawn.get(regionIndex);
+						pass.setUniform(regionUniform, offsets[regionIndex]);
+						//? >=26.2 {
+						pass.setVertexBuffer(0, region.vertices.slice());
+						//?} else {
+						/^pass.setVertexBuffer(0, region.vertices);
+						^///?}
+						boundRegion = regionIndex;
+					}
+					// The sequential index buffer counts from zero, and the base vertex moves it to where
+					// this run of sections starts in the region's buffers.
+					//? >=26.2 {
+					pass.drawIndexed(indexCountFor(list[i + 2]), 1, 0, list[i + 1], 0);
+					//?} else {
+					/^pass.drawIndexed(list[i + 1], 0, indexCountFor(list[i + 2]), 1);
+					^///?}
+				}
 			}
 		}
 		};
