@@ -1171,6 +1171,12 @@ public final class GpuFoliageRenderer {
 		private BlockState state;
 		private BlockPos pos;
 		private ClientLevel level;
+		/**
+		 * For a block resting on leaves -- snow, a carpet -- the level it lies at, which is the top of the leaf under it;
+		 * NOT_RESTING for any other. See cornerY.
+		 */
+		private int restY = NOT_RESTING;
+		private static final int NOT_RESTING = Integer.MIN_VALUE;
 		/** For a field: whether each corner asked for so far stands still, 0, or waves, 1; see pinAt. */
 		private final Long2FloatOpenHashMap fieldPins = new Long2FloatOpenHashMap();
 		private final BlockPos.MutableBlockPos pinCursor = new BlockPos.MutableBlockPos();
@@ -1288,7 +1294,15 @@ public final class GpuFoliageRenderer {
 			if (!(field || hangsOnLeaves) || fieldShelter == null) {
 				return exposure;
 			}
-			return fieldShelter.cornerExposure(Math.round(worldX), Math.round(worldY), Math.round(worldZ));
+			return fieldShelter.cornerExposure(Math.round(worldX), cornerY(worldY), Math.round(worldZ));
+		}
+
+		/**
+		 * The level of the corner a vertex at this height reads: the nearest, or for a block resting on leaves the leaf's
+		 * top under it, whatever the vertex's own height, so the whole layer moves as that leaf does and never shears.
+		 */
+		private int cornerY(float worldY) {
+			return restY != NOT_RESTING ? restY : Math.round(worldY);
 		}
 
 		/**
@@ -1313,7 +1327,7 @@ public final class GpuFoliageRenderer {
 		/** 0 where a block holding the leaves still is among the eight around the corner nearest this position, else 1. */
 		private float cornerPin(float worldX, float worldY, float worldZ) {
 			int x = Math.round(worldX);
-			int y = Math.round(worldY);
+			int y = cornerY(worldY);
 			int z = Math.round(worldZ);
 			long key = BlockPos.asLong(x, y, z);
 			if (fieldPins.containsKey(key)) {
@@ -1485,10 +1499,19 @@ public final class GpuFoliageRenderer {
 	 * Whether a block holds the leaves touching it still: a full block that is not leaves -- a trunk, the ground, a wall.
 	 * The corners of a field touching one do not wave, so leaves never sink into it nor part from it. A block that is not
 	 * full (a fence, stairs, a slab) does not: leaves are not flush with it, and keep every face against it instead.
+	 * <p>
+	 * A layer that would rest on leaves but lies on something else -- a carpet on a fence, beside one on a leaf -- holds
+	 * them still too: it stays with the chunk mesh, unmoved, so a corner it shares with a layer that does rest on a leaf
+	 * stands still for both, and no gap opens between the two.
 	 */
 	private static boolean holdsLeavesStill(ClientLevel level, BlockPos pos, BlockState state) {
-		return !state.isAir() && !(state.getBlock() instanceof LeavesBlock) && !WavingWhitelist.isLeaves(state.getBlock())
-				&& state.isCollisionShapeFullBlock(level, pos);
+		if (state.isAir() || state.getBlock() instanceof LeavesBlock || WavingWhitelist.isLeaves(state.getBlock())) {
+			return false;
+		}
+		if (WavingWhitelist.restsOnLeaves(state.getBlock())) {
+			return !WavingWhitelist.isLeaves(level.getBlockState(pos.below()).getBlock());
+		}
+		return state.isCollisionShapeFullBlock(level, pos);
 	}
 
 	/** Every side of a block, made once: Direction.values() hands out a new array every time. */
@@ -3764,6 +3787,7 @@ public final class GpuFoliageRenderer {
 						// reaches wherever it is so that neighbouring blocks never part.
 						anchor.waving *= WavingWhitelist.intensityOf(state.getBlock());
 						anchor.field = WavingWhitelist.wavesAsField(state.getBlock());
+						anchor.restY = WavingWhitelist.restsOnLeaves(state.getBlock()) ? pos.getY() : SwayAnchor.NOT_RESTING;
 						anchor.steady = anchor.field;
 						// A field's reach is worked out at each corner instead, the same for every block sharing it.
 						if (anchor.field) {

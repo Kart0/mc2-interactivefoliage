@@ -313,16 +313,22 @@ public final class WavingWhitelist {
 	}
 
 	// ==================================================================
-	// Rest on the leaves -- blocks lying on top of leaves, like snow
+	// Rest on the leaves -- thin layers lying on top of leaves, like snow or a carpet
 	// ==================================================================
 	// Only on top of a leaf, and only while waving leaves is on: they then move exactly as the leaf under them, all
 	// over, so they never part from it. Anywhere else -- on the ground, on a roof -- they stay with the chunk mesh as
-	// they always have.
+	// they always have. Only vanilla's own tag is read for the carpets, which a mod's carpets join to be dyed, walked on
+	// and burnt as carpets are.
 
 	private static void restOnLeaves() {
 		// Vanilla
 		rest(
-				"minecraft:snow"
+				"minecraft:snow",
+				"minecraft:moss_carpet",
+				"minecraft:pale_moss_carpet"
+		);
+		restTag(
+				"minecraft:wool_carpets"
 		);
 	}
 
@@ -388,6 +394,14 @@ public final class WavingWhitelist {
 			List<String> ids = new ArrayList<>();
 			readTag(tag, ids, new HashSet<>());
 			add(group, ids.toArray(String[]::new));
+		}
+	}
+
+	private static void restTag(String... tags) {
+		for (String tag : tags) {
+			List<String> ids = new ArrayList<>();
+			readTag(tag, ids, new HashSet<>());
+			rest(ids.toArray(String[]::new));
 		}
 	}
 
