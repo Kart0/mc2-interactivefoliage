@@ -28,11 +28,11 @@ The interactive map is `docs/map/index.html` (open it in a browser). Per-version
 | **Sodium** | fabric: Sodium 0.5 + Indium, uploadMeshes <br> forge: Embeddium 0.3.31 | 0.8, uploadResults(CommandList, Collection) | 0.8, uploadResults(CommandList, Collection) | 0.9.2, uploadResults(CommandList, Collection, UniformBufferManager) | 0.9, uploadResults(Collection, UniformBufferManager) | 0.9.2, uploadResults(Collection, UniformBufferManager) |
 | **Mod shaders** | foliage_legacy_1_20 | foliage_legacy | foliage.vsh/.fsh | foliage.vsh/.fsh | foliage.vsh/.fsh | foliage_modern + foliage_uniforms.glsl |
 | **Terrain / pack core shaders** | LegacyTerrainShader (not with Sodium) | LegacyTerrainShader (not with Sodium) | TerrainFoliageShader; SodiumFoliageShader via ShaderLoader (packs need SCSS) | TerrainFoliageShader; SodiumFoliageShader hybrid | TerrainFoliageShader; SodiumFoliageShader native 0.9 | TerrainFoliageShader (includes first); SodiumFoliageShader (#include) |
-| **Shader packs** | fabric: Iris 1.7 <br> forge: Oculus 1.8; ShaderInstance programs | Iris; ShaderInstance programs, raw GL uniforms | Iris; GlDeviceMixin + ExtendedShaderMixin | Iris; GlDeviceMixin + ExtendedShaderMixin | Iris 1.11.4; GlDeviceMixin + ExtendedShaderMixin | fabric: Iris 1.11.6, assignPipeline + withFoliageProgram <br> neoforge: no Iris yet, GPU steps aside |
-| **Pack shadow map** | ShadowRendererMixin | ShadowRendererMixin | ShadowRendererMixin | registerShadowRenderCallback | callback + pre-flipped depth pipeline | fabric: callback + assignPipelineShadow + drawIntoShadowMap |
+| **Shader packs** | fabric: Iris 1.7 <br> forge: Oculus 1.8; ShaderInstance programs | Iris; ShaderInstance programs, raw GL uniforms | Iris; GlDeviceMixin + ExtendedShaderMixin | Iris; GlDeviceMixin + ExtendedShaderMixin | Iris 1.11.4; GlDeviceMixin + ExtendedShaderMixin | Iris 1.11.7 on both loaders, assignPipeline + withFoliageProgram; solid programs for Fast leaves |
+| **Pack shadow map** | ShadowRendererMixin | ShadowRendererMixin | ShadowRendererMixin | registerShadowRenderCallback | callback + pre-flipped depth pipeline | callback + assignPipelineShadow + drawIntoShadowMap |
 | **Polytone shadow** | none (no shadow map) | ShadowMapRendererMixin | ShadowMapRendererMixin | ShadowMapRendererMixin | ShadowMapRendererMixin | none yet (no Polytone) |
 | **Snow! Real Magic** | fabric: done (SwayVariantModels, GPU plant + snowy variant, particles) <br> forge: done (Indigo mixins, vanilla and Embeddium, particles) | fabric: done (SRM 12.x snow blocks, CPU, GPU, Iris, particles) <br> neoforge: done (SnowRenderApiMixin, vanilla, Sodium, Iris, particles) | no Snow! Real Magic release yet | fabric: done (snowy parts in the GPU mesher, CPU, GPU, Sodium, Iris) <br> neoforge: done (unwrapPushedOnly, snowy parts to Sway, BlockGetterMixinPlugin for Iris; vanilla, Sodium, Iris) | no Snow! Real Magic release yet | no Snow! Real Magic release yet |
-| **Dev-run notes** | Fabric client on Java 17 | fabric: Iris crashes the dev remapper, test in a launcher | neoforge (every version): disableGlValidation |  |  | JVM args from the manifest; neoforge: NeoForm runtime 2.0.31, beta 26.3.0.26 (TerraBlender needs <=.19) |
+| **Dev-run notes** | Fabric client on Java 17 | fabric: Iris crashes the dev remapper, test in a launcher | neoforge (every version): disableGlValidation |  |  | JVM args from the manifest; neoforge: NeoForm runtime 2.0.31, beta 26.3.0.26 (TerraBlender needs <=.19), disableBlaze3DValidation |
 
 ## Porting to a new version
 
@@ -52,11 +52,13 @@ Meshes the foliage near the player on its own and draws it with the sway on the 
 
 - **GpuFoliageRenderer**: The GPU renderer. Meshes every section near the player that holds foliage, packs sections into 8x4x8 regions (Sodium's grouping) and draws each region's visible runs in as few calls as it can.
   - Geometry comes from ModelBlockRenderer.tesselateBlock, the method the section compiler uses, so AO, light and biome tint are vanilla's.
-  - Each vertex carries two extra values after the block format: SwayCell (which plant, for its push) and SwayWeights (one float, 24 exact bits: the wind weight 10, the push 9, a still-in-calm flag 1, the wind exposure 4; packWeights, unpacked in sway.glsl and both legacy vsh).
-  - Rebuilds have a 4 ms budget per frame on every version; the near area adapts its radius.
+  - Each vertex carries two extra values after the block format: SwayCell (which plant, for its push) and SwayWeights (one float, 24 exact bits: the wind weight 10, the push 8, a still-in-calm flag 1, a steady flag 1, the wind exposure 4 -- for a block hanging on leaves, three of those and one bit for whether the leaves wave at its corner; packWeights, unpacked in sway.glsl and both legacy vsh).
+  - Rebuilds have a budget per frame on every version: the six queued sections nearest the camera, for 4 ms after the first. The near area's radius follows the render distance.
   - Only near the player: further out the chunk mesh keeps the foliage, still.
+  - At most one region is uploaded a frame, on every version (uploadDueRegion): the nearest to the camera among those with nothing left queued for them or waiting past 500 ms; one waiting past 2 s goes first. A region is drawn as last uploaded meanwhile (Region.uploadedSections), so its buffer and its layout always agree. Uploading every dirty region whole each frame, as 1.21.11+ did, was the stutter waving leaves showed.
+  - A section holds its cutout vertices and then its solid ones (Section.opaqueVertexCount: leaves drawn as the game's Fast leaves are, meshed in a second walk); a region's buffer holds every section's cutout part and then every solid part, so each kind still goes out in long runs, and the solid runs are drawn first with a pipeline that keeps every pixel.
   - Three draw paths by version: drawLegacy (<1.21.11), a pass of its own (1.21.11-26.2), prepare/draw split into vanilla's pass (26.3+).
-  - Pitfall: It is one 3300-line file guarded per version; read the branch for the version you work on, not the first one you find.
+  - Pitfall: It is one 4200-line file guarded per version; read the branch for the version you work on, not the first one you find.
   - Files: `gpu/GpuFoliageRenderer.java`
   - Links: draws through draw-legacy; draws through draw-pass; draws through draw-split; owns near-area; is fed by split; uploads interaction; bakes shelter from wind; asks sodium-bridge; asks iris-compat; meshes the plant in the snow through srm-compat; waves listed blocks through waving-whitelist
 - **Legacy draw** (<1.21.11): Before 1.21.11: a ShaderInstance loaded from JSON and VertexBuffers per region, drawn right away from the loader's render event.
@@ -116,6 +118,7 @@ Takes the near foliage out of the chunk mesh, and hands it back and forth withou
   - Vanilla: LevelRenderer.addRecentlyCompiledChunk (1.20.1), RenderSection.setCompiled (1.21.1), setSectionMesh (1.21.11+).
   - Empty builds finish on a worker thread (before 1.21.11 and from 26.1.2): reported through onChunkMeshSwappedElsewhere.
   - Sodium: see Sodium upload hook.
+  - A whitelist group switched on (the leaves): in a section the renderer already draws, the chunk mesh keeps the group's blocks (GpuFoliageSplit.AWAITING_GROUP, read by isFoliageAt) until the renderer has uploaded a mesh built with the new list (Section.listGeneration), and is only then asked to let go. The leaves are drawn twice for the few frames that chunk build takes: accepted, rather than drawn by nobody for as long as the renderer takes to mesh and upload every section. Switched off, the chunk mesh goes first and the renderer follows on the MeshSwap.
   - Files: `mixin/SectionMeshSwapMixin.java`, `gpu/GpuFoliageSplit.java`
   - Links: with Sodium sodium-upload
 - **Change tracking**: Keeps the mod's meshes in step: block changes (ClientLevel.setBlocksDirty), light changes (setSectionDirty), and allChanged (resource reload, world swap, video options).
@@ -155,14 +158,14 @@ What moves the plants: Sway's pushes, the calm sway, the rain wind and its shelt
   - Tags are read at bake time from every jar's data/<ns>/tags/block files (Platform.readAll; NeoForge 26.3 through ModList), since the world's tags arrive after the models are baked.
   - GpuFoliageSplit.mayWave wraps listed blocks at bake whatever their group's state; waves/isFoliage decide at mesh time, so the checkbox only rebuilds the GPU area's sections (GpuFoliageRenderer.foliageListChanged, remesh on the MeshSwap).
   - Field wave: constant weight, edge and rain fade measured at the vertex (SwayWeights' steady flag, which also keeps pushes from calming the sway). Rain's reach is worked out per corner (WindShelter.cornerExposure: the 8 blocks around it, leaves neither walls nor roofs to one another, no sky light), the same for every block sharing the corner, so sheltered leaves calm without cracks.
-  - Leaves touching anything but air or leaves are tessellated with every face (a second ModelBlockRenderer built with cull off), since they move and their neighbour does not; the main renderer culls exactly as the section compiler does (its second argument is cull, always true there).
-  - Followers (vines): a majority vote of what is behind each block decides; leaves win -> the whole vine moves with the leaves' field and its free-hanging part below the lowest held block gets a plant's sway at 1.0 (still+steady flags; the leaves' weight is the shaders' MC2_LEAVES_WAVE constant, which must match Group.LEAVES, and the exposure bits carry the corner's wind reach, the same the leaves beside it read); strands of 1-2 blocks get the field only; otherwise, or with waving leaves off, interaction only, and a vine that clings mostly to anything else is not pushed either (SwayAnchor.pushless).
+  - A field's corner touching a block that holds the leaves still does not wave (SwayAnchor.pinAt, from the 8 blocks around the corner alone, so every block sharing it agrees; every version, Fancy and Fast): a full block that is not leaves -- a trunk, the ground -- or a layer of the resting kind lying on anything but a leaf (holdsLeavesStill). Leaves never sink into a trunk nor part from it. Since every corner of a face against such a block stands still, leaves touching only air, leaves and such blocks are meshed with the culling renderer, exactly as the section compiler culls; only against a block they part from (a fence, stairs, a slab) is every face kept (partsFromNeighbour; a second ModelBlockRenderer built with cull off).
+  - Followers (vines): a majority vote of what is behind each block decides; leaves win -> the whole vine moves with the leaves' field and its free-hanging part below the lowest held block gets a plant's sway at 1.0 (still+steady flags; the leaves' weight is the shaders' MC2_LEAVES_WAVE constant, which must match Group.LEAVES; three exposure bits carry the corner's wind reach, the same the leaves beside it read, and the fourth whether the leaves wave at that corner or are held still (SwayAnchor.leafHeldAt), so the strand moves exactly as the leaf beside it); strands of 1-2 blocks get the field only; otherwise, or with waving leaves off, interaction only, and a vine that clings mostly to anything else is not pushed either (SwayAnchor.pushless).
   - Only a block solid on that side counts as behind a strand, by the test the rain's wind uses for walls (WindShelter.isSolidSide): a torch, fence, slab or another vine is as good as nothing.
-  - The leaves group waves only with the game's see-through leaves (WavingWhitelist.leavesWave: the setting and Fancy leaves, cutoutLeaves from 1.21.11; before, Sodium's or Embeddium's own leaves quality, read by reflection, else useFancyGraphics); Fast leaves are left to the game, drawn solid. The renderer follows the game's leaves once a frame and hands them over as the checkbox does; the checkbox greys out with a tooltip meanwhile.
+  - The leaves group waves with the game's see-through leaves, and with its Fast leaves where the renderer can draw them solid too (WavingWhitelist.leavesWave / opaqueLeaves; GpuFoliageRenderer.canDrawOpaqueLeaves: 26.3 so far). There every LeavesBlock, as vanilla's forceOpaque picks them, is meshed last and drawn with a copy of the pipeline without ALPHA_CUTOUT, the way vanilla's solid terrain differs from its cutout terrain: OPAQUE_PIPELINE, TERRAIN_OPAQUE_PIPELINE, SODIUM_OPAQUE_PIPELINE (Sodium's solid material, 1u), and through a shader pack the mod's copies of its TerrainSolid and ShadowSolid programs in a pipeline assigned to Iris's TERRAIN_SOLID. Faces between leaves are hidden by LeavesBlock.skipRendering, as in the chunk mesh. Elsewhere Fast leaves are left to the game and the checkbox greys out with a tooltip. Which leaves the game draws is read once a frame: cutoutLeaves from 1.21.11; before, Sodium's or Embeddium's own leaves quality, by reflection, else useFancyGraphics.
   - Snow! Real Magic on Forge 1.20.1 draws the snow around its plants with minecraft:snow's model -- wrapped for snow on leaves -- and the plant's model data: ForgeFoliageModel never applies its plant-in-snow logic to a resting block's state, or the snow there vanished.
-  - Blocks resting on the leaves (restOnLeaves: minecraft:snow) are foliage only where they lie on a leaf while the leaves wave (GpuFoliageSplit.isFoliageAt / restsOnWavingLeaves, a position rule the model wrappers and the mesher ask): meshed as a field at the leaves' weight, so their bottom corners move with the leaf's top.
+  - Blocks resting on the leaves (restOnLeaves: minecraft:snow, the two moss carpets, and every block of vanilla's #wool_carpets tag, which mods' carpets join) are foliage only where they lie on a leaf while the leaves wave (GpuFoliageSplit.isFoliageAt / restsOnWavingLeaves, a position rule the model wrappers and the mesher ask): meshed as a field at the leaves' weight, every vertex reading the corner of the leaf's top under it whatever its own height (SwayAnchor.restY), so the whole layer moves as that leaf.
   - Any other plant Sway hangs (pale hanging moss, cave vines, BOP's mosses...) follows the leaves the same way while it literally hangs from them (the block above its top), and is a plain plant otherwise.
-  - Pitfall: Fast leaves graphics: the GPU draws leaves as cutout, so they may look see-through next to the chunk's opaque fast leaves.
+  - Pitfall: Before 26.3 there is no solid pipeline yet: Fast leaves are left to the game there. A shader pack that discards by the texture's alpha in its own shadow shader (Miniature) gives Fast leaves holed shadows, the game's own included; one that leaves it to Iris's alpha test (BSL) does not.
   - Files: `WavingWhitelist.java`
   - Links: read as the steady flag by sway-glsl
 
@@ -193,6 +196,7 @@ Drawing the foliage with the shaders the chunks are drawn with, so it matches va
 - **TerrainFoliageShader** (>=1.21.11): Draws foliage with the terrain's own shaders (vanilla's or a resource pack's core/terrain.*): fragment as is, vertex with the sway spliced in (Position renamed, main wrapped).
   - 26.3: reads minecraft:shaders/core/terrain.vsh/.fsh, expands the terrain's includes first (GameTime is only in them), splices, then expands the mod's; binds TerrainUniform and a per-region ChunkSection UBO.
   - Only while Sodium does not draw the chunks.
+  - 26.3: one compiled pipeline per variant asked for (cut out, and solid for Fast leaves), built from the one spliced source and closed together when the shaders reload.
   - Files: `gpu/TerrainFoliageShader.java`
   - Links: splices sway-glsl
 - **LegacyTerrainShader** (<1.21.11): 1.20.1-1.21.1: builds a ShaderInstance from the cutout layer's JSON (rendertype_cutout, following the names the JSON gives), with the sway spliced into its vertex shader.
@@ -224,7 +228,7 @@ Sodium, Embeddium and Indium: who meshes and draws the chunks when they are inst
   - 1.21.11 (0.8): sources from ShaderLoader, #import expanded; packs need Sodium Core Shader Support.
   - 26.1.2: hybrid: 0.8 loading, 0.9 content.
   - 26.2+: vanilla ShaderManager, #moj_import / #include; u_SectionTimeInfo replaced, push_constant blocks stripped (VULKAN defined).
-  - 26.3: #include IMPORT pattern, BuiltSource, compiled via compilePipeline(...).finishCompile(), cached per SOLID_TERRAIN identity.
+  - 26.3: #include IMPORT pattern, BuiltSource, compiled via compilePipeline(...).finishCompile(), cached per SOLID_TERRAIN identity; one copy per variant, the solid one without ALPHA_CUTOUT and with Sodium's solid material.
   - Files: `gpu/SodiumFoliageShader.java`
   - Links: copies shaders of sodium; splices sway-glsl
 
@@ -232,10 +236,10 @@ Sodium, Embeddium and Indium: who meshes and draws the chunks when they are inst
 
 Iris and Oculus: the foliage drawn through a shader pack's own programs, swaying, into its shadow map too.
 
-- **IrisCompat**: The gate: answers the renderer's shader pack questions without loading Iris classes when Iris is absent. Where the support is not compiled (NeoForge 26.3), an installed Iris counts as a pack always loaded with no programs, so the chunk mesh keeps the foliage.
+- **IrisCompat**: The gate: answers the renderer's shader pack questions without loading Iris classes when Iris is absent. Where the support is not compiled (nowhere at present), an installed Iris counts as a pack always loaded with no programs, so the chunk mesh keeps the foliage.
   - Files: `gpu/IrisCompat.java`
   - Links: reaches iris-shaders
-- **IrisFoliageShaders**: Per pack, builds two copies of the pack's programs (terrain cutout, shadow cutout) through Iris's own createShader/createShadowShader, with sway.glsl spliced into the translated vertex shader (iris_Position replaced).
+- **IrisFoliageShaders**: Per pack, builds copies of the pack's programs (terrain cutout, shadow cutout; on 26.3 also solid terrain and solid shadow, for Fast leaves) through Iris's own createShader/createShadowShader, with sway.glsl spliced into the translated vertex shader (iris_Position replaced).
   - ShaderCreatorMixin redirects TransformPatcher.patchVanilla only while building (26.3 adds a Set<String> textureOverrides parameter).
   - Meshes with the block ids the pack expects (BlockSensitiveBufferBuilder.beginBlock) in Iris's terrain format plus the two sway values.
   - A new pack or none: deactivate and re-mesh.
@@ -250,9 +254,9 @@ Iris and Oculus: the foliage drawn through a shader pack's own programs, swaying
   - Links: on 26.3 via draw-split
 - **Pack shadow map**: Plants cast swaying shadows. <26.1.2: ShadowRendererMixin at the point a callback would be. 26.1.2+: IrisApi.registerShadowRenderCallback. 26.3: plus assignPipelineShadow and drawIntoShadowMap in a pass of the mod's own.
   - 26.2: a pre-flipped depth pipeline (Iris only flips depth for pipelines it knows).
-  - 26.3: Iris flips depth and disables cull for every pipeline in the shadow pass; the callback runs with no pass open, before addMainPass; fog must be bound by hand.
+  - 26.3: Iris flips depth and disables cull for every pipeline in the shadow pass; the callback runs with no pass open, before addMainPass; fog must be bound by hand. Solid leaves are drawn there with the solid shadow copy.
   - Files: `mixin/iris/ShadowRendererMixin.java`, `gpu/IrisFoliageShaders.java`
-- **IrisVertexExtension**: Keeps Iris from widening the mod's BLOCK-format meshing buffer when the mod meshes for its own pipeline (ImmediateState.skipExtension). 1.20.1's Iris/Oculus has no such switch.
+- **IrisVertexExtension**: Keeps Iris from widening the mod's BLOCK-format meshing buffer when the mod meshes for its own pipeline (ImmediateState.skipExtension), and lets it while the mod meshes for a pack, raising ImmediateState.isRenderingLevel itself meanwhile: Iris widens only under it, and from 1.11.7 no longer holds it while a frame is extracted, which is when 26.3 meshes. 1.20.1's Iris/Oculus has no such switch.
   - Files: `gpu/IrisVertexExtension.java`
 
 ### Polytone
@@ -337,22 +341,22 @@ Stonecutter, build-logic, access wideners, mixin configs and the dev-run traps.
 
 - **Shader set per jar**: build-logic ModPlatformPlugin.configureProcessResources ships only the set a version loads: legacy (<1.21.1: legacy_1_20), pipeline (1.21.11-26.2), modern (26.3+).
   - Links: ships sh-legacy; ships sh-pipeline; ships sh-modern
-- **Stonecutter**: One source tree for every version: //? guards, commented branches /* */, nested /^ ^/. Constants: fabric/neoforge/forge and iris (shader pack support: >=1.20.1 except NeoForge 26.3).
+- **Stonecutter**: One source tree for every version: //? guards, commented branches /* */, nested /^ ^/. Constants: fabric/neoforge/forge and iris (shader pack support: >=1.20.1).
   - The newest version is vcsVersion and active (26.3-fabric): commit in its form, never switch back to commit.
   - Switch with ./gradlew "Set active project to <v>".
   - Pitfall: A branch whose whole body is // comments gets mangled when switching; put the explanation above the guard.
   - Pitfall: Scripts that edit sources must edit the exact current (active or commented) text.
   - Links: drives build-logic
-- **build-logic**: Loader.kt writes fabric.mod.json / neoforge.mods.toml and their mixin lists per version; ModPlatformPlugin excludes resources per version (shader sets, iris/polytone/pass mixin configs); Context.shaderPackSupport mirrors the iris constant.
+- **build-logic**: Loader.kt writes fabric.mod.json / neoforge.mods.toml and their mixin lists per version; ModPlatformPlugin excludes resources per version (shader sets, iris/polytone/pass mixin configs); Context.shaderPackSupport mirrors the iris constant. The NeoForge manifest names an access transformer where its file is not empty (26.3), and from 26.2 an iconFile, and a bannerFile once assets/<modid>/banner.png exists, in place of the logoFile those versions warn about.
   - Pitfall: The main mixins.json stays hand-written and empty: FletchingTable list generation once swept Iris/Polytone mixins into it. Check the built jar's mixin JSONs after touching mixin or build config.
   - Links: lists mixin-configs; applies shader-sets; applies access
 - **Mixin configs**: mixins.json (empty), gpu.mixins.json (>=1.20.1), iris.mixins.json (where shader pack support is compiled; IrisMixinPlugin), polytone.mixins.json (1.21.1-26.2; required:false), pass.mixins.json (26.3+), snowrealmagic.mixins.json (Forge; required:false), snowrealmagic_neoforge.mixins.json (NeoForge before 1.21.11; required:false), blockgetter.mixins.json (NeoForge 26.1.2+; BlockGetterMixinPlugin, required:false).
   - Links: gates iris-shaders; gates polytone-shadow; lists level-pass; lists (Forge) srm-forge-indigo; lists (NeoForge) srm-neoforge-render; lists (NeoForge 26.1.2+) blockgetter-fix
-- **Access wideners**: aw/<version>.accesswidener (Fabric) and aw/<version>.cfg (NeoForge/Forge AT). 26.3's widener opens GlRenderPipeline's constructor for the Iris path; its .cfg is empty.
+- **Access wideners**: aw/<version>.accesswidener (Fabric) and aw/<version>.cfg (NeoForge/Forge AT). 26.3's widener opens GlRenderPipeline's constructor for the Iris path, and its .cfg does the same on NeoForge, named in neoforge.mods.toml since it is not under META-INF.
 - **Dev-run traps**: Things that break runClient but not players.
   - 26.3 Fabric: Loom omits Mojang's -XX:StackShadowPages=32 and --add-exports java.base/jdk.internal.misc=ALL-UNNAMED: random native deaths (0xC0000005). Added as vmArgs.
   - 26.3 NeoForge: ModDevGradle passes StackShadowPages but not the export (added); NeoForm runtime 2.0.31 needed to recompile 26.3.
-  - NeoForge dev validates draws and crashes on Iris's one-element binding arrays: -Dneoforge.disableGlValidation=true.
+  - NeoForge dev validates draws and crashes on Iris's one-element binding arrays, in Iris's own shadow pass too: -Dneoforge.disableGlValidation=true, renamed -Dneoforge.disableBlaze3DValidation=true on 26.3 (FrontendGpuDevice.STRICT_VALIDATION); the client run sets both.
   - Fabric 1.21.1 dev + Iris 1.8.14 crashes in the dev remapper: test in a launcher instance.
   - Test mods live in versions/<v>/run/mods; the user provides them in versions/<v> mods/<loader>.
   - Forge 1.20.1 dev runs on named mappings: third-party mods go through modRuntimeOnly in build.forge.gradle.kts (remapped), their raw jars in run/mods renamed .disabled.
@@ -372,7 +376,7 @@ Mods the renderer depends on or works with.
 - **Sodium**: Owns chunk meshing and drawing when installed. Versions: 0.5 (1.20.1), 0.8 (1.21.1, 1.21.11), 0.9.2 (26.1.2+).
   - NeoForge's jar carries the mod as a jar-in-jar; on 26.3 its classes and shaders are byte-identical to Fabric's except three of its own mixins.
   - Its terrain setup runs inside LevelExtractor.extract (at consumeFrustumUpdate) on 26.3, before the end-of-extraction events.
-- **Iris**: Fabric on every version; NeoForge from 1.21.1 to 26.2 (none for NeoForge 26.3 yet). OpenGL only.
+- **Iris**: Fabric on every version; NeoForge from 1.21.1 (26.3 from Iris 1.11.7, whose classes shared with Fabric's are byte for byte the same). OpenGL only.
   - Debug: enableDebugOptions=true in run/config/iris.properties dumps translated programs to run/patched_shaders.
 - **Oculus** (<1.21.1, forge): Iris on Forge 1.20.1, mod id oculus (Forge ignores the iris id it provides). Same code as Iris 1.7.
 - **Polytone** (>=1.21.1): Has a shadow map from 1.21.1 (not 1.20.1). No Polytone for 26.3 yet.
@@ -398,7 +402,7 @@ The Minecraft versions the mod is built for.
   - Links: draws with draw-pass
 - **26.2** (>=26.2 <26.3): Fabric and NeoForge. Reversed depth, bind group layouts, LevelExtractor marks sections dirty. Sodium 0.9 native shaders. Vulkan backend exists.
   - Links: draws with draw-pass
-- **26.3** (>=26.3): Fabric and NeoForge. com.mojang.renderpearl, one main pass, prepare/draw split, foliage_modern. Iris on Fabric only; no Polytone or Terrain Slabs yet.
+- **26.3** (>=26.3): Fabric and NeoForge. com.mojang.renderpearl, one main pass, prepare/draw split, foliage_modern. Iris 1.11.7 on both loaders; no Polytone or Terrain Slabs yet.
   - Links: draws with draw-split; adds level-pass
 
 ## What each version carries
