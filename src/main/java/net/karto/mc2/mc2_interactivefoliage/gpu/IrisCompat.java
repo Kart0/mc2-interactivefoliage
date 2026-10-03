@@ -145,10 +145,32 @@ final class IrisCompat {
 	}
 
 	//? >=26.3 {
-	/** The pipeline to draw the foliage with through the pack: Iris's, with the mod's swaying program in it. */
+	/**
+	 * The pipeline to draw the foliage with through the pack: Iris's, with the mod's swaying program in it; its solid one
+	 * for solid leaves.
+	 */
 	static com.mojang.renderpearl.api.pipeline.CompiledRenderPipeline withFoliageProgram(
-			com.mojang.renderpearl.api.pipeline.CompiledRenderPipeline iris) {
-		return IRIS ? IrisFoliageShaders.withFoliageProgram(iris) : iris;
+			com.mojang.renderpearl.api.pipeline.CompiledRenderPipeline iris, boolean solid) {
+		return IRIS ? IrisFoliageShaders.withFoliageProgram(iris, solid) : iris;
+	}
+
+	/** Hands Iris the renderer's pipeline for leaves drawn solid; see IrisFoliageShaders.setUpOpaque. */
+	static void setUpOpaque(com.mojang.renderpearl.api.pipeline.RenderPipeline pipeline) {
+		if (IRIS) {
+			IrisFoliageShaders.setUpOpaque(pipeline);
+		}
+	}
+
+	/** Whether leaves can be drawn solid through the loaded pack: its solid programs are built. */
+	static boolean hasOpaquePrograms() {
+		return IRIS && IrisFoliageShaders.hasOpaquePrograms();
+	}
+
+	/** Inside inTerrainPhase: what is drawn next is solid terrain, or cutout terrain, for the pack. */
+	static void setTerrainPhase(boolean solid) {
+		if (IRIS) {
+			IrisFoliageShaders.setTerrainPhase(solid);
+		}
 	}
 
 	/** Binds the sway settings and the plant pushes where the mod's programs for the pack read them. */
@@ -178,8 +200,15 @@ final class IrisCompat {
 	//? !iris && >=26.3 {
 	/*// Where the support has not been written no frame is drawn through a pack, and these are never reached.
 	static com.mojang.renderpearl.api.pipeline.CompiledRenderPipeline withFoliageProgram(
-			com.mojang.renderpearl.api.pipeline.CompiledRenderPipeline iris) {
+			com.mojang.renderpearl.api.pipeline.CompiledRenderPipeline iris, boolean solid) {
 		return iris;
+	}
+
+	static boolean hasOpaquePrograms() {
+		return false;
+	}
+
+	static void setTerrainPhase(boolean solid) {
 	}
 
 	static void bindSwayBlocks(com.mojang.renderpearl.api.buffers.GpuBuffer settings,

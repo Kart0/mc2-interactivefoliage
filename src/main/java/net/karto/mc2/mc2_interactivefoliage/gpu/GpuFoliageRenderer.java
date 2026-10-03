@@ -775,9 +775,14 @@ public final class GpuFoliageRenderer {
 	/** The same, for drawing into a shader pack's shadow map. */
 	private static RenderPipeline shaderPackShadowPipeline;
 	//?}
+	//? >=26.3 {
+	/** The same, for leaves drawn solid through a shader pack, as the game's Fast leaves are. */
+	private static RenderPipeline shaderPackOpaquePipeline;
+	//?}
 	//?} elif >=26.3 {
 	/*// Never set where there is no shader pack support: no frame is drawn through a pack there.
 	private static RenderPipeline shaderPackPipeline;
+	private static RenderPipeline shaderPackOpaquePipeline;
 	*///?}
 
 	//? >=1.21.11 {
@@ -1800,11 +1805,12 @@ public final class GpuFoliageRenderer {
 
 	/**
 	 * Whether leaves can be drawn solid now, as the game's Fast leaves are: with a pipeline that keeps every pixel, which
-	 * the renderer has for the terrain's shaders, Sodium's and its own on 26.3, and not yet for a shader pack's.
+	 * the renderer has on 26.3 for the terrain's shaders, Sodium's and its own, and for a shader pack whose solid programs
+	 * the mod could copy.
 	 */
 	private static boolean canDrawOpaqueLeaves() {
 		//? >=26.3 {
-		return !IrisCompat.shaderPackInUse();
+		return !IrisCompat.shaderPackInUse() || IrisCompat.hasOpaquePrograms();
 		//?} else {
 		/*return false;
 		*///?}
@@ -1937,6 +1943,17 @@ public final class GpuFoliageRenderer {
 				.build();
 		IrisCompat.setUp(shaderPackPipeline, null, List.of(SWAY_SETTINGS, GpuFoliageInteraction.LAYOUT),
 				GpuFoliageRenderer::drawShadow);
+		// The same without the alpha test, which Iris draws with the pack's solid terrain program: for leaves drawn solid.
+		shaderPackOpaquePipeline = RenderPipeline.builder(RenderPipelines.BLOCK_SNIPPET)
+				.withLocation(Identifier.fromNamespaceAndPath(ModTemplate.MOD_ID, "pipeline/foliage_shader_pack_opaque"))
+				.withVertexShader(Identifier.fromNamespaceAndPath(ModTemplate.MOD_ID, "core/foliage_modern"))
+				.withFragmentShader(Identifier.fromNamespaceAndPath(ModTemplate.MOD_ID, "core/foliage_modern"))
+				.withVertexBinding(0, IrisCompat.shaderPackFormat())
+				.withColorTargetState(ColorTargetState.DEFAULT)
+				.withBindGroupLayout(SWAY_SETTINGS)
+				.withBindGroupLayout(GpuFoliageInteraction.LAYOUT)
+				.build();
+		IrisCompat.setUpOpaque(shaderPackOpaquePipeline);
 		//?} elif >=26.2 {
 		/*shaderPackPipeline = RenderPipeline.builder(RenderPipelines.BLOCK_SNIPPET)
 				.withLocation(Identifier.fromNamespaceAndPath(ModTemplate.MOD_ID, "pipeline/foliage_shader_pack"))
@@ -2166,9 +2183,11 @@ public final class GpuFoliageRenderer {
 			return;
 		}
 		// Leaves drawn solid, as the game's Fast leaves are, go through the same shaders keeping every pixel, as vanilla's
-		// solid terrain does and Sodium's solid pass. Not meshed that way while a shader pack is loaded; where that copy
-		// does not compile they are drawn cut out rather than not at all.
-		CompiledRenderPipeline solid = opaqueDrawsSize == 0 || shaderPack ? null
+		// solid terrain does and Sodium's solid pass; through a shader pack, with the pack's solid terrain program, in a
+		// pipeline of its own that is compiled here as the cutout one is. Where that copy does not compile they are drawn
+		// cut out rather than not at all.
+		CompiledRenderPipeline solid = opaqueDrawsSize == 0 ? null
+				: shaderPack ? compiledPipeline(shaderPackOpaquePipeline)
 				: sodiumShaders ? SodiumFoliageShader.compiled(SODIUM_OPAQUE_PIPELINE, false)
 				: terrainShaders ? TerrainFoliageShader.compiled(TERRAIN_OPAQUE_PIPELINE) : compiledPipeline(OPAQUE_PIPELINE);
 		CompiledRenderPipeline opaquePipeline = solid != null ? solid : pipeline;
@@ -2242,8 +2261,14 @@ public final class GpuFoliageRenderer {
 				}
 				// Asked for again here, as the level is drawn, which is when Iris hands back the pack's program in its
 				// place; the mod's swaying copy of that program then takes its place in turn.
-				pass.setPipeline(kind == 0 ? opaquePipeline : shaderPack
-						? IrisCompat.withFoliageProgram(RenderSystem.getCompiledPipeline(shaderPackPipeline)) : pipeline);
+				boolean drawnSolid = kind == 0 && solid != null;
+				if (shaderPack) {
+					IrisCompat.setTerrainPhase(drawnSolid);
+					pass.setPipeline(IrisCompat.withFoliageProgram(RenderSystem.getCompiledPipeline(
+							drawnSolid ? shaderPackOpaquePipeline : shaderPackPipeline), drawnSolid));
+				} else {
+					pass.setPipeline(kind == 0 ? opaquePipeline : pipeline);
+				}
 				// Projection, fog and the globals are bound by vanilla as it opens the pass. The chunk shaders pick mip
 				// levels themselves, so they sample the atlas as the chunk mesh does: smoothly, between mip levels. The
 				// mod's own shader reads it as the atlas is set to be read.
@@ -2361,9 +2386,16 @@ public final class GpuFoliageRenderer {
 		}
 		GpuBufferSlice[] regionBlocks = RenderSystem.getDynamicUniforms().writeTransforms(transforms);
 		int[] drawList = Arrays.copyOf(draws, drawsSize);
+		int[] opaqueList = Arrays.copyOf(opaqueDraws, opaqueDrawsSize);
+		// Solid leaves cast a solid shadow, through the pack's solid shadow program; cut out where there is none.
+		boolean solidShadow = opaqueList.length > 0 && IrisCompat.hasOpaquePrograms()
+				&& compiledPipeline(shaderPackOpaquePipeline) != null;
 		int longestDraw = 0;
 		for (int i = 2; i < drawList.length; i += 3) {
 			longestDraw = Math.max(longestDraw, drawList[i]);
+		}
+		for (int i = 2; i < opaqueList.length; i += 3) {
+			longestDraw = Math.max(longestDraw, opaqueList[i]);
 		}
 		// No pass is open, so the shared index buffer may grow here; vanilla's pass asks for it again as it draws.
 		RenderSystem.AutoStorageIndexBuffer indices = RenderSystem.getSequentialBuffer(PrimitiveTopology.QUADS);
@@ -2384,26 +2416,36 @@ public final class GpuFoliageRenderer {
 			// As vanilla binds them as it opens its main pass; the projection is the sun's, and the fog -- set by vanilla
 			// only inside that pass -- this frame's terrain fog.
 			RenderSystem.bindDefaultUniforms(pass);
-			// Iris hands back the pack's shadow program in the pipeline here, and the mod's swaying copy takes its place.
-			pass.setPipeline(IrisCompat.withFoliageProgram(RenderSystem.getCompiledPipeline(shaderPackPipeline)));
-			pass.setUniform("Projection", sunProjection);
-			pass.setUniform("Fog", fog);
-			pass.setUniform("Sampler0", atlas.getTextureView(), atlas.getSampler());
-			pass.setUniform("Sampler2", minecraft.gameRenderer.lightmap(),
-					RenderSystem.getSamplerCache().getClampToEdge(FilterMode.LINEAR));
-			pass.setUniform(SWAY_SETTINGS_UNIFORM, settings);
-			pass.setUniform(GpuFoliageInteraction.UNIFORM, interaction);
-			pass.setIndexBuffer(indexBuffer, indices.type());
-			IrisCompat.bindSwayBlocks(settings, interaction);
-			int boundRegion = -1;
-			for (int i = 0; i < drawList.length; i += 3) {
-				int regionIndex = drawList[i];
-				if (regionIndex != boundRegion) {
-					pass.setUniform("DynamicTransforms", regionBlocks[regionIndex]);
-					pass.setVertexBuffer(0, regions[regionIndex].vertices.slice());
-					boundRegion = regionIndex;
+			// The solid leaves, then the rest, each with everything bound again for its pipeline.
+			for (int kind = 0; kind < 2; kind++) {
+				int[] list = kind == 0 ? opaqueList : drawList;
+				if (list.length == 0) {
+					continue;
 				}
-				pass.drawIndexed(indexCountFor(drawList[i + 2]), 1, 0, drawList[i + 1], 0);
+				boolean drawnSolid = kind == 0 && solidShadow;
+				// Iris hands back the pack's shadow program in the pipeline here, and the mod's swaying copy takes its
+				// place.
+				pass.setPipeline(IrisCompat.withFoliageProgram(RenderSystem.getCompiledPipeline(
+						drawnSolid ? shaderPackOpaquePipeline : shaderPackPipeline), drawnSolid));
+				pass.setUniform("Projection", sunProjection);
+				pass.setUniform("Fog", fog);
+				pass.setUniform("Sampler0", atlas.getTextureView(), atlas.getSampler());
+				pass.setUniform("Sampler2", minecraft.gameRenderer.lightmap(),
+						RenderSystem.getSamplerCache().getClampToEdge(FilterMode.LINEAR));
+				pass.setUniform(SWAY_SETTINGS_UNIFORM, settings);
+				pass.setUniform(GpuFoliageInteraction.UNIFORM, interaction);
+				pass.setIndexBuffer(indexBuffer, indices.type());
+				IrisCompat.bindSwayBlocks(settings, interaction);
+				int boundRegion = -1;
+				for (int i = 0; i < list.length; i += 3) {
+					int regionIndex = list[i];
+					if (regionIndex != boundRegion) {
+						pass.setUniform("DynamicTransforms", regionBlocks[regionIndex]);
+						pass.setVertexBuffer(0, regions[regionIndex].vertices.slice());
+						boundRegion = regionIndex;
+					}
+					pass.drawIndexed(indexCountFor(list[i + 2]), 1, 0, list[i + 1], 0);
+				}
 			}
 		}
 	}

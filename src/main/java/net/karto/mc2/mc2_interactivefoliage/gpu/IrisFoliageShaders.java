@@ -137,6 +137,14 @@ public final class IrisFoliageShaders {
 	private static boolean shadowCallbackRegistered;
 	//?}
 	//? >=26.3 {
+	/**
+	 * The renderer's pipeline for leaves drawn solid, as the game's Fast leaves are, and the mod's copies of the pack's
+	 * solid terrain program and solid shadow program, which keep every pixel; null where the pack has none or they could
+	 * not be built, and the leaves are then left to the chunk mesh in Fast.
+	 */
+	private static RenderPipeline opaquePipeline;
+	private static GlProgram mainSolid;
+	private static GlProgram shadowSolid;
 	/** Whether Iris has been told to draw the renderer's pipeline with the pack's program; see setUp. */
 	private static boolean assigned;
 	/**
@@ -213,6 +221,26 @@ public final class IrisFoliageShaders {
 		//?}
 	}
 
+	//? >=26.3 {
+	/**
+	 * The renderer's pipeline for leaves drawn solid: Iris is told to draw it with the pack's solid terrain program, in
+	 * whose place the mod's solid copy then goes, as for the cutout one. In the shadow pass Iris's state is the cutout
+	 * shadow's, which is all it names for terrain there; the program put in its place is the mod's solid shadow copy.
+	 */
+	static void setUpOpaque(RenderPipeline foliageOpaquePipeline) {
+		if (opaquePipeline == null) {
+			opaquePipeline = foliageOpaquePipeline;
+			IrisApi.getInstance().assignPipeline(foliageOpaquePipeline, IrisProgram.TERRAIN_SOLID);
+			IrisApi.getInstance().assignPipelineShadow(foliageOpaquePipeline, IrisShadowProgram.SHADOW_TERRAIN_CUTOUT);
+		}
+	}
+
+	/** Whether the loaded pack's solid programs are built, so leaves can be drawn solid through it. */
+	static boolean hasOpaquePrograms() {
+		return owner != null && mainSolid != null && (shadow == null || shadowSolid != null);
+	}
+	//?}
+
 	/**
 	 * Draws the foliage into the shadow map, in the middle of Iris's shadow pass once the terrain is in it. From 26.1.2
 	 * Iris calls this through its shadow render callback; before, it has none, and ShadowRendererMixin calls it at the same
@@ -265,6 +293,11 @@ public final class IrisFoliageShaders {
 		if (requested == pipeline) {
 			return main;
 		}
+		//? >=26.3 {
+		if (requested == opaquePipeline) {
+			return mainSolid;
+		}
+		//?}
 		return requested == shadowPipeline ? shadow : null;
 	}
 	//?} else {
@@ -329,6 +362,17 @@ public final class IrisFoliageShaders {
 		return previous;
 	}
 
+	/**
+	 * Inside {@link #beginTerrainPhase}: marks what is drawn next as solid terrain or cutout terrain for the pack, as the
+	 * chunk mesh's own layers are marked.
+	 */
+	static void setTerrainPhase(boolean solid) {
+		WorldRenderingPipeline current = Iris.getPipelineManager().getPipelineNullable();
+		if (current != null) {
+			current.setPhase(solid ? WorldRenderingPhase.TERRAIN_SOLID : WorldRenderingPhase.TERRAIN_CUTOUT);
+		}
+	}
+
 	/** Takes what {@link #beginTerrainPhase} returned, typed loosely so callers never name Iris's classes. */
 	static void endTerrainPhase(Object previous) {
 		WorldRenderingPipeline current = Iris.getPipelineManager().getPipelineNullable();
@@ -387,6 +431,9 @@ public final class IrisFoliageShaders {
 					*///?}
 				}
 			}
+			//? >=26.3 {
+			buildSolid(access);
+			//?}
 		} catch (Throwable e) {
 			closePrograms();
 			ModTemplate.LOGGER.error("Could not build the foliage programs for this shader pack; foliage near the "
@@ -395,6 +442,55 @@ public final class IrisFoliageShaders {
 			BUILDING.set(false);
 		}
 	}
+
+	//? >=26.3 {
+	/**
+	 * Builds the mod's copies of the pack's solid terrain and solid shadow programs, as Iris builds the pack's own for
+	 * its solid terrain: the same sources with the alpha test off. A failure here leaves the cutout programs as they
+	 * are and only the solid ones out, so Fast leaves stay with the chunk mesh under this pack.
+	 */
+	private static void buildSolid(IrisRenderingPipelineAccessor access) {
+		try {
+			Optional<ProgramSource> terrain = access.mc2$resolver().resolve(ProgramId.TerrainSolid);
+			if (terrain.isEmpty()) {
+				return;
+			}
+			GlProgram solid = finish(access.mc2$createShader("mc2_foliage_solid", ShaderKey.TERRAIN_SOLID, terrain.get(),
+					ProgramId.TerrainSolid, ShaderKey.TERRAIN_SOLID.getAlphaTest(), FORMAT,
+					ShaderKey.TERRAIN_SOLID.getFogMode(), false, false, false, false, false, Patch.VANILLA));
+			GlProgram solidShadow = null;
+			if (shadow != null) {
+				Optional<ProgramSource> shadowSource = access.mc2$resolver().resolve(ProgramId.ShadowSolid);
+				if (shadowSource.isEmpty()) {
+					solid.close();
+					return;
+				}
+				// Keyed as the cutout shadow, the one terrain shadow Iris names for vanilla's format; the source and the
+				// alpha test are the solid shadow's.
+				solidShadow = finish(access.mc2$createShadowShader("mc2_foliage_shadow_solid",
+						ShaderKey.SHADOW_TERRAIN_CUTOUT, shadowSource.get(), ProgramId.ShadowSolid,
+						ShaderKey.TERRAIN_SOLID.getAlphaTest(), FORMAT, false, false, false, false, Patch.VANILLA));
+			}
+			mainSolid = solid;
+			shadowSolid = solidShadow;
+		} catch (Throwable e) {
+			closeSolidPrograms();
+			ModTemplate.LOGGER.warn("Could not build the solid foliage programs for this shader pack; Fast leaves near "
+					+ "the player are left to the chunk mesh while it is loaded", e);
+		}
+	}
+
+	private static void closeSolidPrograms() {
+		if (mainSolid != null) {
+			mainSolid.close();
+			mainSolid = null;
+		}
+		if (shadowSolid != null) {
+			shadowSolid.close();
+			shadowSolid = null;
+		}
+	}
+	//?}
 
 
 	//? >=1.21.11 {
@@ -433,10 +529,12 @@ public final class IrisFoliageShaders {
 	 * name, Iris's prefixed first. Everything else is Iris's: the uniforms, their slots, the state. Built inside the pass
 	 * the first time, as Iris builds its own, and kept until the program goes. In Iris's shadow pass the program is the
 	 * mod's shadow one, as Iris's is the pack's shadow one there. Where the mod has no program, the pack's own is drawn
-	 * with, unswayed.
+	 * with, unswayed. For leaves drawn solid, the mod's solid copies, in the pipeline Iris built for the renderer's solid
+	 * one.
 	 */
-	static CompiledRenderPipeline withFoliageProgram(CompiledRenderPipeline iris) {
-		GlProgram program = IrisApi.getInstance().isRenderingShadowPass() ? shadow : main;
+	static CompiledRenderPipeline withFoliageProgram(CompiledRenderPipeline iris, boolean solid) {
+		GlProgram program = IrisApi.getInstance().isRenderingShadowPass()
+				? (solid ? shadowSolid : shadow) : (solid ? mainSolid : main);
 		if (program == null || !(iris instanceof FrontendRenderPipeline frontend)
 				|| !(frontend.backendRenderPipeline() instanceof GlRenderPipeline irisPipeline)) {
 			return iris;
@@ -498,6 +596,7 @@ public final class IrisFoliageShaders {
 		WITH_FOLIAGE_PROGRAM.clear();
 		VERTEX_ARRAYS.forEach(VertexArray::close);
 		VERTEX_ARRAYS.clear();
+		closeSolidPrograms();
 		//?}
 		if (main != null) {
 			main.close();
