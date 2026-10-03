@@ -51,6 +51,8 @@ neoForge {
 			// NeoForge validates every draw in the dev environment only, and the check indexes 16 vertex bindings
 			// into the one-element arrays Iris answers for its pipelines, crashing the first frame with a shader pack.
 			systemProperty("neoforge.disableGlValidation", "true")
+			// 26.3 reads the same switch under another name (FrontendGpuDevice.STRICT_VALIDATION).
+			systemProperty("neoforge.disableBlaze3DValidation", "true")
 			// 26.3's version manifest asks for this export, which the plugin leaves out (it passes the rest, among them
 			// -XX:StackShadowPages=32, whose absence killed Fabric's dev runs); the launcher passes it.
 			if (stonecutter.eval(stonecutter.current.version, ">=26.3")) {
@@ -82,7 +84,6 @@ dependencies {
 	// jarJar(libs.moulberry.mixinconstraints)
 	implementation("maven.modrinth:sway:${prop("deps.sway")}")
 	// Optional dependencies: compiled against for the shader pack support, where it has been written.
-	// Only where there is one to compile against: no Iris exists for NeoForge 26.3 yet.
 	if (stonecutter.eval(stonecutter.current.version, ">=1.21.1")) {
 		if (hasProperty("deps.iris")) compileOnly("maven.modrinth:iris:${prop("deps.iris")}")
 		compileOnly("maven.modrinth:sodium:${prop("deps.sodium")}")

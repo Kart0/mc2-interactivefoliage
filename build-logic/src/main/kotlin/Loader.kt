@@ -171,10 +171,18 @@ sealed class Loader(val id: String) {
 					if (ctx.loader is Loader.NeoForge && ctx.stonecutter.eval(ctx.currentMcVersion, ">=26.1.2")) {
 						add(ForgeMixin("${ctx.modId}.blockgetter.mixins.json"))
 					}
+				},
+				// NeoForge 26.3 opens GlRenderPipeline's constructor for the shader pack support, as Fabric's widener does;
+				// every other version's transformer is empty and goes unnamed.
+				accessTransformers = buildList {
+					if (ctx.loader is Loader.NeoForge && ctx.stonecutter.eval(ctx.currentMcVersion, ">=26.3")) {
+						add(ForgeAccessTransformer("aw/${ctx.currentMcVersion}.cfg"))
+					}
 				}
 			)
 
-			return TOML.encodeToString(manifest)
+			// An empty list is written out as an empty array, which no loader needs to read: left out.
+			return TOML.encodeToString(manifest).replace(Regex("""(?m)^accessTransformers = \[\s*]\r?\n"""), "")
 		}
 	}
 
