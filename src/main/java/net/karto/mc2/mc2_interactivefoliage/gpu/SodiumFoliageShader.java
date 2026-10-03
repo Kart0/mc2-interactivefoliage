@@ -286,11 +286,13 @@ final class SodiumFoliageShader {
 			""";
 
 	//? >=26.3 {
-	/** The copy as last compiled, or null where it could not be; asked for again once the shaders reload. */
-	private static CompiledRenderPipeline compiled;
-	/** Vanilla's terrain pipeline as compiled when the copy was last built, which a shader reload replaces. */
+	/**
+	 * Each copy as last compiled -- cut out, and solid for Fast leaves -- or null where it could not be; asked for again
+	 * once the shaders reload.
+	 */
+	private static final Map<RenderPipeline, CompiledRenderPipeline> COMPILED = new java.util.IdentityHashMap<>();
+	/** Vanilla's terrain pipeline as compiled when the copies were last built, which a shader reload replaces. */
 	private static CompiledRenderPipeline compiledFor;
-	private static boolean built;
 
 	/**
 	 * The two shaders of the copy, already written out whole. Nothing is left for the compiler to include, so it never
@@ -397,40 +399,47 @@ final class SodiumFoliageShader {
 	 * could not be built or compiled.
 	 * <p>
 	 * The game compiles only the shaders it reads from resources, so the copy is compiled here, into a pipeline the mod
-	 * holds itself. It is built once after each shader reload -- which shows as vanilla's own terrain pipeline coming back
-	 * as a different compiled one -- and the one before is closed then. Called while the frame is prepared, with no render
-	 * pass open.
+	 * holds itself. Each pipeline asked for is built once after each shader reload -- which shows as vanilla's own terrain
+	 * pipeline coming back as a different compiled one -- and the ones before are closed then. Called while the frame is
+	 * prepared, with no render pass open.
+	 * <p>
+	 * Cut out, the copy is Sodium's cutout pass; not, its solid pass, which keeps every pixel: for leaves drawn solid, as
+	 * the game's Fast leaves are.
 	 */
-	static CompiledRenderPipeline compiled(RenderPipeline pipeline) {
+	static CompiledRenderPipeline compiled(RenderPipeline pipeline, boolean cutout) {
 		if (!available()) {
 			return null;
 		}
 		CompiledRenderPipeline terrain = RenderSystem.getCompiledPipelineNullable(RenderPipelines.SOLID_TERRAIN);
-		if (built && terrain == compiledFor) {
-			return compiled;
+		if (terrain != compiledFor) {
+			compiledFor = terrain;
+			for (CompiledRenderPipeline compiled : COMPILED.values()) {
+				if (compiled != null) {
+					compiled.close();
+				}
+			}
+			COMPILED.clear();
 		}
-		built = true;
-		compiledFor = terrain;
-		if (compiled != null) {
-			compiled.close();
-			compiled = null;
+		if (COMPILED.containsKey(pipeline)) {
+			return COMPILED.get(pipeline);
 		}
-		String vertex = vertex();
-		String fragment = fragment();
+		CompiledRenderPipeline compiled = null;
+		String vertex = vertex(cutout);
+		String fragment = fragment(cutout);
 		if (vertex == null || fragment == null) {
 			ModTemplate.LOGGER.warn("Sodium's chunk shaders in use can't be read by the GPU foliage renderer; foliage near "
 					+ "the player is drawn with the mod's own shaders, which may not match a resource pack's look");
-			return null;
+		} else {
+			try {
+				compiled = RenderSystem.getDevice().compilePipeline(pipeline, new BuiltSource(vertex, fragment),
+						Util.backgroundExecutor()).join().finishCompile();
+			} catch (RuntimeException e) {
+				// A shader that does not compile comes back as an exception rather than as nothing.
+				ModTemplate.LOGGER.warn("Sodium's chunk shaders did not compile with the GPU foliage renderer's vertices; "
+						+ "foliage near the player is drawn with the mod's own shaders", e);
+			}
 		}
-		try {
-			compiled = RenderSystem.getDevice().compilePipeline(pipeline, new BuiltSource(vertex, fragment),
-					Util.backgroundExecutor()).join().finishCompile();
-		} catch (RuntimeException e) {
-			// A shader that does not compile comes back as an exception rather than as nothing.
-			ModTemplate.LOGGER.warn("Sodium's chunk shaders did not compile with the GPU foliage renderer's vertices; "
-					+ "foliage near the player is drawn with the mod's own shaders", e);
-			compiled = null;
-		}
+		COMPILED.put(pipeline, compiled);
 		return compiled;
 	}
 	//?} else {
@@ -455,6 +464,18 @@ final class SodiumFoliageShader {
 	}
 
 	private static String vertex() {
+		return vertex(true);
+	}
+
+	private static String fragment() {
+		return fragment(true);
+	}
+
+	/** Sodium's solid material, which the copy for solid leaves hands its shaders in place of the cutout one. */
+	private static final String CUTOUT_MATERIAL = "_material_params = 5u;";
+	private static final String SOLID_MATERIAL = "_material_params = 1u;";
+
+	private static String vertex(boolean cutout) {
 		String name = shaderName(OPAQUE_VERTEX);
 		String raw = read(name);
 		//? >=26.3 {
@@ -466,18 +487,21 @@ final class SodiumFoliageShader {
 			return null;
 		}
 		String inputs = VERTEX_INPUTS.replace(ADDITIONS, VERSION.matcher(additions).replaceFirst(""));
+		if (!cutout) {
+			inputs = inputs.replace(CUTOUT_MATERIAL, SOLID_MATERIAL);
+		}
 		Set<String> included = new HashSet<>();
 		String expanded = expand(raw, name, inputs, included);
 		return expanded == null || !expanded.contains("void _vert_init()") ? null
-				: adapt(expanded, included.contains(GLOBALS));
+				: adapt(expanded, included.contains(GLOBALS), cutout);
 	}
 
-	private static String fragment() {
+	private static String fragment(boolean cutout) {
 		String name = shaderName(OPAQUE_FRAGMENT);
 		String raw = read(name);
 		Set<String> included = new HashSet<>();
 		String expanded = raw == null ? null : expand(raw, name, null, included);
-		return expanded == null ? null : adapt(expanded, included.contains(GLOBALS));
+		return expanded == null ? null : adapt(expanded, included.contains(GLOBALS), cutout);
 	}
 
 	/**
@@ -519,7 +543,7 @@ final class SodiumFoliageShader {
 	 * Sodium's defines and the game's uniform blocks after the version line, and Sodium's uniforms pointed at them: each
 	 * one declared loose, and every one its block of globals held where that block was imported and left out.
 	 */
-	private static String adapt(String source, boolean globalsLeftOut) {
+	private static String adapt(String source, boolean globalsLeftOut, boolean cutout) {
 		Matcher version = VERSION.matcher(source);
 		if (!version.find()) {
 			return null;
@@ -527,6 +551,10 @@ final class SodiumFoliageShader {
 		String body = source.substring(version.end());
 		StringBuilder header = new StringBuilder(version.group());
 		for (String define : DEFINES) {
+			// The solid copy goes without the alpha test, as Sodium's solid pass does.
+			if (!cutout && define.startsWith("ALPHA_CUTOUT")) {
+				continue;
+			}
 			header.append("#define ").append(define).append('\n');
 		}
 		header.append(GAME_UNIFORMS);

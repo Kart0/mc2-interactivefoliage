@@ -485,25 +485,34 @@ public final class GpuFoliageRenderer {
 	 * The pipeline foliage is drawn with while Sodium draws the chunks and a copy of its chunk shaders reads the mod's
 	 * vertices: the shaders the chunks are drawn with then. See {@link SodiumFoliageShader}, which compiles it.
 	 */
-	private static final RenderPipeline SODIUM_PIPELINE = RenderPipeline.builder()
-			.withLocation(Identifier.fromNamespaceAndPath(ModTemplate.MOD_ID, "pipeline/foliage_sodium"))
-			.withVertexShader(SodiumFoliageShader.SHADER)
-			.withFragmentShader(SodiumFoliageShader.SHADER)
-			.withVertexBinding(0, FOLIAGE_FORMAT)
-			.withPrimitiveTopology(PrimitiveTopology.QUADS)
-			.withDepthStencilState(DepthStencilState.DEFAULT)
-			.withColorTargetState(ColorTargetState.DEFAULT)
-			.withBindGroupLayout(BindGroupLayouts.GLOBALS)
-			.withBindGroupLayout(BindGroupLayouts.FOG)
-			.withBindGroupLayout(BindGroupLayouts.PROJECTION)
-			.withBindGroupLayout(BindGroupLayouts.DYNAMIC_TRANSFORMS)
-			.withBindGroupLayout(BindGroupLayout.builder()
-					.withUniform(SodiumFoliageShader.BLOCK_TEXTURE, UniformType.COMBINED_IMAGE_SAMPLER)
-					.withUniform(SodiumFoliageShader.LIGHT_TEXTURE, UniformType.COMBINED_IMAGE_SAMPLER)
-					.build())
-			.withBindGroupLayout(SWAY_SETTINGS)
-			.withBindGroupLayout(GpuFoliageInteraction.LAYOUT)
-			.build();
+	private static final RenderPipeline SODIUM_PIPELINE = sodiumPipeline("pipeline/foliage_sodium");
+	/**
+	 * The same for the copy of Sodium's solid pass, which keeps every pixel: for leaves drawn as the game's Fast leaves
+	 * are. The alpha test is a define in the copy's own source, so the two pipelines differ only in which copy they hold.
+	 */
+	private static final RenderPipeline SODIUM_OPAQUE_PIPELINE = sodiumPipeline("pipeline/foliage_sodium_opaque");
+
+	private static RenderPipeline sodiumPipeline(String location) {
+		return RenderPipeline.builder()
+				.withLocation(Identifier.fromNamespaceAndPath(ModTemplate.MOD_ID, location))
+				.withVertexShader(SodiumFoliageShader.SHADER)
+				.withFragmentShader(SodiumFoliageShader.SHADER)
+				.withVertexBinding(0, FOLIAGE_FORMAT)
+				.withPrimitiveTopology(PrimitiveTopology.QUADS)
+				.withDepthStencilState(DepthStencilState.DEFAULT)
+				.withColorTargetState(ColorTargetState.DEFAULT)
+				.withBindGroupLayout(BindGroupLayouts.GLOBALS)
+				.withBindGroupLayout(BindGroupLayouts.FOG)
+				.withBindGroupLayout(BindGroupLayouts.PROJECTION)
+				.withBindGroupLayout(BindGroupLayouts.DYNAMIC_TRANSFORMS)
+				.withBindGroupLayout(BindGroupLayout.builder()
+						.withUniform(SodiumFoliageShader.BLOCK_TEXTURE, UniformType.COMBINED_IMAGE_SAMPLER)
+						.withUniform(SodiumFoliageShader.LIGHT_TEXTURE, UniformType.COMBINED_IMAGE_SAMPLER)
+						.build())
+				.withBindGroupLayout(SWAY_SETTINGS)
+				.withBindGroupLayout(GpuFoliageInteraction.LAYOUT)
+				.build();
+	}
 
 	/**
 	 * The pipeline foliage is drawn with while the terrain's shaders compile with the sway spliced in: the chunk mesh's
@@ -1791,11 +1800,11 @@ public final class GpuFoliageRenderer {
 
 	/**
 	 * Whether leaves can be drawn solid now, as the game's Fast leaves are: with a pipeline that keeps every pixel, which
-	 * the renderer has for the terrain's shaders and its own on 26.3, and not yet for Sodium's or a shader pack's.
+	 * the renderer has for the terrain's shaders, Sodium's and its own on 26.3, and not yet for a shader pack's.
 	 */
 	private static boolean canDrawOpaqueLeaves() {
 		//? >=26.3 {
-		return !SodiumBridge.drawsChunks() && !IrisCompat.shaderPackInUse();
+		return !IrisCompat.shaderPackInUse();
 		//?} else {
 		/*return false;
 		*///?}
@@ -2146,7 +2155,7 @@ public final class GpuFoliageRenderer {
 		// level is drawn; the pipeline is compiled here all the same, since Iris builds on what the game compiled.
 		boolean shaderPack = meshedForShaderPack;
 		boolean sodium = !shaderPack && SodiumBridge.drawsChunks();
-		CompiledRenderPipeline sodiumPipeline = sodium ? SodiumFoliageShader.compiled(SODIUM_PIPELINE) : null;
+		CompiledRenderPipeline sodiumPipeline = sodium ? SodiumFoliageShader.compiled(SODIUM_PIPELINE, true) : null;
 		CompiledRenderPipeline terrainPipeline = shaderPack || sodium ? null : TerrainFoliageShader.compiled(TERRAIN_PIPELINE);
 		boolean sodiumShaders = sodiumPipeline != null;
 		boolean terrainShaders = terrainPipeline != null;
@@ -2157,9 +2166,10 @@ public final class GpuFoliageRenderer {
 			return;
 		}
 		// Leaves drawn solid, as the game's Fast leaves are, go through the same shaders keeping every pixel, as vanilla's
-		// solid terrain does. Only meshed that way with the terrain's shaders or the mod's own; where that copy does not
-		// compile they are drawn cut out rather than not at all.
-		CompiledRenderPipeline solid = opaqueDrawsSize == 0 || shaderPack || sodiumShaders ? null
+		// solid terrain does and Sodium's solid pass. Not meshed that way while a shader pack is loaded; where that copy
+		// does not compile they are drawn cut out rather than not at all.
+		CompiledRenderPipeline solid = opaqueDrawsSize == 0 || shaderPack ? null
+				: sodiumShaders ? SodiumFoliageShader.compiled(SODIUM_OPAQUE_PIPELINE, false)
 				: terrainShaders ? TerrainFoliageShader.compiled(TERRAIN_OPAQUE_PIPELINE) : compiledPipeline(OPAQUE_PIPELINE);
 		CompiledRenderPipeline opaquePipeline = solid != null ? solid : pipeline;
 		Region[] regions = DRAWN.toArray(new Region[0]);
