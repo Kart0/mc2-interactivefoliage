@@ -147,6 +147,17 @@ public final class GpuFoliageSplit {
 	private static final LongArrayList REMESH_NOW = new LongArrayList();
 
 	/**
+	 * Sections the renderer draws whose uploaded mesh was built before a whitelist group was switched on, so it holds
+	 * none of that group's blocks yet -- a tree's leaves, and what rests on them. The chunk mesh keeps those blocks there
+	 * until the renderer has uploaded a mesh built since, and is only then asked to let them go: the other way round, the
+	 * chunk mesh let them go at once and they were drawn by nobody for as long as the renderer took to mesh and upload
+	 * every section again. Written by the render thread, read by the meshing threads.
+	 */
+	private static final Set<Long> AWAITING_GROUP = ConcurrentHashMap.newKeySet();
+	/** Bumped each time the blocks that are foliage change, so a mesh says which list it was built with. */
+	private static volatile int listGeneration;
+
+	/**
 	 * Sections the GPU renderer holds uploaded geometry for. Only these may be left out of the chunk mesh: until then the
 	 * chunk mesh keeps their foliage, rather than leave it to a renderer with nothing to show yet -- as it would for the
 	 * sections of a chunk that arrives inside the near area while the renderer is still working through its queue.
@@ -357,11 +368,33 @@ public final class GpuFoliageSplit {
 		if (GPU_READY.remove(sectionKey)) {
 			generation++;
 		}
+		AWAITING_GROUP.remove(sectionKey);
 	}
 
 	/** Whether the GPU renderer holds uploaded geometry for this section. */
 	static boolean isGpuReady(long sectionKey) {
 		return GPU_READY.contains(sectionKey);
+	}
+
+	/** Which list of foliage a section meshed now is built with; see AWAITING_GROUP. */
+	static int listGeneration() {
+		return listGeneration;
+	}
+
+	/**
+	 * Render thread: a whitelist group was switched on and the renderer already draws this section, without the group's
+	 * blocks. The chunk mesh keeps them until {@link #groupTakenOver} says the renderer holds them.
+	 */
+	static void awaitGroup(long sectionKey) {
+		AWAITING_GROUP.add(sectionKey);
+	}
+
+	/**
+	 * Render thread: the renderer has uploaded this section, meshed with the list of that generation. Returns whether it
+	 * was waiting for a group's blocks and now holds them, in which case its chunk mesh is due to be built again without.
+	 */
+	static boolean groupTakenOver(long sectionKey, int meshedGeneration) {
+		return meshedGeneration == listGeneration && AWAITING_GROUP.remove(sectionKey);
 	}
 
 	/**
@@ -494,6 +527,7 @@ public final class GpuFoliageSplit {
 		TAKING_OVER.clear();
 		REMESH_ON_SWAP.clear();
 		REMESH_NOW.clear();
+		AWAITING_GROUP.clear();
 		generation++;
 	}
 
@@ -550,6 +584,13 @@ public final class GpuFoliageSplit {
 	 * leaves while they wave -- snow on a tree -- which is foliage only there.
 	 */
 	public static boolean isFoliageAt(BlockGetter level, BlockPos pos, BlockState state) {
+		// A section the renderer draws without this block yet keeps it in the chunk mesh; see AWAITING_GROUP.
+		if (!AWAITING_GROUP.isEmpty()
+				&& (WavingWhitelist.isLeaves(state.getBlock()) || WavingWhitelist.restsOnLeaves(state.getBlock()))
+				&& AWAITING_GROUP.contains(SectionPos.asLong(SectionPos.blockToSectionCoord(pos.getX()),
+						SectionPos.blockToSectionCoord(pos.getY()), SectionPos.blockToSectionCoord(pos.getZ())))) {
+			return false;
+		}
 		if (isFoliage(state)) {
 			return true;
 		}
@@ -576,6 +617,7 @@ public final class GpuFoliageSplit {
 	 */
 	public static void foliageChanged() {
 		foliage = null;
+		listGeneration++;
 	}
 
 	/**

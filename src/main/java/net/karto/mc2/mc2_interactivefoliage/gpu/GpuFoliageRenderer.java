@@ -831,6 +831,8 @@ public final class GpuFoliageRenderer {
 		final int stride;
 		/** Whether its plants were meshed with the wind shelter worked out; see {@link #followRain}. */
 		boolean sheltered;
+		/** Which list of foliage it was meshed with; see GpuFoliageSplit.AWAITING_GROUP. */
+		int listGeneration;
 
 		Section(long key, BlockPos origin, ByteBuffer data, int vertexCount, int opaqueVertexCount, int stride) {
 			this.opaqueVertexCount = opaqueVertexCount;
@@ -1051,6 +1053,9 @@ public final class GpuFoliageRenderer {
 			for (int i = 0; i < occupiedCount; i++) {
 				long key = sections[occupied[i]].key;
 				if (GpuFoliageSplit.markGpuReady(key) && GpuFoliageSplit.isNear(SectionPos.x(key), SectionPos.z(key))) {
+					rebuildChunkMesh(minecraft, SectionPos.x(key), SectionPos.y(key), SectionPos.z(key));
+				} else if (GpuFoliageSplit.groupTakenOver(key, sections[occupied[i]].listGeneration)) {
+					// It now holds the blocks of a group switched on since: the chunk mesh, which kept them meanwhile, lets go.
 					rebuildChunkMesh(minecraft, SectionPos.x(key), SectionPos.y(key), SectionPos.z(key));
 				}
 			}
@@ -3176,6 +3181,8 @@ public final class GpuFoliageRenderer {
 		int centreX = GpuFoliageSplit.centreX();
 		int centreZ = GpuFoliageSplit.centreZ();
 		int radius = GpuFoliageSplit.radius();
+		// Switched on, the renderer takes the blocks over; switched off, it hands them back.
+		boolean takingOver = WavingWhitelist.leavesWave();
 		for (int chunkX = centreX - radius; chunkX <= centreX + radius; chunkX++) {
 			for (int chunkZ = centreZ - radius; chunkZ <= centreZ + radius; chunkZ++) {
 				LevelChunk chunk = level.getChunkSource().getChunk(chunkX, chunkZ, ChunkStatus.FULL, false);
@@ -3199,8 +3206,14 @@ public final class GpuFoliageRenderer {
 						continue;
 					}
 					if (GpuFoliageSplit.isGpuReady(key)) {
-						rebuildChunkMesh(minecraft, chunkX, sectionY, chunkZ);
-						GpuFoliageSplit.remeshOnSwap(key);
+						if (takingOver) {
+							// The renderer goes first: the chunk mesh keeps the blocks until it holds them.
+							GpuFoliageSplit.awaitGroup(key);
+							DIRTY.add(key);
+						} else {
+							rebuildChunkMesh(minecraft, chunkX, sectionY, chunkZ);
+							GpuFoliageSplit.remeshOnSwap(key);
+						}
 					} else {
 						DIRTY.add(key);
 					}
@@ -3892,6 +3905,7 @@ public final class GpuFoliageRenderer {
 			}
 			Section section = new Section(key, origin, data, vertexCount, vertexCount - cutoutVertices, stride);
 			section.sheltered = shelter != null;
+			section.listGeneration = GpuFoliageSplit.listGeneration();
 			putSection(key, section);
 		//? >=1.21.1 {
 		}
