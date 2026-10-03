@@ -126,6 +126,11 @@ sealed class Loader(val id: String) {
 			addDeps(ctx.extension.dependencies.optional, "optional")
 			addDeps(ctx.extension.dependencies.incompatible, "incompatible")
 
+			// NeoForge 26.2 on shows a square icon in the mod list and a wide banner above the description, each named as
+			// an asset, and warns about a mod still naming a logoFile. Before, and on Forge, the one logoFile is all
+			// there is. The banner is only named once its picture is among the resources.
+			val newPictures = ctx.loader is Loader.NeoForge && ctx.stonecutter.eval(ctx.currentMcVersion, ">=26.2")
+			val hasBanner = ctx.project.rootProject.file("src/main/resources/assets/${ctx.modId}/banner.png").exists()
 			val manifest = ForgeManifest(
 				license = ctx.licenseName, issueTrackerURL = ctx.issuesUrl, mods = listOf(
 					ForgeMod(
@@ -134,7 +139,10 @@ sealed class Loader(val id: String) {
 						version = ctx.baseVersion,
 						displayURL = ctx.homepageUrl,
 						modUrl = ctx.homepageUrl,
-						logoFile = "assets/${ctx.modId}/icon.png",
+						logoFile = if (newPictures) "" else "assets/${ctx.modId}/icon.png",
+						iconFile = if (newPictures) "${ctx.modId}:icon.png" else "",
+						iconBlur = newPictures,
+						bannerFile = if (newPictures && hasBanner) "${ctx.modId}:banner.png" else "",
 						authors = ctx.authors.joinToString(", "),
 						credits = "${ctx.authors.joinToString(", ")} Contributors: ${ctx.contributors.joinToString(", ")}",
 						description = ctx.description
@@ -181,8 +189,12 @@ sealed class Loader(val id: String) {
 				}
 			)
 
-			// An empty list is written out as an empty array, which no loader needs to read: left out.
-			return TOML.encodeToString(manifest).replace(Regex("""(?m)^accessTransformers = \[\s*]\r?\n"""), "")
+			// An empty list is written out as an empty array, and a picture a version does not name as an empty string or
+			// a false, none of which a loader needs to read: left out.
+			return TOML.encodeToString(manifest)
+				.replace(Regex("""(?m)^accessTransformers = \[\s*]\r?\n"""), "")
+				.replace(Regex("""(?m)^(logoFile|iconFile|bannerFile) = ""\r?\n"""), "")
+				.replace(Regex("""(?m)^iconBlur = false\r?\n"""), "")
 		}
 	}
 

@@ -43,7 +43,13 @@ data class ForgeMod(
 	val version: String,
 	val displayURL: String,
 	val modUrl: String,
-	val logoFile: String,
+	/** The mod list's picture before NeoForge 26.2, which reads the two below instead and warns about this one. */
+	val logoFile: String = "",
+	/** NeoForge 26.2 on: the square picture beside the mod's name in the list, and whether it is smoothed when scaled. */
+	val iconFile: String = "",
+	val iconBlur: Boolean = false,
+	/** NeoForge 26.2 on: the wide picture above the mod's description, fitted to 50 pixels of height. */
+	val bannerFile: String = "",
 	val authors: String,
 	val logoBlur: Boolean = false,
 	val credits: String,
