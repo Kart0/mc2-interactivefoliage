@@ -180,7 +180,26 @@ final class IrisCompat {
 			IrisFoliageShaders.bindSwayBlocks(settings, interaction);
 		}
 	}
-	//?}
+	//?} elif >=1.21.11 {
+	/*/^* Hands over the renderer's pipelines for leaves drawn solid, in the pack's own pass and in its shadow pass. ^/
+	static void setUpOpaque(RenderPipeline pipeline, RenderPipeline shadowPipeline) {
+		if (IRIS) {
+			IrisFoliageShaders.setUpOpaque(pipeline, shadowPipeline);
+		}
+	}
+
+	/^* Whether leaves can be drawn solid through the loaded pack: its solid programs are built. ^/
+	static boolean hasOpaquePrograms() {
+		return IRIS && IrisFoliageShaders.hasOpaquePrograms();
+	}
+
+	/^* Inside inTerrainPhase: what is drawn next is solid terrain, or cutout terrain, for the pack. ^/
+	static void setTerrainPhase(boolean solid) {
+		if (IRIS) {
+			IrisFoliageShaders.setTerrainPhase(solid);
+		}
+	}
+	*///?}
 
 	/** Runs a draw as terrain cutout for the pack. */
 	static void inTerrainPhase(Runnable draw) {

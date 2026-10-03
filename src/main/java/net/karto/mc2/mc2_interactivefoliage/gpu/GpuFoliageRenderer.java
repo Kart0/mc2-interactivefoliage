@@ -825,10 +825,14 @@ public final class GpuFoliageRenderer {
 	/** The same, for drawing into a shader pack's shadow map. */
 	private static RenderPipeline shaderPackShadowPipeline;
 	//?}
-	//? >=26.3 {
+	//? >=1.21.11 {
 	/** The same, for leaves drawn solid through a shader pack, as the game's Fast leaves are. */
 	private static RenderPipeline shaderPackOpaquePipeline;
 	//?}
+	//? >=1.21.11 && <26.3 {
+	/*/^* The same, for drawing them into a shader pack's shadow map. ^/
+	private static RenderPipeline shaderPackShadowOpaquePipeline;
+	*///?}
 	//?} elif >=26.3 {
 	/*// Never set where there is no shader pack support: no frame is drawn through a pack there.
 	private static RenderPipeline shaderPackPipeline;
@@ -1890,9 +1894,10 @@ public final class GpuFoliageRenderer {
 		//? >=26.3 {
 		return !IrisCompat.shaderPackInUse() || IrisCompat.hasOpaquePrograms();
 		//?} elif >=1.21.11 {
-		/*// Sodium's solid copy is written for Sodium 0.8 so far, which is what 1.21.11 has.
+		/*// Sodium's solid copy is written for Sodium 0.8 so far, which is what 1.21.11 has, and a shader pack's solid programs
+		// are only tried there yet.
 		//? <26.1.2 {
-		/^return !IrisCompat.shaderPackInUse();
+		/^return !IrisCompat.shaderPackInUse() || IrisCompat.hasOpaquePrograms();
 		^///?} else {
 		return !SodiumBridge.drawsChunks() && !IrisCompat.shaderPackInUse();
 		//?}
@@ -2065,6 +2070,26 @@ public final class GpuFoliageRenderer {
 				.build();
 		IrisCompat.setUp(shaderPackPipeline, shaderPackShadowPipeline,
 				List.of(SWAY_SETTINGS, GpuFoliageInteraction.LAYOUT), GpuFoliageRenderer::drawShadow);
+		// The same two without the alpha test, drawn with the mod's copies of the pack's solid programs: for leaves drawn
+		// solid.
+		shaderPackOpaquePipeline = RenderPipeline.builder(RenderPipelines.BLOCK_SNIPPET)
+				.withLocation(Identifier.fromNamespaceAndPath(ModTemplate.MOD_ID, "pipeline/foliage_shader_pack_opaque"))
+				.withVertexShader(Identifier.fromNamespaceAndPath(ModTemplate.MOD_ID, "core/foliage"))
+				.withFragmentShader(Identifier.fromNamespaceAndPath(ModTemplate.MOD_ID, "core/foliage"))
+				.withVertexBinding(0, IrisCompat.shaderPackFormat())
+				.withBindGroupLayout(SWAY_SETTINGS)
+				.withBindGroupLayout(GpuFoliageInteraction.LAYOUT)
+				.build();
+		shaderPackShadowOpaquePipeline = RenderPipeline.builder(RenderPipelines.BLOCK_SNIPPET)
+				.withLocation(Identifier.fromNamespaceAndPath(ModTemplate.MOD_ID, "pipeline/foliage_shader_pack_shadow_opaque"))
+				.withVertexShader(Identifier.fromNamespaceAndPath(ModTemplate.MOD_ID, "core/foliage"))
+				.withFragmentShader(Identifier.fromNamespaceAndPath(ModTemplate.MOD_ID, "core/foliage"))
+				.withVertexBinding(0, IrisCompat.shaderPackFormat())
+				.withBindGroupLayout(SWAY_SETTINGS)
+				.withBindGroupLayout(GpuFoliageInteraction.LAYOUT)
+				.withDepthStencilState(new DepthStencilState(CompareOp.LESS_THAN_OR_EQUAL, true))
+				.build();
+		IrisCompat.setUpOpaque(shaderPackOpaquePipeline, shaderPackShadowOpaquePipeline);
 		*///?} elif >=1.21.11 {
 		/*// Before 26.2 depth is not reversed, so the shadow map takes the same test as everything else. The shadow pipeline is
 		// a pipeline of its own only so the pack's shadow program is the one it draws with.
@@ -2074,6 +2099,12 @@ public final class GpuFoliageRenderer {
 				List.of(new RenderPipeline.UniformDescription(SWAY_SETTINGS_UNIFORM, UniformType.UNIFORM_BUFFER),
 						new RenderPipeline.UniformDescription(GpuFoliageInteraction.UNIFORM, UniformType.UNIFORM_BUFFER)),
 				GpuFoliageRenderer::drawShadow);
+		// The same two without the alpha test, drawn with the mod's copies of the pack's solid programs: for leaves drawn
+		// solid.
+		shaderPackOpaquePipeline = blockPipeline("pipeline/foliage_shader_pack_opaque", IrisCompat.shaderPackFormat(), false);
+		shaderPackShadowOpaquePipeline = blockPipeline("pipeline/foliage_shader_pack_shadow_opaque",
+				IrisCompat.shaderPackFormat(), false);
+		IrisCompat.setUpOpaque(shaderPackOpaquePipeline, shaderPackShadowOpaquePipeline);
 		*///?} else {
 		/*// Before 1.21.11 the renderer draws with the pack's programs themselves, so only the shadow draw is handed over.
 		IrisCompat.setUp(GpuFoliageRenderer::drawShadow);
@@ -2582,6 +2613,15 @@ public final class GpuFoliageRenderer {
 	 * program -- or it does not compile, the pipeline itself, so they are drawn cut out rather than not at all.
 	 ^/
 	private static RenderPipeline opaqueOf(RenderPipeline pipeline) {
+		//? iris {
+		// Through a shader pack, the pipelines the mod's copies of its solid programs are drawn with.
+		if (pipeline == shaderPackPipeline) {
+			return IrisCompat.hasOpaquePrograms() ? shaderPackOpaquePipeline : pipeline;
+		}
+		if (pipeline == shaderPackShadowPipeline) {
+			return IrisCompat.hasOpaquePrograms() ? shaderPackShadowOpaquePipeline : pipeline;
+		}
+		//?}
 		if (pipeline == SODIUM_PIPELINE) {
 			return SodiumFoliageShader.usable(SODIUM_OPAQUE_PIPELINE) ? SODIUM_OPAQUE_PIPELINE : pipeline;
 		}
@@ -2725,6 +2765,12 @@ public final class GpuFoliageRenderer {
 					continue;
 				}
 				pass.setPipeline(kind == 0 ? opaquePipeline : pipeline);
+				//? iris {
+				if (meshedForShaderPack) {
+					// Marked for the pack as the chunk mesh's own layers are: solid terrain, then cutout terrain.
+					IrisCompat.setTerrainPhase(kind == 0);
+				}
+				//?}
 				RenderSystem.bindDefaultUniforms(pass);
 				if (projection != null) {
 					pass.setUniform("Projection", projection);

@@ -136,7 +136,7 @@ public final class IrisFoliageShaders {
 	//? >=26.1.2 {
 	private static boolean shadowCallbackRegistered;
 	//?}
-	//? >=26.3 {
+	//? >=1.21.11 {
 	/**
 	 * The renderer's pipeline for leaves drawn solid, as the game's Fast leaves are, and the mod's copies of the pack's
 	 * solid terrain program and solid shadow program, which keep every pixel; null where the pack has none or they could
@@ -145,6 +145,12 @@ public final class IrisFoliageShaders {
 	private static RenderPipeline opaquePipeline;
 	private static GlProgram mainSolid;
 	private static GlProgram shadowSolid;
+	//?}
+	//? >=1.21.11 && <26.3 {
+	/*/^* The same pipeline for the pack's shadow pass, which is one of its own before 26.3, as the cutout one is. ^/
+	private static RenderPipeline shadowOpaquePipeline;
+	*///?}
+	//? >=26.3 {
 	/** Whether Iris has been told to draw the renderer's pipeline with the pack's program; see setUp. */
 	private static boolean assigned;
 	/**
@@ -234,7 +240,18 @@ public final class IrisFoliageShaders {
 			IrisApi.getInstance().assignPipelineShadow(foliageOpaquePipeline, IrisShadowProgram.SHADOW_TERRAIN_CUTOUT);
 		}
 	}
+	//?} elif >=1.21.11 {
+	/*/^*
+	 * The renderer's pipelines for leaves drawn solid, in the pack's own pass and in its shadow pass: drawn with the mod's
+	 * solid copies, as the cutout ones are with the cutout copies; see programFor.
+	 ^/
+	static void setUpOpaque(RenderPipeline foliageOpaquePipeline, RenderPipeline foliageShadowOpaquePipeline) {
+		opaquePipeline = foliageOpaquePipeline;
+		shadowOpaquePipeline = foliageShadowOpaquePipeline;
+	}
+	*///?}
 
+	//? >=1.21.11 {
 	/** Whether the loaded pack's solid programs are built, so leaves can be drawn solid through it. */
 	static boolean hasOpaquePrograms() {
 		return owner != null && mainSolid != null && (shadow == null || shadowSolid != null);
@@ -293,11 +310,14 @@ public final class IrisFoliageShaders {
 		if (requested == pipeline) {
 			return main;
 		}
-		//? >=26.3 {
 		if (requested == opaquePipeline) {
 			return mainSolid;
 		}
-		//?}
+		//? <26.3 {
+		/*if (requested == shadowOpaquePipeline) {
+			return shadowSolid;
+		}
+		*///?}
 		return requested == shadowPipeline ? shadow : null;
 	}
 	//?} else {
@@ -431,7 +451,7 @@ public final class IrisFoliageShaders {
 					*///?}
 				}
 			}
-			//? >=26.3 {
+			//? >=1.21.11 {
 			buildSolid(access);
 			//?}
 		} catch (Throwable e) {
@@ -443,7 +463,7 @@ public final class IrisFoliageShaders {
 		}
 	}
 
-	//? >=26.3 {
+	//? >=1.21.11 {
 	/**
 	 * Builds the mod's copies of the pack's solid terrain and solid shadow programs, as Iris builds the pack's own for
 	 * its solid terrain: the same sources with the alpha test off. A failure here leaves the cutout programs as they
@@ -457,7 +477,11 @@ public final class IrisFoliageShaders {
 			}
 			GlProgram solid = finish(access.mc2$createShader("mc2_foliage_solid", ShaderKey.TERRAIN_SOLID, terrain.get(),
 					ProgramId.TerrainSolid, ShaderKey.TERRAIN_SOLID.getAlphaTest(), FORMAT,
-					ShaderKey.TERRAIN_SOLID.getFogMode(), false, false, false, false, false, Patch.VANILLA));
+					ShaderKey.TERRAIN_SOLID.getFogMode(), false, false, false, false, false
+					//? >=26.2 {
+					, Patch.VANILLA
+					//?}
+			));
 			GlProgram solidShadow = null;
 			if (shadow != null) {
 				Optional<ProgramSource> shadowSource = access.mc2$resolver().resolve(ProgramId.ShadowSolid);
@@ -469,7 +493,11 @@ public final class IrisFoliageShaders {
 				// alpha test are the solid shadow's.
 				solidShadow = finish(access.mc2$createShadowShader("mc2_foliage_shadow_solid",
 						ShaderKey.SHADOW_TERRAIN_CUTOUT, shadowSource.get(), ProgramId.ShadowSolid,
-						ShaderKey.TERRAIN_SOLID.getAlphaTest(), FORMAT, false, false, false, false, Patch.VANILLA));
+						ShaderKey.TERRAIN_SOLID.getAlphaTest(), FORMAT, false, false, false, false
+						//? >=26.2 {
+						, Patch.VANILLA
+						//?}
+				));
 			}
 			mainSolid = solid;
 			shadowSolid = solidShadow;
@@ -596,8 +624,8 @@ public final class IrisFoliageShaders {
 		WITH_FOLIAGE_PROGRAM.clear();
 		VERTEX_ARRAYS.forEach(VertexArray::close);
 		VERTEX_ARRAYS.clear();
-		closeSolidPrograms();
 		//?}
+		closeSolidPrograms();
 		if (main != null) {
 			main.close();
 			main = null;

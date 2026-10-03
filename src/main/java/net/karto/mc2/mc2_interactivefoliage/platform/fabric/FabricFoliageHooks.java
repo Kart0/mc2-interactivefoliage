@@ -58,10 +58,11 @@ public final class FabricFoliageHooks {
 		//?} elif >=26.1.2 {
 		/*LevelRenderEvents.AFTER_OPAQUE_TERRAIN.register(context -> GpuFoliageRenderer.draw(context.levelState()));
 		*///?} elif >=1.21.11 {
-		/*// There is no event for the moment the opaque terrain is done before 26.1.2. The one before the
-		// translucent pass is the nearest: the opaque blocks are drawn by then, and the foliage still lands
-		// before anything see-through, which is what it has to be behind.
-		WorldRenderEvents.BEFORE_TRANSLUCENT.register(context -> GpuFoliageRenderer.draw(context.worldState()));
+		/*// There is no event named for the moment the opaque terrain is done before 26.1.2; the one before the entities
+		// fires right after it. Not the one before the translucent pass: a shader pack has run its deferred passes and
+		// kept its copy of the depth without anything see-through by then, so foliage drawn there was missing from both,
+		// and a pack's light shafts shone through it.
+		WorldRenderEvents.BEFORE_ENTITIES.register(context -> GpuFoliageRenderer.draw(context.worldState()));
 		*///?} else {
 		/*// Fired straight after the solid and cutout terrain, the same moment the newer event marks. The frustum
 		// comes with it, since nothing else hands it out on this version.
