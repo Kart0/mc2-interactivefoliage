@@ -595,49 +595,65 @@ public final class GpuFoliageRenderer {
 	 * The pipeline foliage is drawn with while Sodium draws the chunks and its shaders compile with the mod's vertices
 	 * read in: the shaders the chunks are drawn with then. See {@link SodiumFoliageShader}.
 	 ^/
-	private static final RenderPipeline SODIUM_PIPELINE = RenderPipeline.builder(RenderPipelines.GLOBALS_SNIPPET)
-			.withLocation(Identifier.fromNamespaceAndPath(ModTemplate.MOD_ID, "pipeline/foliage_sodium"))
-			.withVertexShader(SodiumFoliageShader.SHADER)
-			.withFragmentShader(SodiumFoliageShader.SHADER)
-			.withVertexBinding(0, FOLIAGE_FORMAT)
-			.withPrimitiveTopology(PrimitiveTopology.QUADS)
-			.withDepthStencilState(DepthStencilState.DEFAULT)
-			.withBindGroupLayout(BindGroupLayouts.DYNAMIC_TRANSFORMS)
-			.withBindGroupLayout(BindGroupLayouts.PROJECTION)
-			.withBindGroupLayout(BindGroupLayouts.FOG)
-			.withBindGroupLayout(BindGroupLayout.builder()
-					.withSampler(SodiumFoliageShader.BLOCK_TEXTURE)
-					.withSampler(SodiumFoliageShader.LIGHT_TEXTURE)
-					.build())
-			.withBindGroupLayout(SWAY_SETTINGS)
-			.withBindGroupLayout(GpuFoliageInteraction.LAYOUT)
-			.build();
+	private static final RenderPipeline SODIUM_PIPELINE = sodiumPipeline("pipeline/foliage_sodium", SodiumFoliageShader.SHADER);
+	// The same with the copy of Sodium's solid pass, which keeps every pixel: for leaves drawn as the game's Fast leaves
+	// are.
+	private static final RenderPipeline SODIUM_OPAQUE_PIPELINE = sodiumPipeline("pipeline/foliage_sodium_opaque",
+			SodiumFoliageShader.SHADER_OPAQUE);
+
+	private static RenderPipeline sodiumPipeline(String location, Identifier shader) {
+		return RenderPipeline.builder(RenderPipelines.GLOBALS_SNIPPET)
+				.withLocation(Identifier.fromNamespaceAndPath(ModTemplate.MOD_ID, location))
+				.withVertexShader(shader)
+				.withFragmentShader(shader)
+				.withVertexBinding(0, FOLIAGE_FORMAT)
+				.withPrimitiveTopology(PrimitiveTopology.QUADS)
+				.withDepthStencilState(DepthStencilState.DEFAULT)
+				.withBindGroupLayout(BindGroupLayouts.DYNAMIC_TRANSFORMS)
+				.withBindGroupLayout(BindGroupLayouts.PROJECTION)
+				.withBindGroupLayout(BindGroupLayouts.FOG)
+				.withBindGroupLayout(BindGroupLayout.builder()
+						.withSampler(SodiumFoliageShader.BLOCK_TEXTURE)
+						.withSampler(SodiumFoliageShader.LIGHT_TEXTURE)
+						.build())
+				.withBindGroupLayout(SWAY_SETTINGS)
+				.withBindGroupLayout(GpuFoliageInteraction.LAYOUT)
+				.build();
+	}
 	*///?} elif >=1.21.11 && <26.2 {
 	/*// Drawn with Sodium's chunk shaders while Sodium draws the chunks and they compile with the mod's vertices read in;
 	// see the newer pipeline.
-	private static final RenderPipeline SODIUM_PIPELINE = RenderPipeline.builder()
-			.withLocation(Identifier.fromNamespaceAndPath(ModTemplate.MOD_ID, "pipeline/foliage_sodium"))
-			.withVertexShader(SodiumFoliageShader.SHADER)
-			.withFragmentShader(SodiumFoliageShader.SHADER)
-			.withVertexFormat(FOLIAGE_FORMAT, VertexFormat.Mode.QUADS)
-			.withSampler(SodiumFoliageShader.BLOCK_TEXTURE)
-			.withSampler(SodiumFoliageShader.LIGHT_TEXTURE)
-			.withUniform("DynamicTransforms", UniformType.UNIFORM_BUFFER)
-			.withUniform("Projection", UniformType.UNIFORM_BUFFER)
-			.withUniform("Fog", UniformType.UNIFORM_BUFFER)
-			.withUniform("Globals", UniformType.UNIFORM_BUFFER)
-			//? <26.1.2 {
-			/^.withUniform(SodiumFoliageShader.CHUNK_DATA, UniformType.UNIFORM_BUFFER)
-			^///?}
-			.withUniform(SWAY_SETTINGS_UNIFORM, UniformType.UNIFORM_BUFFER)
-			.withUniform(GpuFoliageInteraction.UNIFORM, UniformType.UNIFORM_BUFFER)
-			//? >=26.1.2 {
-			.withDepthStencilState(DepthStencilState.DEFAULT)
-			//?} else {
-			/^.withDepthWrite(true)
-			.withDepthTestFunction(DepthTestFunction.LESS_DEPTH_TEST)
-			^///?}
-			.build();
+	private static final RenderPipeline SODIUM_PIPELINE = sodiumPipeline("pipeline/foliage_sodium", SodiumFoliageShader.SHADER);
+	// The same with the copy of Sodium's solid pass, which keeps every pixel: for leaves drawn as the game's Fast leaves
+	// are.
+	private static final RenderPipeline SODIUM_OPAQUE_PIPELINE = sodiumPipeline("pipeline/foliage_sodium_opaque",
+			SodiumFoliageShader.SHADER_OPAQUE);
+
+	private static RenderPipeline sodiumPipeline(String location, Identifier shader) {
+		return RenderPipeline.builder()
+				.withLocation(Identifier.fromNamespaceAndPath(ModTemplate.MOD_ID, location))
+				.withVertexShader(shader)
+				.withFragmentShader(shader)
+				.withVertexFormat(FOLIAGE_FORMAT, VertexFormat.Mode.QUADS)
+				.withSampler(SodiumFoliageShader.BLOCK_TEXTURE)
+				.withSampler(SodiumFoliageShader.LIGHT_TEXTURE)
+				.withUniform("DynamicTransforms", UniformType.UNIFORM_BUFFER)
+				.withUniform("Projection", UniformType.UNIFORM_BUFFER)
+				.withUniform("Fog", UniformType.UNIFORM_BUFFER)
+				.withUniform("Globals", UniformType.UNIFORM_BUFFER)
+				//? <26.1.2 {
+				/^.withUniform(SodiumFoliageShader.CHUNK_DATA, UniformType.UNIFORM_BUFFER)
+				^///?}
+				.withUniform(SWAY_SETTINGS_UNIFORM, UniformType.UNIFORM_BUFFER)
+				.withUniform(GpuFoliageInteraction.UNIFORM, UniformType.UNIFORM_BUFFER)
+				//? >=26.1.2 {
+				.withDepthStencilState(DepthStencilState.DEFAULT)
+				//?} else {
+				/^.withDepthWrite(true)
+				.withDepthTestFunction(DepthTestFunction.LESS_DEPTH_TEST)
+				^///?}
+				.build();
+	}
 
 	// Drawn with the terrain's shaders where they compile with the sway spliced in; see the newer pipeline. Vanilla's
 	// terrain snippet is private before 26.2, so the state it holds is spelled out, as for the block pipeline.
@@ -1874,7 +1890,12 @@ public final class GpuFoliageRenderer {
 		//? >=26.3 {
 		return !IrisCompat.shaderPackInUse() || IrisCompat.hasOpaquePrograms();
 		//?} elif >=1.21.11 {
-		/*return !SodiumBridge.drawsChunks() && !IrisCompat.shaderPackInUse();
+		/*// Sodium's solid copy is written for Sodium 0.8 so far, which is what 1.21.11 has.
+		//? <26.1.2 {
+		/^return !IrisCompat.shaderPackInUse();
+		^///?} else {
+		return !SodiumBridge.drawsChunks() && !IrisCompat.shaderPackInUse();
+		//?}
 		*///?} else {
 		/*return false;
 		*///?}
@@ -2561,6 +2582,9 @@ public final class GpuFoliageRenderer {
 	 * program -- or it does not compile, the pipeline itself, so they are drawn cut out rather than not at all.
 	 ^/
 	private static RenderPipeline opaqueOf(RenderPipeline pipeline) {
+		if (pipeline == SODIUM_PIPELINE) {
+			return SodiumFoliageShader.usable(SODIUM_OPAQUE_PIPELINE) ? SODIUM_OPAQUE_PIPELINE : pipeline;
+		}
 		if (pipeline == TERRAIN_PIPELINE) {
 			return TerrainFoliageShader.usable(TERRAIN_OPAQUE_PIPELINE) ? TERRAIN_OPAQUE_PIPELINE : pipeline;
 		}

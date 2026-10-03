@@ -130,7 +130,7 @@
    "fileInfo": {
     "gpu/GpuFoliageRenderer.java": {
      "kind": "java",
-     "lines": 3986,
+     "lines": 4072,
      "guard": "//? >=1.20.1 {"
     }
    }
@@ -154,7 +154,7 @@
    "fileInfo": {
     "gpu/GpuFoliageRenderer.java": {
      "kind": "java",
-     "lines": 3986,
+     "lines": 4072,
      "guard": "//? >=1.20.1 {"
     }
    }
@@ -179,7 +179,7 @@
    "fileInfo": {
     "gpu/GpuFoliageRenderer.java": {
      "kind": "java",
-     "lines": 3986,
+     "lines": 4072,
      "guard": "//? >=1.20.1 {"
     }
    }
@@ -213,7 +213,7 @@
    "fileInfo": {
     "gpu/GpuFoliageRenderer.java": {
      "kind": "java",
-     "lines": 3986,
+     "lines": 4072,
      "guard": "//? >=1.20.1 {"
     },
     "mixin/LevelPassMixin.java": {
@@ -239,7 +239,7 @@
    "fileInfo": {
     "gpu/GpuFoliageRenderer.java": {
      "kind": "java",
-     "lines": 3986,
+     "lines": 4072,
      "guard": "//? >=1.20.1 {"
     }
    }
@@ -588,13 +588,13 @@
     "A field's corner touching a block that holds the leaves still does not wave (SwayAnchor.pinAt, from the 8 blocks around the corner alone, so every block sharing it agrees; every version, Fancy and Fast): a full block that is not leaves -- a trunk, the ground -- or a layer of the resting kind lying on anything but a leaf (holdsLeavesStill). Leaves never sink into a trunk nor part from it. Since every corner of a face against such a block stands still, leaves touching only air, leaves and such blocks are meshed with the culling renderer, exactly as the section compiler culls; only against a block they part from (a fence, stairs, a slab) is every face kept (partsFromNeighbour; a second ModelBlockRenderer built with cull off).",
     "Followers (vines): a majority vote of what is behind each block decides; leaves win -> the whole vine moves with the leaves' field and its free-hanging part below the lowest held block gets a plant's sway at 1.0 (still+steady flags; the leaves' weight is the shaders' MC2_LEAVES_WAVE constant, which must match Group.LEAVES; three exposure bits carry the corner's wind reach, the same the leaves beside it read, and the fourth whether the leaves wave at that corner or are held still (SwayAnchor.leafHeldAt), so the strand moves exactly as the leaf beside it); strands of 1-2 blocks get the field only; otherwise, or with waving leaves off, interaction only, and a vine that clings mostly to anything else is not pushed either (SwayAnchor.pushless).",
     "Only a block solid on that side counts as behind a strand, by the test the rain's wind uses for walls (WindShelter.isSolidSide): a torch, fence, slab or another vine is as good as nothing.",
-    "The leaves group waves with the game's see-through leaves, and with its Fast leaves where the renderer can draw them solid too (WavingWhitelist.leavesWave / opaqueLeaves; GpuFoliageRenderer.canDrawOpaqueLeaves: 26.3 so far). There every LeavesBlock, as vanilla's forceOpaque picks them, is meshed last and drawn with a copy of the pipeline without ALPHA_CUTOUT, the way vanilla's solid terrain differs from its cutout terrain: OPAQUE_PIPELINE, TERRAIN_OPAQUE_PIPELINE, SODIUM_OPAQUE_PIPELINE (Sodium's solid material, 1u), and through a shader pack the mod's copies of its TerrainSolid and ShadowSolid programs in a pipeline assigned to Iris's TERRAIN_SOLID. Faces between leaves are hidden by LeavesBlock.skipRendering, as in the chunk mesh. Elsewhere Fast leaves are left to the game and the checkbox greys out with a tooltip. Which leaves the game draws is read once a frame: cutoutLeaves from 1.21.11; before, Sodium's or Embeddium's own leaves quality, by reflection, else useFancyGraphics.",
+    "The leaves group waves with the game's see-through leaves, and with its Fast leaves where the renderer can draw them solid too (WavingWhitelist.leavesWave / opaqueLeaves; GpuFoliageRenderer.canDrawOpaqueLeaves: 26.3; from 1.21.11 to 26.2 with the terrain's shaders and the mod's own, and on 1.21.11 with Sodium 0.8's too). There every LeavesBlock, as vanilla's forceOpaque picks them, is meshed last and drawn with a copy of the pipeline without ALPHA_CUTOUT, the way vanilla's solid terrain differs from its cutout terrain: OPAQUE_PIPELINE, TERRAIN_OPAQUE_PIPELINE, SODIUM_OPAQUE_PIPELINE (Sodium's solid material, 1u), and through a shader pack the mod's copies of its TerrainSolid and ShadowSolid programs in a pipeline assigned to Iris's TERRAIN_SOLID. Faces between leaves are hidden by LeavesBlock.skipRendering, as in the chunk mesh. Elsewhere Fast leaves are left to the game and the checkbox greys out with a tooltip. Which leaves the game draws is read once a frame: cutoutLeaves from 1.21.11; before, Sodium's or Embeddium's own leaves quality, by reflection, else useFancyGraphics.",
     "Snow! Real Magic on Forge 1.20.1 draws the snow around its plants with minecraft:snow's model -- wrapped for snow on leaves -- and the plant's model data: ForgeFoliageModel never applies its plant-in-snow logic to a resting block's state, or the snow there vanished.",
     "Blocks resting on the leaves (restOnLeaves: minecraft:snow, the two moss carpets, and every block of vanilla's #wool_carpets tag, which mods' carpets join) are foliage only where they lie on a leaf while the leaves wave (GpuFoliageSplit.isFoliageAt / restsOnWavingLeaves, a position rule the model wrappers and the mesher ask): meshed as a field at the leaves' weight, every vertex reading the corner of the leaf's top under it whatever its own height (SwayAnchor.restY), so the whole layer moves as that leaf.",
     "Any other plant Sway hangs (pale hanging moss, cave vines, BOP's mosses...) follows the leaves the same way while it literally hangs from them (the block above its top), and is a plain plant otherwise."
    ],
    "pitfalls": [
-    "Before 26.3 there is no solid pipeline yet: Fast leaves are left to the game there. A shader pack that discards by the texture's alpha in its own shadow shader (Miniature) gives Fast leaves holed shadows, the game's own included; one that leaves it to Iris's alpha test (BSL) does not."
+    "Before 26.3 Fast leaves are still left to the game through a shader pack, with Sodium 0.9 (26.1.2, 26.2), and before 1.21.11. A shader pack that discards by the texture's alpha in its own shadow shader (Miniature) gives Fast leaves holed shadows, the game's own included; one that leaves it to Iris's alpha test (BSL) does not."
    ],
    "fileInfo": {
     "WavingWhitelist.java": {
@@ -882,12 +882,13 @@
     "1.21.11 (0.8): sources from ShaderLoader, #import expanded; packs need Sodium Core Shader Support.",
     "26.1.2: hybrid: 0.8 loading, 0.9 content.",
     "26.2+: vanilla ShaderManager, #moj_import / #include; u_SectionTimeInfo replaced, push_constant blocks stripped (VULKAN defined).",
-    "26.3: #include IMPORT pattern, BuiltSource, compiled via compilePipeline(...).finishCompile(), cached per SOLID_TERRAIN identity; one copy per variant, the solid one without ALPHA_CUTOUT and with Sodium's solid material."
+    "26.3: #include IMPORT pattern, BuiltSource, compiled via compilePipeline(...).finishCompile(), cached per SOLID_TERRAIN identity; one copy per variant, the solid one without ALPHA_CUTOUT and with Sodium's solid material.",
+    "1.21.11 (Sodium 0.8): one pair of shaders for every pass; the solid pass is compiled without USE_FRAGMENT_DISCARD and its vertices carry the solid material (1u, cutoff 0), so the solid copy drops that define, and names RENDER_PASS_SOLID in place of RENDER_PASS_CUTOUT for Sodium Core Shader Support's packs. The game keeps compiled shaders by name before 26.3, so the solid copy has a name of its own (SHADER_OPAQUE) for SODIUM_OPAQUE_PIPELINE; where it does not compile the leaves are drawn cut out."
    ],
    "fileInfo": {
     "gpu/SodiumFoliageShader.java": {
      "kind": "java",
-     "lines": 619,
+     "lines": 624,
      "guard": "//? >=1.21.11 {"
     }
    }
@@ -2465,7 +2466,7 @@
   },
   "gpu/GpuFoliageRenderer.java": {
    "kind": "java",
-   "lines": 3986,
+   "lines": 4072,
    "guard": "//? >=1.20.1 {"
   },
   "gpu/GpuFoliageSplit.java": {
@@ -2510,7 +2511,7 @@
   },
   "gpu/SodiumFoliageShader.java": {
    "kind": "java",
-   "lines": 619,
+   "lines": 624,
    "guard": "//? >=1.21.11 {"
   },
   "gpu/TerrainFoliageShader.java": {

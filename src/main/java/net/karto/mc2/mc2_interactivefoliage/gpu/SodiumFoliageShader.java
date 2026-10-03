@@ -67,6 +67,13 @@ final class SodiumFoliageShader {
 
 	/** Both of the pipeline's shaders; the source hands over the vertex or the fragment copy as asked. */
 	static final Identifier SHADER = Identifier.fromNamespaceAndPath(ModTemplate.MOD_ID, "core/foliage_sodium");
+	//? <26.3 {
+	/*/^*
+	 * The copy of Sodium's solid pass, which keeps every pixel: for leaves drawn as the game's Fast leaves are. A name of
+	 * its own, since the game keeps what it compiled by name and the two copies differ only in their own source.
+	 ^/
+	static final Identifier SHADER_OPAQUE = Identifier.fromNamespaceAndPath(ModTemplate.MOD_ID, "core/foliage_sodium_opaque");
+	*///?}
 	//? <26.1.2 {
 	/*/^* Sodium's buffer of when each chunk started fading in; every one of the mod's is fully in. ^/
 	static final String CHUNK_DATA = "ChunkData";
@@ -315,10 +322,11 @@ final class SodiumFoliageShader {
 	}
 	//?} else {
 	/*private static final ShaderSource SOURCE = (id, type) -> {
-		if (!id.equals(SHADER)) {
+		boolean cutout = id.equals(SHADER);
+		if (!cutout && !id.equals(SHADER_OPAQUE)) {
 			return Minecraft.getInstance().getShaderManager().getShader(id, type);
 		}
-		String built = type == ShaderType.VERTEX ? vertex() : fragment();
+		String built = type == ShaderType.VERTEX ? vertex(cutout) : fragment(cutout);
 		if (built == null) {
 			ModTemplate.LOGGER.warn("Sodium's chunk shaders in use can't be read by the GPU foliage renderer; foliage near "
 					+ "the player is drawn with the terrain's shaders, which may not match a resource pack's look");
@@ -463,14 +471,6 @@ final class SodiumFoliageShader {
 		//?}
 	}
 
-	private static String vertex() {
-		return vertex(true);
-	}
-
-	private static String fragment() {
-		return fragment(true);
-	}
-
 	/** Sodium's solid material, which the copy for solid leaves hands its shaders in place of the cutout one. */
 	private static final String CUTOUT_MATERIAL = "_material_params = 5u;";
 	private static final String SOLID_MATERIAL = "_material_params = 1u;";
@@ -551,9 +551,14 @@ final class SodiumFoliageShader {
 		String body = source.substring(version.end());
 		StringBuilder header = new StringBuilder(version.group());
 		for (String define : DEFINES) {
-			// The solid copy goes without the alpha test, as Sodium's solid pass does.
-			if (!cutout && define.startsWith("ALPHA_CUTOUT")) {
+			// The solid copy goes without the alpha test, as Sodium's solid pass does: a define of its own from Sodium 0.9,
+			// the fragment discard before, which Sodium 0.8 compiles only its cutout and translucent passes with. Sodium
+			// Core Shader Support names the pass for the packs that ask.
+			if (!cutout && (define.startsWith("ALPHA_CUTOUT") || define.equals("USE_FRAGMENT_DISCARD"))) {
 				continue;
+			}
+			if (!cutout && define.equals("RENDER_PASS_CUTOUT")) {
+				define = "RENDER_PASS_SOLID";
 			}
 			header.append("#define ").append(define).append('\n');
 		}
