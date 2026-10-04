@@ -129,6 +129,9 @@ public final class IrisFoliageShaders {
 	//?} else {
 	/*private static ShaderInstance main;
 	private static ShaderInstance shadow;
+	/^* The mod's copies of the pack's solid terrain and solid shadow programs, for leaves drawn solid; see buildSolid. ^/
+	private static ShaderInstance mainSolid;
+	private static ShaderInstance shadowSolid;
 	*///?}
 	/** Bumped for every pack loaded, so sections meshed for the last one are meshed again with this one's block ids. */
 	private static int generation;
@@ -251,12 +254,10 @@ public final class IrisFoliageShaders {
 	}
 	*///?}
 
-	//? >=1.21.11 {
 	/** Whether the loaded pack's solid programs are built, so leaves can be drawn solid through it. */
 	static boolean hasOpaquePrograms() {
 		return owner != null && mainSolid != null && (shadow == null || shadowSolid != null);
 	}
-	//?}
 
 	/**
 	 * Draws the foliage into the shadow map, in the middle of Iris's shadow pass once the terrain is in it. From 26.1.2
@@ -321,8 +322,11 @@ public final class IrisFoliageShaders {
 		return requested == shadowPipeline ? shadow : null;
 	}
 	//?} else {
-	/*/^* The program the renderer draws foliage with in the pack's own pass, or in its shadow pass. ^/
-	static ShaderInstance program(boolean shadowPass) {
+	/*/^* The program the renderer draws foliage with in the pack's own pass, or in its shadow pass; solid leaves' if asked. ^/
+	static ShaderInstance program(boolean shadowPass, boolean solid) {
+		if (solid) {
+			return shadowPass ? shadowSolid : mainSolid;
+		}
 		return shadowPass ? shadow : main;
 	}
 
@@ -451,9 +455,7 @@ public final class IrisFoliageShaders {
 					*///?}
 				}
 			}
-			//? >=1.21.11 {
 			buildSolid(access);
-			//?}
 		} catch (Throwable e) {
 			closePrograms();
 			ModTemplate.LOGGER.error("Could not build the foliage programs for this shader pack; foliage near the "
@@ -656,6 +658,52 @@ public final class IrisFoliageShaders {
 	private static void closePrograms() {
 		main = null;
 		shadow = null;
+		mainSolid = null;
+		shadowSolid = null;
+	}
+
+	/^*
+	 * Builds the mod's copies of the pack's solid terrain and solid shadow programs, as Iris builds the pack's own for
+	 * its solid terrain: the same sources with the alpha test off. A failure here leaves the cutout programs as they
+	 * are and only the solid ones out, so Fast leaves stay with the chunk mesh under this pack.
+	 ^/
+	private static void buildSolid(IrisRenderingPipelineAccessor access) {
+		try {
+			Optional<ProgramSource> terrain = access.mc2$resolver().resolve(ProgramId.TerrainSolid);
+			if (terrain.isEmpty()) {
+				return;
+			}
+			//? >=1.21.1 {
+			ShaderInstance solid = finish(access.mc2$createShader("mc2_foliage_solid", terrain.get(),
+					ProgramId.TerrainSolid, ShaderKey.TERRAIN_SOLID.getAlphaTest(), FORMAT,
+					ShaderKey.TERRAIN_SOLID.getFogMode(), false, false, false, false, false));
+			//?} else {
+			/^ShaderInstance solid = finish(access.mc2$createShader("mc2_foliage_solid", terrain.get(),
+					ProgramId.TerrainSolid, ShaderKey.TERRAIN_SOLID.getAlphaTest(), FORMAT,
+					ShaderKey.TERRAIN_SOLID.getFogMode(), false, false, false, false));
+			^///?}
+			ShaderInstance solidShadow = null;
+			if (shadow != null) {
+				Optional<ProgramSource> shadowSource = access.mc2$resolver().resolve(ProgramId.ShadowSolid);
+				if (shadowSource.isEmpty()) {
+					return;
+				}
+				//? >=1.21.1 {
+				solidShadow = finish(access.mc2$createShadowShader("mc2_foliage_shadow_solid", shadowSource.get(),
+						ProgramId.ShadowSolid, ShaderKey.TERRAIN_SOLID.getAlphaTest(), FORMAT,
+						false, false, false, false));
+				//?} else {
+				/^solidShadow = finish(access.mc2$createShadowShader("mc2_foliage_shadow_solid", shadowSource.get(),
+						ProgramId.ShadowSolid, ShaderKey.TERRAIN_SOLID.getAlphaTest(), FORMAT,
+						false, false, false));
+				^///?}
+			}
+			mainSolid = solid;
+			shadowSolid = solidShadow;
+		} catch (Throwable e) {
+			ModTemplate.LOGGER.warn("Could not build the solid foliage programs for this shader pack; Fast leaves near "
+					+ "the player are left to the chunk mesh while it is loaded", e);
+		}
 	}
 	*///?}
 

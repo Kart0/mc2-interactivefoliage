@@ -116,9 +116,12 @@ final class IrisCompat {
 		}
 	}
 
-	/^* The pack's program the foliage is drawn with, in its own pass or its shadow pass, or null if there is none. ^/
-	static ShaderInstance program(boolean shadowPass) {
-		return IRIS ? IrisFoliageShaders.program(shadowPass) : null;
+	/^*
+	 * The pack's program the foliage is drawn with, in its own pass or its shadow pass -- the solid one for leaves drawn
+	 * solid -- or null if there is none.
+	 ^/
+	static ShaderInstance program(boolean shadowPass, boolean solid) {
+		return IRIS ? IrisFoliageShaders.program(shadowPass, solid) : null;
 	}
 
 	/^* Sets the sway's own uniforms on a pack's program, once it is applied. ^/
@@ -189,6 +192,18 @@ final class IrisCompat {
 	}
 
 	/^* Whether leaves can be drawn solid through the loaded pack: its solid programs are built. ^/
+	static boolean hasOpaquePrograms() {
+		return IRIS && IrisFoliageShaders.hasOpaquePrograms();
+	}
+
+	/^* Inside inTerrainPhase: what is drawn next is solid terrain, or cutout terrain, for the pack. ^/
+	static void setTerrainPhase(boolean solid) {
+		if (IRIS) {
+			IrisFoliageShaders.setTerrainPhase(solid);
+		}
+	}
+	*///?} else {
+	/*/^* Whether leaves can be drawn solid through the loaded pack: its solid programs are built. ^/
 	static boolean hasOpaquePrograms() {
 		return IRIS && IrisFoliageShaders.hasOpaquePrograms();
 	}

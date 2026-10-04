@@ -1021,8 +1021,7 @@ public final class GpuFoliageRenderer {
 					occupied[occupiedCount++] = slot;
 				}
 			}
-			// The solid leaves after all of it. Only drawn where the renderer can draw them so, which is never before 26.3,
-			// so the older uploads below, which copy each section whole, find none.
+			// The solid leaves after all of it, so each kind is drawn in long runs.
 			for (int i = 0; i < occupiedCount; i++) {
 				firstOpaqueVertex[occupied[i]] = vertexCount;
 				vertexCount += sections[occupied[i]].opaqueVertexCount;
@@ -1061,8 +1060,13 @@ public final class GpuFoliageRenderer {
 			for (int i = 0; i < occupiedCount; i++) {
 				int slot = occupied[i];
 				Section section = sections[slot];
+				long cutoutBytes = (long) section.cutoutVertexCount() * stride;
 				MemoryUtil.memCopy(MemoryUtil.memAddress(section.data, 0),
-						pointer + (long) firstVertex[slot] * stride, (long) section.vertexCount * stride);
+						pointer + (long) firstVertex[slot] * stride, cutoutBytes);
+				if (section.opaqueVertexCount > 0) {
+					MemoryUtil.memCopy(MemoryUtil.memAddress(section.data, 0) + cutoutBytes,
+							pointer + (long) firstOpaqueVertex[slot] * stride, (long) section.opaqueVertexCount * stride);
+				}
 			}
 			MeshData mesh = new MeshData(staging.build(), new MeshData.DrawState(regionFormat(), vertexCount,
 					indexCountFor(vertexCount), VertexFormat.Mode.QUADS, VertexFormat.IndexType.least(vertexCount)));
@@ -1076,22 +1080,34 @@ public final class GpuFoliageRenderer {
 			for (int i = 0; i < occupiedCount; i++) {
 				int slot = occupied[i];
 				Section section = sections[slot];
+				long cutoutBytes = (long) section.cutoutVertexCount() * stride;
 				MemoryUtil.memCopy(MemoryUtil.memAddress(section.data, 0),
-						pointer + (long) firstVertex[slot] * stride, (long) section.vertexCount * stride);
+						pointer + (long) firstVertex[slot] * stride, cutoutBytes);
+				if (section.opaqueVertexCount > 0) {
+					MemoryUtil.memCopy(MemoryUtil.memAddress(section.data, 0) + cutoutBytes,
+							pointer + (long) firstOpaqueVertex[slot] * stride, (long) section.opaqueVertexCount * stride);
+				}
 			}
 			staging.nextElementByte += vertexCount * stride;
 			staging.vertices = vertexCount;
 			BufferBuilder.RenderedBuffer mesh = staging.end();
 			^///?} else {
 			/^// Before 1.21.1 a mesh only comes out of a buffer builder. Forge's takes a block of vertices whole, so each
-			// section goes in as it stands, in the order the region's layout was worked out in.
+			// section's parts go in as they stand, in the order the region's layout was worked out in: every cutout part,
+			// then every solid one.
 			BufferBuilder staging = uploadBuilder();
 			staging.begin(VertexFormat.Mode.QUADS, regionFormat());
-			for (int i = 0; i < occupiedCount; i++) {
-				ByteBuffer data = sections[occupied[i]].data;
-				staging.putBulkData(data);
-				// Read to its end by the copy; set back for the region's next upload.
-				data.rewind();
+			for (int kind = 0; kind < 2; kind++) {
+				for (int i = 0; i < occupiedCount; i++) {
+					Section section = sections[occupied[i]];
+					int cutoutBytes = section.cutoutVertexCount() * stride;
+					int from = kind == 0 ? 0 : cutoutBytes;
+					int bytes = kind == 0 ? cutoutBytes : section.opaqueVertexCount * stride;
+					if (bytes > 0) {
+						// A view of its own, so the section's data is left where it was for the region's next upload.
+						staging.putBulkData(section.data.slice(from, bytes));
+					}
+				}
 			}
 			BufferBuilder.RenderedBuffer mesh = staging.end();
 			^///?}
@@ -1979,17 +1995,14 @@ public final class GpuFoliageRenderer {
 	*///?}
 
 	/**
-	 * Whether leaves can be drawn solid now, as the game's Fast leaves are: with a pipeline that keeps every pixel, which
-	 * the renderer has from 1.21.11 for the terrain's shaders, Sodium's and its own -- where one of those copies does not
-	 * compile the leaves are drawn cut out instead, see opaqueOf -- and for a shader pack whose solid programs the mod
-	 * could copy. Only under a pack whose solid programs it could not are Fast leaves left to the game.
+	 * Whether leaves can be drawn solid now, as the game's Fast leaves are: with shaders that keep every pixel, which the
+	 * renderer has for the terrain's shaders, Sodium's and its own -- where one of those copies does not compile the
+	 * leaves are drawn cut out or with the mod's own instead, see opaqueOf and drawLegacy -- and for a shader pack whose
+	 * solid programs the mod could copy. Only under a pack whose solid programs it could not are Fast leaves left to the
+	 * game.
 	 */
 	private static boolean canDrawOpaqueLeaves() {
-		//? >=1.21.11 {
 		return !IrisCompat.shaderPackInUse() || IrisCompat.hasOpaquePrograms();
-		//?} else {
-		/*return false;
-		*///?}
 	}
 
 	private static void drawFrame(Vec3 camera, Frustum frustum) {
@@ -2950,10 +2963,8 @@ public final class GpuFoliageRenderer {
 	}
 
 	/^*
-	 * Draws the queued runs the way vanilla draws a chunk layer before 1.21.11: the cutout layer's render state,
-	 * the shader's default uniforms, then one offset and one vertex buffer per region. Only the draw call differs:
-	 * a vertex buffer can only draw the whole of itself, and a region is drawn in runs of visible sections, so each
-	 * run is drawn from where it starts in the buffer.
+	 * Draws the queued runs the way vanilla draws its chunk layers before 1.21.11: the leaves drawn solid first, with the
+	 * solid layer's render state and shaders that keep every pixel, then everything else with the cutout layer's.
 	 ^/
 	private static void drawLegacy(Minecraft minecraft, Vec3 camera, List<Region> drawn, Matrix4f shadowModelView,
 			Matrix4f shadowProjection) {
@@ -2961,32 +2972,67 @@ public final class GpuFoliageRenderer {
 		boolean shadowPass = shadowModelView != null;
 		Matrix4f modelView = shadowPass ? shadowModelView : legacyModelView;
 		Matrix4f projection = shadowPass ? shadowProjection : legacyProjection;
-		ShaderInstance shader = legacyShader;
-		boolean shaderPack = false;
-		//? iris {
-		if (meshedForShaderPack) {
-			// The pack's own program for the pass, built for the foliage; see IrisFoliageShaders.
-			shader = IrisCompat.program(shadowPass);
-			shaderPack = true;
-		}
-		//?}
-		//? >=1.20.1 {
-		// The cutout shaders the chunk mesh draws plants with, where they compile with the sway spliced in. Sodium draws
-		// its chunks with shaders of its own, which a resource pack's core shaders never reach, so the mod keeps to its
-		// own shader there rather than following a pack the terrain does not.
-		if (!shaderPack && legacyShader != null && !SodiumBridge.drawsChunks()) {
-			ShaderInstance cutout = LegacyTerrainShader.get(FOLIAGE_FORMAT, INTERACTION_BINDING);
-			if (cutout != null) {
-				shader = cutout;
-			}
-		}
-		//?}
-		if (shader == null || modelView == null || projection == null) {
+		if (modelView == null || projection == null) {
 			return;
 		}
-		GpuFoliageInteraction.uploadLegacy(camera, INTERACTION_BINDING);
+		boolean uploaded = false;
+		for (int kind = 0; kind < 2; kind++) {
+			int[] list = kind == 0 ? opaqueDraws : draws;
+			int listSize = kind == 0 ? opaqueDrawsSize : drawsSize;
+			if (listSize == 0) {
+				continue;
+			}
+			boolean solid = kind == 0;
+			// The mod's own shader draws either kind: what it discards is a uniform.
+			ShaderInstance shader = legacyShader;
+			boolean shaderPack = false;
+			//? iris {
+			if (meshedForShaderPack) {
+				// The pack's own program for the pass, built for the foliage; see IrisFoliageShaders. Leaves meshed solid
+				// under a pack whose solid programs are gone since are drawn cut out.
+				shader = IrisCompat.program(shadowPass, solid);
+				if (shader == null && solid) {
+					solid = false;
+					shader = IrisCompat.program(shadowPass, false);
+				}
+				shaderPack = true;
+			}
+			//?}
+			//? >=1.20.1 {
+			// The shaders the chunk mesh draws that layer with, where they compile with the sway spliced in. Sodium draws
+			// its chunks with shaders of its own, which a resource pack's core shaders never reach, so the mod keeps to its
+			// own shader there rather than following a pack the terrain does not.
+			if (!shaderPack && legacyShader != null && !SodiumBridge.drawsChunks()) {
+				ShaderInstance terrain = LegacyTerrainShader.get(FOLIAGE_FORMAT, INTERACTION_BINDING, solid);
+				if (terrain != null) {
+					shader = terrain;
+				}
+			}
+			//?}
+			if (shader == null) {
+				continue;
+			}
+			if (!uploaded) {
+				GpuFoliageInteraction.uploadLegacy(camera, INTERACTION_BINDING);
+				uploaded = true;
+			}
+			drawLegacyRuns(minecraft, camera, drawn, shader, solid, modelView, projection, list, listSize);
+		}
+	}
 
-		RenderType renderType = RenderType.cutout();
+	/^*
+	 * Draws one kind's runs: the layer's render state, the shader's default uniforms, then one offset and one vertex
+	 * buffer per region. Only the draw call differs from vanilla's: a vertex buffer can only draw the whole of itself,
+	 * and a region is drawn in runs of visible sections, so each run is drawn from where it starts in the buffer.
+	 ^/
+	private static void drawLegacyRuns(Minecraft minecraft, Vec3 camera, List<Region> drawn, ShaderInstance shader,
+			boolean solid, Matrix4f modelView, Matrix4f projection, int[] list, int listSize) {
+		//? iris {
+		if (meshedForShaderPack) {
+			IrisCompat.setTerrainPhase(solid);
+		}
+		//?}
+		RenderType renderType = solid ? RenderType.solid() : RenderType.cutout();
 		renderType.setupRenderState();
 		ShaderInstance program = shader;
 		RenderSystem.setShader(() -> program);
@@ -3043,6 +3089,8 @@ public final class GpuFoliageRenderer {
 				(float) (cameraBlock.getZ() - camera.z));
 		Vector4f weather = weather();
 		shader.safeGetUniform("Weather").set(weather.x, weather.y, weather.z, weather.w);
+		// What the mod's own fragment shader discards below: vanilla's cutout layer's 0.1, or nothing.
+		shader.safeGetUniform("AlphaCutout").set(solid ? 0.0F : 0.1F);
 		// The same values under the names sway.glsl reads them by, for the shader built from the cutout shaders.
 		shader.safeGetUniform("mc2_SwayIntensity").set(swayIntensity());
 		shader.safeGetUniform("mc2_CalmSway").set(calmSway());
@@ -3068,8 +3116,8 @@ public final class GpuFoliageRenderer {
 		Uniform regionOffset = shader.CHUNK_OFFSET;
 		int boundRegion = -1;
 		int indexType = 0;
-		for (int i = 0; i < drawsSize; i += 3) {
-			int regionIndex = draws[i];
+		for (int i = 0; i < listSize; i += 3) {
+			int regionIndex = list[i];
 			if (regionIndex != boundRegion) {
 				Region region = drawn.get(regionIndex);
 				if (regionOffset != null) {
@@ -3085,7 +3133,7 @@ public final class GpuFoliageRenderer {
 				indexType = RenderSystem.getSequentialBuffer(VertexFormat.Mode.QUADS).type().asGLType;
 				boundRegion = regionIndex;
 			}
-			GL32.glDrawElementsBaseVertex(GL11.GL_TRIANGLES, indexCountFor(draws[i + 2]), indexType, 0L, draws[i + 1]);
+			GL32.glDrawElementsBaseVertex(GL11.GL_TRIANGLES, indexCountFor(list[i + 2]), indexType, 0L, list[i + 1]);
 		}
 
 		if (regionOffset != null) {

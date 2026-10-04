@@ -30,16 +30,17 @@ import java.util.regex.Pattern;
  * in their place -- so foliage is lit and coloured as the terrain around it. The shader system before 1.21.11 loads a
  * program from its JSON and two sources, so the mod hands it its own: the cutout layer's JSON with the mod's uniforms
  * added, the cutout fragment shader as it is, and the cutout vertex shader with the sway spliced in, the way
- * {@link TerrainFoliageShader} does it for newer versions.
+ * {@link TerrainFoliageShader} does it for newer versions. Leaves drawn solid, as the game's Fast leaves are, get the
+ * same made from the solid layer's shaders.
  * <p>
- * Built the first time foliage is drawn after each resource reload. A cutout shader that cannot be read that way, or
- * that does not compile once it is, leaves the renderer on its own shader.
+ * Each is built the first time it is drawn with after each resource reload. A layer's shader that cannot be read that
+ * way, or that does not compile once it is, leaves the renderer on its own shader for that layer.
  ^/
 final class LegacyTerrainShader {
 
-	/^* The name the program is loaded under, and its two sources, all served by the mod. ^/
-	private static final String NAME = "mc2_foliage_cutout";
-	private static final String CUTOUT = "rendertype_cutout";
+	/^* The layers followed, cutout then solid, and the name each one's program and its two sources are served under. ^/
+	private static final String[] LAYERS = {"rendertype_cutout", "rendertype_solid"};
+	private static final String[] NAMES = {"mc2_foliage_cutout", "mc2_foliage_solid"};
 	private static final String CORE = "shaders/core/";
 
 	private static final Pattern MAIN = Pattern.compile("\\bvoid\\s+main\\s*\\(\\s*(?:void\\s*)?\\)");
@@ -84,70 +85,77 @@ final class LegacyTerrainShader {
 			{"mc2_Weather", "float", "4"}, {"mc2_CameraBlockPos", "int", "3"}, {"mc2_CameraOffset", "float", "3"},
 			{"mc2_GameTime", "float", "1"}, {"ChunkOffset", "float", "3"}};
 
-	private static ShaderInstance shader;
-	/^* Whether the shader is due to be built, as it is once after every resource reload. ^/
-	private static boolean stale = true;
+	private static final ShaderInstance[] SHADERS = new ShaderInstance[LAYERS.length];
+	/^* Whether each shader is due to be built, as it is once after every resource reload. ^/
+	private static final boolean[] STALE = {true, true};
 
 	private LegacyTerrainShader() {
 	}
 
-	/^* Called on every resource reload: the next draw builds the shader again from the shaders then in use. ^/
+	/^* Called on every resource reload: the next draw builds the shaders again from the shaders then in use. ^/
 	static void invalidate() {
-		stale = true;
+		java.util.Arrays.fill(STALE, true);
 	}
 
-	/^* The shader to draw foliage with, or null to keep to the mod's own. Render thread only. ^/
-	static ShaderInstance get(VertexFormat format, int interactionBinding) {
-		if (stale) {
-			stale = false;
-			if (shader != null) {
-				shader.close();
-				shader = null;
+	/^*
+	 * The shader to draw foliage with -- the solid layer's for leaves drawn solid, the cutout layer's otherwise -- or null
+	 * to keep to the mod's own. Render thread only.
+	 ^/
+	static ShaderInstance get(VertexFormat format, int interactionBinding, boolean solid) {
+		int layer = solid ? 1 : 0;
+		if (STALE[layer]) {
+			STALE[layer] = false;
+			if (SHADERS[layer] != null) {
+				SHADERS[layer].close();
+				SHADERS[layer] = null;
 			}
-			shader = build(Minecraft.getInstance().getResourceManager(), format);
+			ShaderInstance shader = build(Minecraft.getInstance().getResourceManager(), format, layer);
 			if (shader != null) {
 				int index = GL31.glGetUniformBlockIndex(shader.getId(), GpuFoliageInteraction.UNIFORM);
 				if (index != GL31.GL_INVALID_INDEX) {
 					GL31.glUniformBlockBinding(shader.getId(), index, interactionBinding);
 				}
 			}
+			SHADERS[layer] = shader;
 		}
-		return shader;
+		return SHADERS[layer];
 	}
 
-	private static ShaderInstance build(ResourceManager resources, VertexFormat format) {
+	private static ShaderInstance build(ResourceManager resources, VertexFormat format, int layer) {
+		String name = NAMES[layer];
 		try {
-			Resource json = resources.getResourceOrThrow(vanilla(CORE + CUTOUT + ".json"));
+			Resource json = resources.getResourceOrThrow(vanilla(CORE + LAYERS[layer] + ".json"));
 			JsonObject cutout = JsonParser.parseString(read(json)).getAsJsonObject();
 			// Which two sources the cutout layer is drawn from is the JSON's to say: a resource pack may point it at
 			// shaders of its own under any name, as a pack that shades the world in the fragment shader does.
 			String vertex = splice(read(resources, source(cutout, "vertex", ".vsh")), readSway());
 			if (vertex == null) {
-				ModTemplate.LOGGER.warn("The cutout vertex shader in use can't be read by the GPU foliage renderer; foliage "
-						+ "near the player is drawn with the renderer's own shader, which may not match a resource pack's look");
+				ModTemplate.LOGGER.warn("The {} vertex shader in use can't be read by the GPU foliage renderer; foliage "
+						+ "near the player is drawn with the renderer's own shader, which may not match a resource pack's look",
+						LAYERS[layer]);
 				return null;
 			}
-			String program = programJson(cutout);
+			String program = programJson(cutout, name);
 			String fragment = read(resources, source(cutout, "fragment", ".fsh"));
 			ResourceProvider provider = location -> {
 				if (location.getNamespace().equals(ResourceLocation.DEFAULT_NAMESPACE)) {
 					String path = location.getPath();
-					if (path.equals(CORE + NAME + ".json")) {
+					if (path.equals(CORE + name + ".json")) {
 						return Optional.of(served(json, program));
 					}
-					if (path.equals(CORE + NAME + ".vsh")) {
+					if (path.equals(CORE + name + ".vsh")) {
 						return Optional.of(served(json, vertex));
 					}
-					if (path.equals(CORE + NAME + ".fsh")) {
+					if (path.equals(CORE + name + ".fsh")) {
 						return Optional.of(served(json, fragment));
 					}
 				}
 				return resources.getResource(location);
 			};
-			return new ShaderInstance(provider, NAME, format);
+			return new ShaderInstance(provider, name, format);
 		} catch (Exception e) {
-			ModTemplate.LOGGER.warn("The GPU foliage renderer couldn't build its shader from the cutout shaders in use; "
-					+ "foliage near the player is drawn with the renderer's own shader", e);
+			ModTemplate.LOGGER.warn("The GPU foliage renderer couldn't build its shader from the {} shaders in use; "
+					+ "foliage near the player is drawn with the renderer's own shader", LAYERS[layer], e);
 			return null;
 		}
 	}
@@ -189,11 +197,11 @@ final class LegacyTerrainShader {
 		}
 	}
 
-	/^* The cutout layer's JSON, reading the mod's sources, with the uniforms the mod sets added where it lacks them. ^/
-	private static String programJson(JsonObject cutout) {
+	/^* A layer's JSON, reading the mod's sources, with the uniforms the mod sets added where it lacks them. ^/
+	private static String programJson(JsonObject cutout, String name) {
 		JsonObject json = cutout.deepCopy();
-		json.addProperty("vertex", NAME);
-		json.addProperty("fragment", NAME);
+		json.addProperty("vertex", name);
+		json.addProperty("fragment", name);
 		JsonArray uniforms = json.has("uniforms") ? json.getAsJsonArray("uniforms") : new JsonArray();
 		for (String[] uniform : UNIFORMS) {
 			boolean present = false;
