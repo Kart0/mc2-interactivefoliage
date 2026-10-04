@@ -325,7 +325,8 @@ public final class WavingWhitelist {
 		rest(
 				"minecraft:snow",
 				"minecraft:moss_carpet",
-				"minecraft:pale_moss_carpet"
+				"minecraft:pale_moss_carpet",
+				"biomesoplenty:glowing_moss_carpet"
 		);
 		restTag(
 				"minecraft:wool_carpets"
