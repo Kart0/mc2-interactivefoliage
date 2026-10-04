@@ -57,6 +57,8 @@ layout(std140) uniform FoliageInteraction {
 const float INTERACT_STRENGTH = 1.0;
 const float PUSHED_SWAY = 0.25;
 const float PUSH_FOR_CALM = 0.2;
+// What a plant weighed down by snow keeps of its calm sway. See sway.glsl.
+const float LADEN_CALM = 0.25;
 const float EDGE_EASE_BLOCKS = 6.0;
 
 // Rain's wind, as in sway.glsl, where each value is explained.
@@ -152,7 +154,7 @@ void main() {
     vec4 weights = unpackWeights(SwayWeights, steady);
     // Still and steady at once: a block hanging on leaves, swaying as a plant and moving as the leaves. See sway.glsl.
     bool hanging = steady > 0.5 && weights.w < 0.5;
-    float calmShare = hanging ? 1.0 : weights.w;
+    float calmShare = hanging ? 1.0 : mix(LADEN_CALM, 1.0, weights.w);
     float exposure = weights.z;
     // Three of the wind's bits, and whether the leaves wave where this vertex is: so it moves as the leaf beside it. See sway.glsl.
     float leafWaves = 1.0;

@@ -66,6 +66,10 @@ const float MC2_PUSHED_SWAY = 0.25;
 // How hard a push has to be before a plant keeps only MC2_PUSHED_SWAY; lighter pushes calm it partly, so the sway
 // eases down as a plant is pushed and back up as the push fades.
 const float MC2_PUSH_FOR_CALM = 0.2;
+// How much of its calm sway a plant weighed down by snow keeps, of the weight it is meshed with, which is what the
+// weather's wind moves it by: GpuFoliageRenderer's SNOW_LADEN_SWAY over its SNOW_LADEN_WIND. Such a plant is marked
+// still without steady.
+const float MC2_LADEN_CALM = 0.25;
 
 // How much of the wind a plant keeps, by how far its anchor block sits inside the edge. It rises along a curve that
 // starts and ends gently, so the plants by the edge barely stir and no one plant moves much more than the next; and
@@ -114,7 +118,7 @@ vec3 mc2_unpackCell(float bits) {
 // SwayWeights: how freely this vertex sways, ten bits, how far a push moves it, eight, whether the plant stands still in
 // calm weather, one, whether a push leaves its sway as it is, one, and how much of rain's wind reaches the plant, four.
 // The first is the wind's own curve; the second is Sway's, so a pushed plant bends the same whoever draws it; the third is
-// set for the blocks the mod keeps from waving, which the weather's wind still moves; the fourth for a tree's leaves,
+// set alone for a plant weighed down by snow, which keeps MC2_LADEN_CALM of its calm sway and all of its wind; the fourth for a tree's leaves,
 // which wave together, and for what hangs on them; the fifth is 1 in the open and falls under roofs, in caves and behind walls upwind, as the
 // mod works out when it meshes the plant. A block hanging on leaves keeps three of those four bits for the wind and gives
 // the lowest to whether the leaves wave where the vertex is; mc2_sway takes z apart for it. x: the wind weight, y: the
@@ -181,7 +185,7 @@ vec3 mc2_sway(vec3 pos, vec3 modelOffset, ivec3 cameraBlockPos, vec3 cameraOffse
     // It sways as the plant it is, all of its calm sway, and moves as the leaves do on top of that, all over, at the
     // leaves' own weight; the wind reaches both as far as it reaches the leaves at the same corner.
     bool hanging = steady > 0.5 && weights.w < 0.5;
-    float calmShare = hanging ? 1.0 : weights.w;
+    float calmShare = hanging ? 1.0 : mix(MC2_LADEN_CALM, 1.0, weights.w);
     float exposure = weights.z;
     // It keeps three of the wind's bits, and the last says whether the leaves wave where this vertex is or stand still
     // against a block holding them, as the leaf beside it was told: so it moves exactly as that leaf.

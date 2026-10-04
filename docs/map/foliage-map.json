@@ -130,7 +130,7 @@
    "fileInfo": {
     "gpu/GpuFoliageRenderer.java": {
      "kind": "java",
-     "lines": 4236,
+     "lines": 4248,
      "guard": "//? >=1.20.1 {"
     }
    }
@@ -155,7 +155,7 @@
    "fileInfo": {
     "gpu/GpuFoliageRenderer.java": {
      "kind": "java",
-     "lines": 4236,
+     "lines": 4248,
      "guard": "//? >=1.20.1 {"
     }
    }
@@ -180,7 +180,7 @@
    "fileInfo": {
     "gpu/GpuFoliageRenderer.java": {
      "kind": "java",
-     "lines": 4236,
+     "lines": 4248,
      "guard": "//? >=1.20.1 {"
     }
    }
@@ -214,7 +214,7 @@
    "fileInfo": {
     "gpu/GpuFoliageRenderer.java": {
      "kind": "java",
-     "lines": 4236,
+     "lines": 4248,
      "guard": "//? >=1.20.1 {"
     },
     "mixin/LevelPassMixin.java": {
@@ -240,7 +240,7 @@
    "fileInfo": {
     "gpu/GpuFoliageRenderer.java": {
      "kind": "java",
-     "lines": 4236,
+     "lines": 4248,
      "guard": "//? >=1.20.1 {"
     }
    }
@@ -592,13 +592,13 @@
     "A field's corner touching a block that holds the leaves still does not wave (SwayAnchor.pinAt, from the 8 blocks around the corner alone, so every block sharing it agrees; every version, Fancy and Fast): a full block that is not leaves -- a trunk, the ground -- or a layer of the resting kind lying on anything but a leaf (holdsLeavesStill). Leaves never sink into a trunk nor part from it. Since every corner of a face against such a block stands still, leaves touching only air, leaves and such blocks are meshed with the culling renderer, exactly as the section compiler culls; only against a block they part from (a fence, stairs, a slab) is every face kept (partsFromNeighbour; a second ModelBlockRenderer built with cull off).",
     "Followers (vines), block by block (SwayAnchor.hangVine), no vote: a block with leaves behind it moves exactly as they do (still+steady flags; the leaves' weight is the shaders' MC2_LEAVES_WAVE constant, which must match Group.LEAVES; three exposure bits carry the corner's wind reach and the fourth whether the leaves wave at that corner or are held still, SwayAnchor.leafHeldAt), one with anything else solid behind it stands still, and neither is pushed. Below the lowest block with something behind it the strand hangs free, straight as a strip of cloth: its weight grows evenly from nothing where it starts to hang to VINE_TIP_SWAY at the tip, over max(VINE_SPAN, its length), so strands up to the span share one slant and longer ones hang steeper; on top of the leaves' movement if leaves hold it, of none if anything else does (a vine under stone sways too). Only that part is pushed, easing in over its first block, and a push never calms it. With the leaves standing still the held blocks stand still and the free part sways all the same. The free part reads one wind reach for the whole strand (strandExposure) rather than a corner's, which twisted it near walls; the row it starts to hang from reads the corner, as the block holding it does, so the two never part.",
     "Only a block solid on that side counts as behind a strand, by the test the rain's wind uses for walls (WindShelter.isSolidSide): a torch, fence, slab or another vine is as good as nothing.",
-    "The leaves group waves with the game's see-through leaves, and with its Fast leaves where the renderer can draw them solid too (WavingWhitelist.leavesWave / opaqueLeaves; GpuFoliageRenderer.canDrawOpaqueLeaves: from 1.21.1, with the terrain's shaders, Sodium's and the mod's own, and through a shader pack whose solid programs the mod could copy). There every LeavesBlock, as vanilla's forceOpaque picks them, is meshed last and drawn with a copy of the pipeline without ALPHA_CUTOUT, the way vanilla's solid terrain differs from its cutout terrain: OPAQUE_PIPELINE, TERRAIN_OPAQUE_PIPELINE, SODIUM_OPAQUE_PIPELINE (Sodium's solid material, 1u), and through a shader pack the mod's copies of its TerrainSolid and ShadowSolid programs in a pipeline assigned to Iris's TERRAIN_SOLID. Faces between leaves are hidden by LeavesBlock.skipRendering, as in the chunk mesh. Elsewhere Fast leaves are left to the game and the checkbox greys out with a tooltip. Which leaves the game draws is read once a frame: cutoutLeaves from 1.21.11; before, Sodium's or Embeddium's own leaves quality, by reflection, else useFancyGraphics.",
+    "The leaves group waves with the game's see-through leaves, and with its Fast leaves where the renderer can draw them solid too (WavingWhitelist.leavesWave / opaqueLeaves; GpuFoliageRenderer.canDrawOpaqueLeaves: every version, with the terrain's shaders, Sodium's and the mod's own, and through a shader pack whose solid programs the mod could copy). There every LeavesBlock, as vanilla's forceOpaque picks them, is meshed last and drawn with a copy of the pipeline without ALPHA_CUTOUT, the way vanilla's solid terrain differs from its cutout terrain: OPAQUE_PIPELINE, TERRAIN_OPAQUE_PIPELINE, SODIUM_OPAQUE_PIPELINE (Sodium's solid material, 1u), and through a shader pack the mod's copies of its TerrainSolid and ShadowSolid programs in a pipeline assigned to Iris's TERRAIN_SOLID. Faces between leaves are hidden by LeavesBlock.skipRendering, as in the chunk mesh. Elsewhere Fast leaves are left to the game and the checkbox greys out with a tooltip. Which leaves the game draws is read once a frame: cutoutLeaves from 1.21.11; before, Sodium's or Embeddium's own leaves quality, by reflection, else useFancyGraphics.",
     "Snow! Real Magic on Forge 1.20.1 draws the snow around its plants with minecraft:snow's model -- wrapped for snow on leaves -- and the plant's model data: ForgeFoliageModel never applies its plant-in-snow logic to a resting block's state, or the snow there vanished.",
     "Blocks resting on the leaves (restOnLeaves: minecraft:snow, the two moss carpets, and every block of vanilla's #wool_carpets tag, which mods' carpets join) are foliage only where they lie on a leaf while the leaves wave (GpuFoliageSplit.isFoliageAt / restsOnWavingLeaves, a position rule the model wrappers and the mesher ask): meshed as a field at the leaves' weight, every vertex reading the corner of the leaf's top under it whatever its own height (SwayAnchor.restY), so the whole layer moves as that leaf.",
     "Any other plant Sway hangs (pale hanging moss, cave vines, BOP's mosses...) follows the leaves the same way while it literally hangs from them (the block above its top), and is a plain plant otherwise."
    ],
    "pitfalls": [
-    "Fast leaves are still left to the game under a shader pack whose solid programs could not be built. On 1.21.1 the solid leaves are drawn first with the solid layer's render state (RenderType.solid, mipmapped as the game's Fast leaves are) and a shader that keeps every pixel: LegacyTerrainShader's copy of rendertype_solid; with Sodium the mod's own shader, whose AlphaCutout uniform is set to 0 (0.1 for the cutout kind); through a shader pack the mod's copies of TerrainSolid and ShadowSolid as shader instances (IrisCompat.program(shadowPass, solid)), with Iris's phase set to solid terrain. The legacy region uploads copy each section's cutout part and solid part to their own places, as the newer one does: copying a section whole overwrote the next section's vertices. From 1.21.11 to 26.2 a shader pack's solid programs are copied as on 26.3 (TerrainSolid, and ShadowSolid keyed as the cutout shadow), each drawn by a pipeline of its own that IrisFoliageShaders.programFor answers for -- the shadow pass has its own pipeline before 26.3 -- with Iris's phase set to solid terrain for them. A shader pack that discards by the texture's alpha in its own shadow shader (Miniature) gives Fast leaves holed shadows, the game's own included; one that leaves it to Iris's alpha test (BSL) does not."
+    "Fast leaves are still left to the game under a shader pack whose solid programs could not be built. Before 1.21.11 the solid leaves are drawn first with the solid layer's render state (RenderType.solid, mipmapped as the game's Fast leaves are) and a shader that keeps every pixel: LegacyTerrainShader's copy of rendertype_solid; with Sodium the mod's own shader, whose AlphaCutout uniform is set to 0 (0.1 for the cutout kind); through a shader pack the mod's copies of TerrainSolid and ShadowSolid as shader instances (IrisCompat.program(shadowPass, solid)), with Iris's phase set to solid terrain. The legacy region uploads copy each section's cutout part and solid part to their own places, as the newer one does: copying a section whole overwrote the next section's vertices. From 1.21.11 to 26.2 a shader pack's solid programs are copied as on 26.3 (TerrainSolid, and ShadowSolid keyed as the cutout shadow), each drawn by a pipeline of its own that IrisFoliageShaders.programFor answers for -- the shadow pass has its own pipeline before 26.3 -- with Iris's phase set to solid terrain for them. A shader pack that discards by the texture's alpha in its own shadow shader (Miniature) gives Fast leaves holed shadows, the game's own included; one that leaves it to Iris's alpha test (BSL) does not."
    ],
    "fileInfo": {
     "WavingWhitelist.java": {
@@ -620,7 +620,7 @@
    "fileInfo": {
     "shaders/include/sway.glsl": {
      "kind": "shader",
-     "lines": 223,
+     "lines": 227,
      "guard": ""
     }
    }
@@ -649,7 +649,7 @@
     },
     "shaders/core/foliage_legacy.vsh": {
      "kind": "shader",
-     "lines": 190,
+     "lines": 192,
      "guard": ""
     },
     "shaders/core/foliage_legacy.fsh": {
@@ -664,7 +664,7 @@
     },
     "shaders/core/foliage_legacy_1_20.vsh": {
      "kind": "shader",
-     "lines": 189,
+     "lines": 191,
      "guard": ""
     }
    }
@@ -965,7 +965,7 @@
     "mixin/iris/ShaderCreatorMixin.java",
     "mixin/iris/IrisMixinPlugin.java"
    ],
-   "summary": "Per pack, builds copies of the pack's programs (terrain cutout, shadow cutout; from 1.21.1 also solid terrain and solid shadow, for Fast leaves) through Iris's own createShader/createShadowShader, with sway.glsl spliced into the translated vertex shader (iris_Position replaced).",
+   "summary": "Per pack, builds copies of the pack's programs (terrain cutout, shadow cutout; also solid terrain and solid shadow, for Fast leaves) through Iris's own createShader/createShadowShader, with sway.glsl spliced into the translated vertex shader (iris_Position replaced).",
    "details": [
     "ShaderCreatorMixin redirects TransformPatcher.patchVanilla only while building (26.3 adds a Set<String> textureOverrides parameter).",
     "Meshes with the block ids the pack expects (BlockSensitiveBufferBuilder.beginBlock) in Iris's terrain format plus the two sway values.",
@@ -1166,7 +1166,7 @@
     "GpuFoliageSplit.bends: foliage is what Sway bends, so the snow block is never wrapped, meshed or given a forced render layer; the plant inside it is.",
     "GPU mesher: a snow block holding a Sway plant meshes the plant (raised as offset_y says, not at 8 layers), with its snowy variant; the anchor and a tall plant's length read the plant inside the snow.",
     "The plant inside changes through its block entity: ClientLevelMixin follows ClientLevel.sendBlockUpdated for the snow block.",
-    "GPU: a plant under the snow (held in it, or a tall plant's top half on it) keeps SNOW_LADEN_SWAY (20%) of its sway, wind included, scaled into its wave weight as it is meshed (GpuFoliageRenderer); pushes are untouched. No shader changes.",
+    "GPU: a plant under the snow (held in it, or a tall plant's top half on it) keeps SNOW_LADEN_SWAY (20%) of its calm sway and SNOW_LADEN_WIND (80%) of the weather's wind; pushes are untouched. It is meshed with the wind's share of its wave weight and marked still without steady, a pair nothing else sets, which the shaders read as keeping MC2_LADEN_CALM (0.25, the one over the other) of the calm sway: sway.glsl, and LADEN_CALM in both legacy vsh. Leaves under snow keep the one 20% for both, so they never part from their neighbours. No shader changes.",
     "snowVariants off in its client config: the plain model everywhere, as the chunk mesh."
    ],
    "pitfalls": [
@@ -2470,7 +2470,7 @@
   },
   "gpu/GpuFoliageRenderer.java": {
    "kind": "java",
-   "lines": 4236,
+   "lines": 4248,
    "guard": "//? >=1.20.1 {"
   },
   "gpu/GpuFoliageSplit.java": {
@@ -2775,7 +2775,7 @@
   },
   "shaders/core/foliage_legacy.vsh": {
    "kind": "shader",
-   "lines": 190,
+   "lines": 192,
    "guard": ""
   },
   "shaders/core/foliage_legacy_1_20.json": {
@@ -2785,7 +2785,7 @@
   },
   "shaders/core/foliage_legacy_1_20.vsh": {
    "kind": "shader",
-   "lines": 189,
+   "lines": 191,
    "guard": ""
   },
   "shaders/core/foliage_modern.fsh": {
@@ -2810,7 +2810,7 @@
   },
   "shaders/include/sway.glsl": {
    "kind": "shader",
-   "lines": 223,
+   "lines": 227,
    "guard": ""
   }
  },

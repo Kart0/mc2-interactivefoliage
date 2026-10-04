@@ -775,11 +775,16 @@ public final class GpuFoliageRenderer {
 
 	private static final Predicate<BlockState> FOLIAGE = GpuFoliageSplit::mayHoldFoliage;
 	/**
-	 * How much of its sway a plant under Snow! Real Magic's snow keeps, as if the snow weighed it down: a little less
-	 * than a plant keeps while an entity pushes it (MC2_PUSHED_SWAY in sway.glsl). Its wind is scaled with it; a push
-	 * moves it as far as any other.
+	 * How much of its calm sway a plant under Snow! Real Magic's snow keeps, as if the snow weighed it down: a little less
+	 * than a plant keeps while an entity pushes it (MC2_PUSHED_SWAY in sway.glsl). A push moves it as far as any other.
 	 */
 	private static final float SNOW_LADEN_SWAY = 0.20F;
+	/**
+	 * How much of the weather's wind such a plant keeps: nearly all of it, a storm shaking it whatever lies on it. The
+	 * plant is meshed with this much of its weight and marked still without steady, which the shaders read as keeping
+	 * only MC2_LADEN_CALM of its calm sway: that constant has to be SNOW_LADEN_SWAY over this.
+	 */
+	private static final float SNOW_LADEN_WIND = 0.80F;
 
 	private static ModelBlockRenderer modelRenderer;
 	//? >=26.1.2 {
@@ -4047,14 +4052,21 @@ public final class GpuFoliageRenderer {
 								: shelter.exposureAt(pos.getX(), anchor.cellY, pos.getZ(), anchor.length);
 						anchor.still = false;
 						// A plant under Snow! Real Magic's snow -- held in it, or the top half of one that is -- is weighed
-						// down, in calm weather and in the wind alike. Either still bends as far as any other when pushed.
-						anchor.waving = inSnow || SnowRealMagicCompat.standsOnSnow(level, pos, state) ? SNOW_LADEN_SWAY : 1.0F;
+						// down. Either still bends as far as any other when pushed.
+						boolean laden = inSnow || SnowRealMagicCompat.standsOnSnow(level, pos, state);
+						anchor.waving = laden ? SNOW_LADEN_SWAY : 1.0F;
 						// A block of the waving whitelist waves as hard as its group says, and leaves as a field, which the wind
 						// reaches wherever it is so that neighbouring blocks never part.
 						anchor.waving *= WavingWhitelist.intensityOf(state.getBlock());
 						anchor.field = WavingWhitelist.wavesAsField(state.getBlock());
 						anchor.restY = WavingWhitelist.restsOnLeaves(state.getBlock()) ? pos.getY() : SwayAnchor.NOT_RESTING;
 						anchor.steady = anchor.field;
+						// Weighed down in calm weather only: the weather's wind moves it nearly as far as any other plant. A
+						// field under snow keeps the one weight for both, as its neighbours it must not part from.
+						if (laden && !anchor.field) {
+							anchor.waving *= SNOW_LADEN_WIND / SNOW_LADEN_SWAY;
+							anchor.still = true;
+						}
 						// A field's reach is worked out at each corner instead, the same for every block sharing it.
 						if (anchor.field) {
 							anchor.exposure = 1.0F;
