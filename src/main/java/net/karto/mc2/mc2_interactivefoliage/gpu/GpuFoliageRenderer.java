@@ -1980,21 +1980,14 @@ public final class GpuFoliageRenderer {
 
 	/**
 	 * Whether leaves can be drawn solid now, as the game's Fast leaves are: with a pipeline that keeps every pixel, which
-	 * the renderer has on 26.3 for the terrain's shaders, Sodium's and its own, and for a shader pack whose solid programs
-	 * the mod could copy; from 1.21.11 to 26.2, for the terrain's shaders and its own so far.
+	 * the renderer has from 1.21.11 for the terrain's shaders, Sodium's and its own -- where one of those copies does not
+	 * compile the leaves are drawn cut out instead, see opaqueOf -- and for a shader pack whose solid programs the mod
+	 * could copy. Only under a pack whose solid programs it could not are Fast leaves left to the game.
 	 */
 	private static boolean canDrawOpaqueLeaves() {
-		//? >=26.3 {
+		//? >=1.21.11 {
 		return !IrisCompat.shaderPackInUse() || IrisCompat.hasOpaquePrograms();
-		//?} elif >=1.21.11 {
-		/*// Sodium's solid copy is written for Sodium 0.8 so far, which is what 1.21.11 has, and a shader pack's solid programs
-		// are only tried there yet.
-		//? <26.1.2 {
-		/^return !IrisCompat.shaderPackInUse() || IrisCompat.hasOpaquePrograms();
-		^///?} else {
-		return !SodiumBridge.drawsChunks() && !IrisCompat.shaderPackInUse();
-		//?}
-		*///?} else {
+		//?} else {
 		/*return false;
 		*///?}
 	}
