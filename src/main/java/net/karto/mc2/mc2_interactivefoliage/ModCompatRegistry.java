@@ -22,6 +22,8 @@ public class ModCompatRegistry {
 	private static final List<Block> REGISTERED = new ArrayList<>();
 
 	private static boolean initialized;
+	/** Whether Snow! Real Magic's snow blocks were found and handed to Sway; see registerLate. */
+	private static boolean snowRealMagicRegistered;
 	private static int found;
 	private static int missing;
 
@@ -45,6 +47,22 @@ public class ModCompatRegistry {
 		registerSnowRealMagic();
 
 		ModTemplate.LOGGER.info("Foliage compat: {} blocks registered, {} not present", found, missing);
+	}
+
+	/**
+	 * Registers what was not there yet when {@link #initialize()} ran. On Fabric mods start in no promised order, and
+	 * Snow! Real Magic's blocks are registered by Kiwi as it starts: in a run where that came after this mod, its snow
+	 * was never handed to Sway, and the plants inside it were neither pushed nor shook their snow off. Called as the
+	 * models load, which is after every mod has started. Does nothing once the blocks were found.
+	 */
+	public static synchronized void registerLate() {
+		if (!initialized || snowRealMagicRegistered || !ModTemplate.xplat().isModLoaded("snowrealmagic")) {
+			return;
+		}
+		registerSnowRealMagic();
+		if (snowRealMagicRegistered) {
+			ModTemplate.LOGGER.info("Foliage compat: Snow! Real Magic's snow registered once its blocks were");
+		}
 	}
 
 	/**
@@ -329,11 +347,14 @@ public class ModCompatRegistry {
 				"snowrealmagic:snowy_plant",
 				"snowrealmagic:snowy_double_plant_lower",
 				"snowrealmagic:snowy_double_plant_upper"}) {
-			lookup(id).ifPresent(block -> SwayAPI.setBlockPipeline(block, List.of(
-					BuiltinBehaviors.ENTITY_COLLISION_KEY,
-					BuiltinBehaviors.PROXIMITY_FORCE_KEY,
-					BuiltinBehaviors.multiplierKey(1.0F)
-			)));
+			lookup(id).ifPresent(block -> {
+				SwayAPI.setBlockPipeline(block, List.of(
+						BuiltinBehaviors.ENTITY_COLLISION_KEY,
+						BuiltinBehaviors.PROXIMITY_FORCE_KEY,
+						BuiltinBehaviors.multiplierKey(1.0F)
+				));
+				snowRealMagicRegistered = true;
+			});
 		}
 	}
 
