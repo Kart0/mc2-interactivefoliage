@@ -79,6 +79,7 @@ import org.lwjgl.opengl.GL32;
 *///?}
 import com.mojang.blaze3d.vertex.BufferBuilder;
 import it.unimi.dsi.fastutil.longs.Long2FloatOpenHashMap;
+import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 //? >=1.21.1 {
 import com.mojang.blaze3d.vertex.ByteBufferBuilder;
@@ -283,6 +284,13 @@ public final class GpuFoliageRenderer {
 	private static final float LONG_STRAND_SWAY = 2.0F;
 	/** A strand hanging on leaves this long or shorter only moves as the leaves do; see SwayAnchor.hangOnLeaves. */
 	private static final int SHORT_HANGING_STRAND = 2;
+	/**
+	 * How a vine's free part sways, from where it starts to hang: straight as a strip of cloth, further the further
+	 * down, every strand at the same slant up to this many blocks of it. A longer one reaches no further at its tip, so
+	 * it hangs steeper, as a heavier one would. And how freely its tip sways, against a plant's.
+	 */
+	private static final float VINE_SPAN = 4.0F;
+	private static final float VINE_TIP_SWAY = 0.6F;
 
 	/**
 	 * How much of its sway a column loses per block of length, and how far that can go: a strand of
@@ -1180,11 +1188,17 @@ public final class GpuFoliageRenderer {
 		/** Column length is shared by every block of a strand, so it is resolved once per anchor. */
 		private final Map<BlockPos, Integer> lengthByAnchor = new HashMap<>();
 		/** Whether a strand starts on leaves, where its free part starts and how long it is, by anchor; see hangOnLeaves. */
-		private final Map<BlockPos, float[]> freeByAnchor = new HashMap<>();
+		private final Long2ObjectOpenHashMap<float[]> freeByAnchor = new Long2ObjectOpenHashMap<>();
 		/** Whether this is a block hanging on leaves while they wave; see hangOnLeaves. */
 		private boolean hangsOnLeaves;
 		/** Whether a push leaves it where it is: a block that follows the leaves, clinging to anything else. */
 		private boolean pushless;
+		/** Where each vine starts to hang free, and whether leaves hold it there, by anchor; see hangVine. */
+		private final Long2ObjectOpenHashMap<int[]> holdByAnchor = new Long2ObjectOpenHashMap<>();
+		/** Whether this block of a vine hangs free, below everything holding the strand; see hangVine. */
+		private boolean vineFree;
+		/** Whether this block of a vine moves as the leaves do: held by them, or hanging free from them. */
+		private boolean vineOnLeaves;
 		/** Where its free part starts, and how many blocks long it is: none for a strand held all the way down. */
 		private float freeTop;
 		private int freeLength;
@@ -1337,18 +1351,55 @@ public final class GpuFoliageRenderer {
 			if (hangsOnLeaves) {
 				return freeLength == 0 ? 0.0F : curveAt(freeTop - worldY, freeLength, true) * waving;
 			}
+			if (vineFree) {
+				// Straight, from nothing where it starts to hang to its tip.
+				return VINE_TIP_SWAY * Mth.clamp((freeTop - worldY) / Math.max(VINE_SPAN, freeLength), 0.0F, 1.0F) * waving;
+			}
 			return weightAt(worldY) * waving;
 		}
 
 		/**
 		 * How much of rain's wind reaches a vertex at this position: the plant's own, or for a field and a block hanging on
-		 * it, the corner's it sits on, which every block sharing that corner reads alike.
+		 * it, the corner's it sits on, which every block sharing that corner reads alike. Where a strand hangs free, below
+		 * what holds it, the whole of it reads one reach instead (see strandExposure): corner by corner each stretch of it,
+		 * and each side of a stretch, caught a different wind near a wall or a roof, and the strand twisted against it.
 		 */
 		float exposureAt(float worldX, float worldY, float worldZ) {
-			if (!(field || hangsOnLeaves) || fieldShelter == null) {
+			if (!(field || hangsOnLeaves || vineFree || vineOnLeaves) || fieldShelter == null) {
 				return exposure;
 			}
+			// The row a strand starts to hang from is shared with the block holding it, and reads the corner as that block
+			// does: read any other way the two parted there by as much as the wind reached them differently.
+			if ((vineFree || hangsOnLeaves && freeLength > 0) && worldY < freeTop - FREE_PART_MARGIN) {
+				return strandExposure();
+			}
 			return fieldShelter.cornerExposure(Math.round(worldX), cornerY(worldY), Math.round(worldZ));
+		}
+
+		/** How far below where a strand starts to hang free a vertex has to be to count as hanging free itself. */
+		private static final float FREE_PART_MARGIN = 0.01F;
+		/** The one reach of rain's wind each strand's free part reads, by anchor; see strandExposure. */
+		private final Long2FloatOpenHashMap strandExposureByAnchor = new Long2FloatOpenHashMap();
+
+		/**
+		 * How much of rain's wind reaches the part of this strand that hangs free: what reaches the four corners of its
+		 * column halfway down that part, as the leaves would read them, evened out. Worked out once per strand.
+		 */
+		private float strandExposure() {
+			long anchor = BlockPos.asLong(cellX, cellY, cellZ);
+			if (strandExposureByAnchor.containsKey(anchor)) {
+				return strandExposureByAnchor.get(anchor);
+			}
+			int middle = Math.round(freeTop - freeLength * 0.5F);
+			float sum = 0.0F;
+			for (int dx = 0; dx <= 1; dx++) {
+				for (int dz = 0; dz <= 1; dz++) {
+					sum += fieldShelter.cornerExposure(cellX + dx, middle, cellZ + dz);
+				}
+			}
+			float reach = sum / 4.0F;
+			strandExposureByAnchor.put(anchor, reach);
+			return reach;
 		}
 
 		/**
@@ -1375,7 +1426,12 @@ public final class GpuFoliageRenderer {
 		 * leaves do -- still and steady at once.
 		 */
 		boolean leafHeldAt(float worldX, float worldY, float worldZ) {
-			return hangsOnLeaves && still && steady && cornerPin(worldX, worldY, worldZ) == 0.0F;
+			if (vineFree) {
+				// A vine's free part moves with the leaf it hangs from all the way down: as that leaf does at the corner
+				// above this vertex, where the strand starts to hang.
+				worldY = freeTop;
+			}
+			return (hangsOnLeaves || vineOnLeaves) && still && steady && cornerPin(worldX, worldY, worldZ) == 0.0F;
 		}
 
 		/** 0 where a block holding the leaves still is among the eight around the corner nearest this position, else 1. */
@@ -1404,34 +1460,84 @@ public final class GpuFoliageRenderer {
 		}
 
 		/** How far a push moves a vertex at this height, as meshed: Sway's own weight, none for a block Sway does not push. */
-		float pushAt(float localY) {
-			return pushless ? 0.0F : pushWeightAt(localY);
+		float pushAt(float localY, float worldY) {
+			if (pushless) {
+				return 0.0F;
+			}
+			// A vine is only pushed where it hangs free, from nothing where something holds it.
+			return vineFree ? pushWeightAt(localY) * Mth.clamp(freeTop - worldY, 0.0F, 1.0F) : pushWeightAt(localY);
 		}
 
 		/**
-		 * Whether this strand hangs on leaves, and where it hangs free; false for one that clings mostly to anything else
-		 * -- a trunk, a wall -- which stands still, as its support does, and would cut through it if it moved as the leaves.
-		 * <p>
-		 * The blocks behind it decide: leaves behind more of its blocks than anything else, and it moves as they do; else it
-		 * stands still. One with nothing behind any block -- hanging free from the underside of a canopy -- goes by what is
-		 * above its top. One that moves as the leaves also sways as a plant where it hangs free: from its lowest block with
-		 * something behind it down to its tip, from that block down. Where something is behind it, it moves as the leaves
-		 * alone. A strand of one or two blocks only moves as the leaves. Worked out once per strand, each time its section
-		 * is meshed.
-		 * <p>
-		 * Strictly, only what is above its top decides, whatever is behind it: for a plant that hangs from the underside of
-		 * a block rather than clinging to a side, which hangs on leaves only when it literally hangs from them. Sets where
-		 * it hangs free either way; whether it then moves as the leaves is the caller's to set (hangsOnLeaves).
+		 * Sets this block of a vine up, block by block rather than the strand as a whole:
+		 * <ul>
+		 * <li>with leaves behind it, it moves exactly as they do, as a layer lying on them does, corners held still against
+		 * a trunk included, and nothing pushes it; while the leaves stand still, so does it;</li>
+		 * <li>with anything else solid behind it, it stands still and nothing pushes it;</li>
+		 * <li>below the lowest block with something behind it, it hangs free: straight as a strip of cloth (see VINE_SPAN),
+		 * from the movement of what holds it -- the leaves', or none -- growing evenly down to the tip, in calm weather
+		 * and in the weather's wind, whatever the leaves do; pushes bend it and never calm it.</li>
+		 * </ul>
+		 * A strand with nothing behind any of its blocks hangs from what is above its top.
 		 */
-		boolean hangOnLeaves(ClientLevel level, boolean strictly) {
+		void hangVine(ClientLevel level, BlockPos pos, BlockState state) {
+			long anchor = BlockPos.asLong(cellX, cellY, cellZ);
+			int[] hold = holdByAnchor.get(anchor);
+			if (hold == null) {
+				hold = measureHold(level);
+				holdByAnchor.put(anchor, hold);
+			}
+			int tipY = cellY - length + 1;
+			freeTop = hold[0];
+			freeLength = hold[0] - tipY;
+			boolean leavesWave = WavingWhitelist.leavesWave();
+			exposure = 1.0F;
+			if (pos.getY() >= hold[0]) {
+				waving = 0.0F;
+				pushless = true;
+				// Not against anything solid: with the leaves beside it, corner by corner.
+				vineOnLeaves = leavesWave && behind(level, pos, state) != BEHIND_OTHER;
+				still = vineOnLeaves;
+				steady = vineOnLeaves;
+				return;
+			}
+			vineFree = true;
+			vineOnLeaves = leavesWave && hold[1] != 0;
+			still = vineOnLeaves;
+			steady = true;
+		}
+
+		/** Where a vine starts to hang free -- the bottom of its lowest block with something behind -- and whether leaves hold it there. */
+		private int[] measureHold(ClientLevel level) {
+			BlockPos.MutableBlockPos at = new BlockPos.MutableBlockPos();
+			for (int y = cellY - length + 1; y <= cellY; y++) {
+				at.set(cellX, y, cellZ);
+				int behind = behind(level, at, level.getBlockState(at));
+				if (behind != BEHIND_NOTHING) {
+					return new int[] {y, behind == BEHIND_LEAVES ? 1 : 0};
+				}
+			}
+			// Nothing behind any of it: it hangs from what is above its top.
+			at.set(cellX, cellY + 1, cellZ);
+			return new int[] {cellY + 1, WavingWhitelist.isLeaves(level.getBlockState(at).getBlock()) ? 1 : 0};
+		}
+
+		/**
+		 * Whether this strand -- a hanging plant other than a vine, which hangVine sets up -- literally hangs from leaves:
+		 * what is above its top decides, whatever is beside it. It then moves as the leaves do and sways as a plant where
+		 * it hangs free, from its lowest block with something behind it down to its tip; a strand of one or two blocks
+		 * only moves as the leaves. Sets where it hangs free; whether it then moves as the leaves is the caller's to set
+		 * (hangsOnLeaves). Worked out once per strand, each time its section is meshed.
+		 */
+		boolean hangOnLeaves(ClientLevel level) {
 			freeLength = 0;
 			if (!hanging) {
 				return false;
 			}
-			BlockPos anchor = new BlockPos(cellX, cellY, cellZ);
+			long anchor = BlockPos.asLong(cellX, cellY, cellZ);
 			float[] known = freeByAnchor.get(anchor);
 			if (known == null) {
-				known = measureHang(level, anchor, strictly);
+				known = measureHang(level);
 				freeByAnchor.put(anchor, known);
 			}
 			if (known[0] == 0.0F) {
@@ -1442,38 +1548,24 @@ public final class GpuFoliageRenderer {
 			return true;
 		}
 
-		/** Whether the strand hangs on leaves (1 or 0), the top of its free part and how long it is; see hangOnLeaves. */
-		private float[] measureHang(ClientLevel level, BlockPos anchor, boolean strictly) {
-			// Strictly, only what is above decides: a strand not hanging from leaves is not walked at all.
-			if (strictly && !WavingWhitelist.isLeaves(level.getBlockState(anchor.above()).getBlock())) {
-				return new float[] {0.0F, 0.0F, 0.0F};
-			}
-			int tipY = cellY - length + 1;
-			BlockPos.MutableBlockPos at = new BlockPos.MutableBlockPos();
-			int onLeaves = 0;
-			int onOther = 0;
-			// The lowest block with something behind it: everything below it hangs free.
-			int heldY = cellY + 1;
-			for (int y = cellY; y >= tipY; y--) {
-				at.set(cellX, y, cellZ);
-				int behind = behind(level, at, level.getBlockState(at));
-				if (behind == BEHIND_LEAVES) {
-					onLeaves++;
-				} else if (behind == BEHIND_OTHER) {
-					onOther++;
-				}
-				if (behind != BEHIND_NOTHING) {
-					heldY = y;
-				}
-			}
-			boolean leaves = strictly || onLeaves + onOther == 0
-					? WavingWhitelist.isLeaves(level.getBlockState(anchor.above()).getBlock())
-					: onLeaves > onOther;
-			if (!leaves) {
+		/** Whether the strand hangs from leaves (1 or 0), the top of its free part and how long it is; see hangOnLeaves. */
+		private float[] measureHang(ClientLevel level) {
+			BlockPos.MutableBlockPos at = new BlockPos.MutableBlockPos(cellX, cellY + 1, cellZ);
+			// A strand not hanging from leaves is not walked at all, nor one too short to hang free.
+			if (!WavingWhitelist.isLeaves(level.getBlockState(at).getBlock())) {
 				return new float[] {0.0F, 0.0F, 0.0F};
 			}
 			if (length <= SHORT_HANGING_STRAND) {
 				return new float[] {1.0F, 0.0F, 0.0F};
+			}
+			int tipY = cellY - length + 1;
+			// The lowest block with something behind it: everything below it hangs free.
+			int heldY = cellY + 1;
+			for (int y = cellY; y >= tipY; y--) {
+				at.set(cellX, y, cellZ);
+				if (behind(level, at, level.getBlockState(at)) != BEHIND_NOTHING) {
+					heldY = y;
+				}
 			}
 			// Nothing behind any of it: it hangs free from its anchor, as any hanging plant.
 			return heldY > cellY ? new float[] {1.0F, anchorY, length} : new float[] {1.0F, heldY, heldY - tipY};
@@ -1490,16 +1582,17 @@ public final class GpuFoliageRenderer {
 		private static int behind(ClientLevel level, BlockPos pos, BlockState state) {
 			boolean clings = false;
 			int found = BEHIND_NOTHING;
+			BlockPos.MutableBlockPos beside = new BlockPos.MutableBlockPos();
 			for (Direction side : Direction.Plane.HORIZONTAL) {
 				BooleanProperty face = PipeBlock.PROPERTY_BY_DIRECTION.get(side);
 				if (state.hasProperty(face) && state.getValue(face)) {
 					clings = true;
-					found = Math.max(found, supportAt(level, pos.relative(side), side.getAxis()));
+					found = Math.max(found, supportAt(level, beside.setWithOffset(pos, side), side.getAxis()));
 				}
 			}
 			if (!clings) {
 				for (Direction side : Direction.Plane.HORIZONTAL) {
-					found = Math.max(found, supportAt(level, pos.relative(side), side.getAxis()));
+					found = Math.max(found, supportAt(level, beside.setWithOffset(pos, side), side.getAxis()));
 				}
 			}
 			// Leaves on any side outweigh anything else on another.
@@ -3534,7 +3627,7 @@ public final class GpuFoliageRenderer {
 					anchor.cellZ - regionOrigin.getZ()));
 			weightScratch.putFloat(packWeights(anchor.waveAt(regionOrigin.getY() + y)
 						* anchor.pinAt(regionOrigin.getX() + x, regionOrigin.getY() + y, regionOrigin.getZ() + z),
-					anchor.pushAt(localY), anchor.still, anchor.steady, anchor.exposureAt(regionOrigin.getX() + x,
+					anchor.pushAt(localY, regionOrigin.getY() + y), anchor.still, anchor.steady, anchor.exposureAt(regionOrigin.getX() + x,
 							regionOrigin.getY() + y, regionOrigin.getZ() + z), anchor.leafHeldAt(regionOrigin.getX() + x,
 							regionOrigin.getY() + y, regionOrigin.getZ() + z)));
 			return this;
@@ -3620,7 +3713,7 @@ public final class GpuFoliageRenderer {
 					anchor.cellZ - regionOrigin.getZ()));
 			weightScratch.putFloat(packWeights(anchor.waveAt(regionOrigin.getY() + y)
 						* anchor.pinAt(regionOrigin.getX() + x, regionOrigin.getY() + y, regionOrigin.getZ() + z),
-					anchor.pushAt(localY), anchor.still, anchor.steady, anchor.exposureAt(regionOrigin.getX() + x,
+					anchor.pushAt(localY, regionOrigin.getY() + y), anchor.still, anchor.steady, anchor.exposureAt(regionOrigin.getX() + x,
 							regionOrigin.getY() + y, regionOrigin.getZ() + z), anchor.leafHeldAt(regionOrigin.getX() + x,
 							regionOrigin.getY() + y, regionOrigin.getZ() + z)));
 		}
@@ -3848,7 +3941,7 @@ public final class GpuFoliageRenderer {
 				float worldX = regionOrigin.getX() + x + quad.position(vertex).x();
 				float worldZ = regionOrigin.getZ() + z + quad.position(vertex).z();
 				weightScratch.putFloat(packWeights(anchor.waveAt(worldY) * anchor.pinAt(worldX, worldY, worldZ),
-						anchor.pushAt(localY), anchor.still, anchor.steady, anchor.exposureAt(worldX, worldY, worldZ),
+						anchor.pushAt(localY, worldY), anchor.still, anchor.steady, anchor.exposureAt(worldX, worldY, worldZ),
 						anchor.leafHeldAt(worldX, worldY, worldZ)));
 			}
 		};
@@ -3925,38 +4018,22 @@ public final class GpuFoliageRenderer {
 						if (anchor.field) {
 							anchor.exposure = 1.0F;
 						}
-						// A block that follows the leaves -- a vine -- moves as the leaves it hangs on do. While they wave it moves
-						// with them all over, and sways as the plant it is on top of that, from where it hangs: marked still and
-						// steady at once, which nothing else is, the wind reaching it as far as it reaches the leaves at the same
-						// corner (see exposureAt). A push never calms it, so it keeps with them. While they stand still, what they
-						// hold stands still too and only the part hanging free sways, as a plant; a short strand, held all the way,
-						// is only pushed. One that clings mostly to anything else -- a trunk -- neither waves nor bends, as what
-						// it clings to.
-						// Any other hanging plant does the same while it literally hangs from leaves that wave, and is left a
-						// plant as any other otherwise.
+						// A vine goes block by block: with the leaves behind it, still against anything else, and hanging free
+						// below both; see SwayAnchor.hangVine. Any other hanging plant moves with the leaves while it literally
+						// hangs from leaves that wave -- marked still and steady at once, which nothing else is, the wind reaching
+						// it as far as it reaches the leaves at the same corner (see exposureAt) -- and is left a plant as any
+						// other otherwise.
 						anchor.hangsOnLeaves = false;
 						anchor.pushless = false;
-						boolean follows = WavingWhitelist.followsLeaves(state.getBlock());
-						// Any other hanging plant only changes while the leaves wave: it is not measured otherwise.
-						if (follows || anchor.hanging && WavingWhitelist.leavesWave()) {
-							boolean onLeaves = anchor.hangOnLeaves(level, !follows);
-							if (onLeaves && WavingWhitelist.leavesWave()) {
-								anchor.hangsOnLeaves = true;
-								anchor.still = true;
-								anchor.steady = true;
-								anchor.exposure = 1.0F;
-							} else if (follows && onLeaves && anchor.freeLength > 0) {
-								// The leaves stand still -- switched off, or Fast -- and so does all of it they hold; the part
-								// hanging free below still sways as the plant it is, in calm weather and in the weather's wind.
-								anchor.hangsOnLeaves = true;
-								anchor.still = false;
-								anchor.steady = false;
-							} else if (follows) {
-								anchor.waving = 0.0F;
-								anchor.still = false;
-								anchor.steady = false;
-								anchor.pushless = !onLeaves;
-							}
+						anchor.vineFree = false;
+						anchor.vineOnLeaves = false;
+						if (anchor.hanging && WavingWhitelist.followsLeaves(state.getBlock())) {
+							anchor.hangVine(level, pos, state);
+						} else if (anchor.hanging && WavingWhitelist.leavesWave() && anchor.hangOnLeaves(level)) {
+							anchor.hangsOnLeaves = true;
+							anchor.still = true;
+							anchor.steady = true;
+							anchor.exposure = 1.0F;
 						}
 						// Another mod may draw the plant lower than its block, as the chunk mesh shows it.
 						float lift = TerrainSlabsCompat.offsetY(level, pos, state) + raised;

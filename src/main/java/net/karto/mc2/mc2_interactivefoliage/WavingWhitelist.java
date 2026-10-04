@@ -297,9 +297,9 @@ public final class WavingWhitelist {
 	// ==================================================================
 	// Follow the leaves -- blocks that hang on leaves, like vines
 	// ==================================================================
-	// They only wave while waving leaves is on: as the plants they are, in calm weather and in the weather's wind, as hard
-	// as the leaves, and a push leaves their sway as it is so they keep with the leaves. With it off, the renderer neither
-	// sways them nor moves them in the wind. Sway pushes them either way.
+	// Block by block: with leaves behind it a block moves exactly as they do, with anything else solid behind it it stands
+	// still, and below both the strand hangs free, straight as a strip of cloth, in calm weather and in the weather's wind.
+	// Only the part hanging free is pushed. See GpuFoliageRenderer's SwayAnchor.hangVine.
 
 	private static void followLeaves() {
 		// Vanilla
