@@ -233,11 +233,15 @@ public final class GpuFoliageRenderer {
 	private static final long UPLOAD_BUDGET_SHARE = 2L;
 	/**
 	 * How long a frame may spend rebuilding sections already on screen whose light or blocks changed, see
-	 * {@link #URGENT}: long enough for the thirty-odd sections around a torch, so that their light reaches the foliage on
-	 * the frame it changes, as measured -- 25 to 55 ms in one frame, against 2 to 5 frames within the frame's own
-	 * budget and 10 to 27 before that. What does not fit goes on in the next frame, still ahead of everything else.
+	 * {@link #URGENT}: twice what the frame gets for everything else, within these bounds. What does not fit goes on in
+	 * the next frame, still ahead of everything else.
+	 * <p>
+	 * All of them in the frame they are queued was tried, up to 50 ms: one frame for a torch where a section meshes in a
+	 * millisecond, but where it takes two to five -- 70 to 200 ms for the forty around a torch, measured on 26.3 --
+	 * that was several frames of 50 ms in a row, a stutter worse than light a few frames late.
 	 */
-	private static final long URGENT_BUDGET_NANOS = 50_000_000L;
+	private static final long URGENT_BUDGET_MIN_NANOS = 8_000_000L;
+	private static final long URGENT_BUDGET_MAX_NANOS = 24_000_000L;
 	/** When the frame before this one was drawn, and how long rebuilds may take in this one. */
 	private static long lastFrameNanos;
 	private static long frameBudgetNanos = REBUILD_BUDGET_NANOS;
@@ -1722,6 +1726,22 @@ public final class GpuFoliageRenderer {
 	/** Light arrived or changed in a section. Only sections already holding foliage care. */
 	public static void onLightChanged(int sectionX, int sectionY, int sectionZ) {
 		long key = SectionPos.asLong(sectionX, sectionY, sectionZ);
+		// A light that keeps changing -- one carried about, with a dynamic lights mod, which asks for the sections around
+		// it again every tick it moves -- is not rebuilt at once each time: that would be every section around the player,
+		// on the render thread, twenty times a second. Past the first, it takes its turn within the frame's budget.
+		long now = System.currentTimeMillis();
+		long last = LIGHT_CHANGED_AT.put(key, now);
+		if (LIGHT_CHANGED_AT.size() > 8192) {
+			LIGHT_CHANGED_AT.clear();
+		}
+		if (now - last < LIGHT_STREAM_MILLIS) {
+			Region region = REGIONS.get(regionKeyOf(key));
+			if (region != null && region.sections[slotOf(key)] != null && DIRTY.add(key)) {
+				burstLightQueued++;
+				burstLightStreamed++;
+			}
+			return;
+		}
 		if (queueUrgent(key)) {
 			burstLightQueued++;
 		}
@@ -1862,6 +1882,7 @@ public final class GpuFoliageRenderer {
 		URGENT.clear();
 		URGENT_REGIONS.clear();
 		// The textures are the atlas's, which a resource reload makes anew.
+		LIGHT_CHANGED_AT.clear();
 		SPRITE_ANIMATES.clear();
 		STATE_SPRITES.clear();
 		// The renderer snapshots options such as smooth lighting, which are among the things that
@@ -3399,11 +3420,15 @@ public final class GpuFoliageRenderer {
 	/**
 	 * The queued sections that are on screen already and show a change the player just made or saw: a block placed or
 	 * broken, the light of a torch. They are rebuilt before anything else, all of them on the frame they are queued
-	 * where {@link #URGENT_BUDGET_NANOS} allows, and their regions uploaded on that frame too: the chunk mesh shows the
+	 * where their budget allows, and their regions uploaded on that frame too: the chunk mesh shows the
 	 * same change within a frame or two, and foliage that follows it several frames later reads as light arriving late.
 	 * A section meshed for the first time is not urgent: nothing of it is on screen yet.
 	 */
 	private static final LongOpenHashSet URGENT = new LongOpenHashSet();
+	/** When each section's light last changed, and how soon after that another change counts as a light on the move. */
+	private static final it.unimi.dsi.fastutil.longs.Long2LongOpenHashMap LIGHT_CHANGED_AT =
+			new it.unimi.dsi.fastutil.longs.Long2LongOpenHashMap();
+	private static final long LIGHT_STREAM_MILLIS = 3_000L;
 	/** The regions the urgent sections rebuilt this frame are in. */
 	private static final LongOpenHashSet URGENT_REGIONS = new LongOpenHashSet();
 
@@ -3426,6 +3451,7 @@ public final class GpuFoliageRenderer {
 			return 0L;
 		}
 		long begin = System.nanoTime();
+		long urgentBudget = Math.max(URGENT_BUDGET_MIN_NANOS, Math.min(frameBudgetNanos * 2L, URGENT_BUDGET_MAX_NANOS));
 		var urgent = URGENT.iterator();
 		while (urgent.hasNext()) {
 			long key = urgent.nextLong();
@@ -3441,7 +3467,7 @@ public final class GpuFoliageRenderer {
 			burstMeshNanos += taken;
 			burstMeshMaxNanos = Math.max(burstMeshMaxNanos, taken);
 			URGENT_REGIONS.add(regionKeyOf(key));
-			if (System.nanoTime() - begin >= URGENT_BUDGET_NANOS) {
+			if (System.nanoTime() - begin >= urgentBudget) {
 				break;
 			}
 		}
@@ -3491,6 +3517,7 @@ public final class GpuFoliageRenderer {
 	private static long burstStartNanos;
 	private static int burstFrames;
 	private static int burstLightQueued;
+	private static int burstLightStreamed;
 	private static int burstPeakQueue;
 	private static int burstRebuilt;
 	private static long burstMeshNanos;
@@ -3520,16 +3547,18 @@ public final class GpuFoliageRenderer {
 				burstFrames = 1;
 			}
 			ModTemplate.LOGGER.debug(String.format(java.util.Locale.ROOT,
-					"Foliage burst: %.0f ms over %d frames; %d sections rebuilt (%d queued by light, peak queue %d), "
+					"Foliage burst: %.0f ms over %d frames; %d sections rebuilt (%d queued by light, %d of them by a light "
+							+ "on the move, peak queue %d), "
 							+ "meshing %.1f ms in all, %.1f ms the slowest; %d region uploads, %.1f ms in all, %.1f ms the "
 							+ "slowest, longest wait before upload %d ms",
-					(System.nanoTime() - burstStartNanos) / 1.0E6D, burstFrames, burstRebuilt, burstLightQueued,
+					(System.nanoTime() - burstStartNanos) / 1.0E6D, burstFrames, burstRebuilt, burstLightQueued, burstLightStreamed,
 					burstPeakQueue, burstMeshNanos / 1.0E6D, burstMeshMaxNanos / 1.0E6D, burstUploads,
 					burstUploadNanos / 1.0E6D, burstUploadMaxNanos / 1.0E6D, burstWaitMaxMillis));
 		}
 		burstStartNanos = 0L;
 		burstFrames = 0;
 		burstLightQueued = 0;
+		burstLightStreamed = 0;
 		burstPeakQueue = 0;
 		burstRebuilt = 0;
 		burstMeshNanos = 0L;
