@@ -140,7 +140,7 @@
    "fileInfo": {
     "gpu/GpuFoliageRenderer.java": {
      "kind": "java",
-     "lines": 4800,
+     "lines": 4856,
      "guard": "//? >=1.20.1 {"
     }
    }
@@ -165,7 +165,7 @@
    "fileInfo": {
     "gpu/GpuFoliageRenderer.java": {
      "kind": "java",
-     "lines": 4800,
+     "lines": 4856,
      "guard": "//? >=1.20.1 {"
     }
    }
@@ -190,7 +190,7 @@
    "fileInfo": {
     "gpu/GpuFoliageRenderer.java": {
      "kind": "java",
-     "lines": 4800,
+     "lines": 4856,
      "guard": "//? >=1.20.1 {"
     }
    }
@@ -224,7 +224,7 @@
    "fileInfo": {
     "gpu/GpuFoliageRenderer.java": {
      "kind": "java",
-     "lines": 4800,
+     "lines": 4856,
      "guard": "//? >=1.20.1 {"
     },
     "mixin/LevelPassMixin.java": {
@@ -250,7 +250,7 @@
    "fileInfo": {
     "gpu/GpuFoliageRenderer.java": {
      "kind": "java",
-     "lines": 4800,
+     "lines": 4856,
      "guard": "//? >=1.20.1 {"
     }
    }
@@ -1203,6 +1203,59 @@
    "fileInfo": {}
   },
   {
+   "id": "beryl-bridge",
+   "label": "BerylBridge",
+   "group": "vulkanmod",
+   "kind": "component",
+   "loaders": [
+    "fabric"
+   ],
+   "files": [
+    "gpu/BerylBridge.java",
+    "gpu/BerylFoliageShader.java",
+    "mixin/BerylShadowMixin.java"
+   ],
+   "summary": "Lights the foliage as Beryl lights its terrain and draws it into Beryl's shadow map. Beryl puts one of its Vulkan pipelines under the game's render pipelines while its shaders are on (ShaderRenderPipeline.redirectPipeline); the mod does the same for its own: a pipeline built from Beryl's terrain shaders while Beryl draws the terrain, one from its shadow shaders while it draws its shadow map, none otherwise. Everything by name, never compiled against.",
+   "details": [
+    "BerylFoliageShader copies Beryl's vertex shader from its jar as the game runs and changes it in place: plain vertices instead of VulkanMod's compressed ones (Beryl's source carries both), the region's corner from the mod's transform instead of Beryl's push constant and section block, the block id's input given to SwayCell and SwayWeights, material 13 (Beryl's foliage) for every plant, the sway before anything is worked out from the position. Each change has to find its place exactly once; where one does not there is no copy and the foliage stays on the mod's own shader. Beryl's fragment shaders are used untouched.",
+    "Uniforms: Beryl's shared blocks are filled by VulkanMod from suppliers it looks up by field name (MVP, LightSpaceMat, LightDir...). A block declared by its size alone is named \"UBO <binding>\" and is bound from the render pass when the pass holds a uniform of that name, which is how the region's transform, the game's globals, the sway settings and the pushes get in. VulkanMod lays a pipeline's bindings out by number, so they must be contiguous: the region takes binding 2 (Beryl's section block), the other three follow Beryl's last texture (6 on, or 8 on with coloured shadows; 5 on in the shadow pipeline).",
+    "Colours: Beryl overwrites BufferBuilder.setColor(int) to raise colours to 2.2 for as long as it draws a frame (RenderingPipeline.useSrgbColors), and its terrain shader does so again. The 1.21.1-1.21.11 vertex writer writes the colour raised to 1/2.2 while that is on, so the buffer always holds the plain colour.",
+    "Shadow map: BerylShadowMixin (@Pseudo, ShadowMap.renderShadowMap, at the VRenderSystem.applyProjectionMatrix call between Beryl's terrain and its entities) calls drawBerylShadow, which draws every section near the player into the targets Beryl has the game draw entity shadows into (RenderSystem.outputColorTextureOverride / outputDepthTextureOverride). The shadow shader places vertices by LightSpaceMat alone, so no matrix is handed over. Nothing is drawn unless Beryl's shadow pipeline went under the mod's.",
+    "Rebuilt when Beryl's options change (coloured shadows, textured sun, waving water, SSR: they are defines of its shaders). Written against Beryl 0.2.1-alpha and VulkanMod 0.6.8; tested on 1.21.11 Fabric (light, tint, shadows received and cast)."
+   ],
+   "fileInfo": {
+    "gpu/BerylBridge.java": {
+     "kind": "java",
+     "lines": 455,
+     "guard": "//? >=1.20.1 {"
+    },
+    "gpu/BerylFoliageShader.java": {
+     "kind": "java",
+     "lines": 147,
+     "guard": ""
+    },
+    "mixin/BerylShadowMixin.java": {
+     "kind": "java",
+     "lines": 34,
+     "guard": "//? >=1.20.1 {"
+    }
+   }
+  },
+  {
+   "id": "beryl",
+   "label": "Beryl",
+   "group": "external",
+   "kind": "mod",
+   "loaders": [
+    "fabric"
+   ],
+   "versions": [
+    "<26.2"
+   ],
+   "summary": "A shader renderer for VulkanMod by the same author: not shader packs, one built-in set of shaders (shadow map, materials by block id, bloom, SSR, tone mapping), toggled by a key. Draws in plain light and converts at the end. 0.2.0 (1.21.1), 0.2.1 (1.21.11, 26.1.2).",
+   "fileInfo": {}
+  },
+  {
    "id": "srm",
    "label": "Snow! Real Magic",
    "group": "external",
@@ -2071,6 +2124,31 @@
    "label": "draws with"
   },
   {
+   "source": "renderer",
+   "target": "beryl-bridge",
+   "label": "asks"
+  },
+  {
+   "source": "beryl-bridge",
+   "target": "beryl",
+   "label": "reaches by name"
+  },
+  {
+   "source": "beryl-bridge",
+   "target": "vulkanmod",
+   "label": "builds pipelines through"
+  },
+  {
+   "source": "beryl-bridge",
+   "target": "sway-glsl",
+   "label": "splices"
+  },
+  {
+   "source": "beryl-bridge",
+   "target": "vulkan-bridge",
+   "label": "needs"
+  },
+  {
    "source": "level-pass",
    "target": "iris",
    "label": "view bobbing from"
@@ -2453,6 +2531,17 @@
     }
    },
    {
+    "label": "Beryl (VulkanMod shaders)",
+    "cells": {
+     "1.20.1": "no Beryl",
+     "1.21.1": "fabric: GPU renderer stays out with VulkanMod 0.6.7",
+     "1.21.11": "fabric: done (0.2.1: Beryl's light, shadows received and cast)",
+     "26.1.2": "fabric: written, not tested yet (0.2.1)",
+     "26.2": "no VulkanMod",
+     "26.3": "no VulkanMod"
+    }
+   },
+   {
     "label": "Snow! Real Magic",
     "cells": {
      "1.20.1": "fabric: done (SwayVariantModels, GPU plant + snowy variant, particles) | forge: done (Indigo mixins, vanilla and Embeddium, particles)",
@@ -2505,6 +2594,7 @@
    "plugin": null,
    "required": true,
    "mixins": [
+    "BerylShadowMixin",
     "ClientLevelMixin",
     "LevelExtractorMixin",
     "SectionMeshSwapMixin",
@@ -2567,6 +2657,16 @@
    "lines": 333,
    "guard": ""
   },
+  "gpu/BerylBridge.java": {
+   "kind": "java",
+   "lines": 455,
+   "guard": "//? >=1.20.1 {"
+  },
+  "gpu/BerylFoliageShader.java": {
+   "kind": "java",
+   "lines": 147,
+   "guard": ""
+  },
   "gpu/GpuFoliageInteraction.java": {
    "kind": "java",
    "lines": 394,
@@ -2579,7 +2679,7 @@
   },
   "gpu/GpuFoliageRenderer.java": {
    "kind": "java",
-   "lines": 4800,
+   "lines": 4856,
    "guard": "//? >=1.20.1 {"
   },
   "gpu/GpuFoliageSplit.java": {
@@ -2645,6 +2745,11 @@
   "gpu/WindShelter.java": {
    "kind": "java",
    "lines": 412,
+   "guard": "//? >=1.20.1 {"
+  },
+  "mixin/BerylShadowMixin.java": {
+   "kind": "java",
+   "lines": 34,
    "guard": "//? >=1.20.1 {"
   },
   "mixin/blockgetter/BlockGetterMixinPlugin.java": {

@@ -9,13 +9,12 @@ import java.io.InputStream;
 import java.lang.reflect.Method;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.IdentityHashMap;
 import java.util.List;
-import java.util.Set;
+import java.util.Map;
 
 /**
- * Lights the foliage as Beryl lights the terrain while Beryl's shaders are on.
+ * Lights the foliage as Beryl lights the terrain while Beryl's shaders are on, and draws it into Beryl's shadow map.
  * <p>
  * Beryl is a shader renderer for VulkanMod with one set of shaders of its own, which work the light, the shadows and
  * the fog out themselves. It draws the game's entities and particles through them by putting one of its Vulkan
@@ -25,42 +24,56 @@ import java.util.Set;
  * ({@link BerylFoliageShader}), and puts it under its own while Beryl draws the terrain, and takes it away again
  * otherwise.
  * <p>
- * The pipeline is built as Beryl builds its own. The two blocks Beryl's shaders share are filled by VulkanMod from
+ * Beryl draws its shadow map from its own chunk meshes, which the foliage was left out of, so a plant cast no shadow.
+ * While Beryl draws its shadow map, the pipeline under the mod's is one built the same way from the shaders Beryl draws
+ * the terrain into it with, and the foliage is drawn with it once Beryl's terrain is in.
+ * <p>
+ * The pipelines are built as Beryl builds its own. The blocks Beryl's shaders share are filled by VulkanMod from
  * values it looks up by name, as they are for the terrain; the four the sway reads are bound from what the mod hands the
  * render pass, which VulkanMod finds by the name it gives a block declared by its size alone: {@code "UBO "} and its
- * binding. The textures are found by name too, and the shadow map is the one Beryl has bound by then.
+ * binding. VulkanMod lays a pipeline's bindings out by their number, so those four take the one Beryl's block of section
+ * offsets leaves free and the three after Beryl's last. The textures are found by name too, and the shadow map read is
+ * the one Beryl has bound by then.
  * <p>
  * Neither mod is compiled against: everything is reached by name, on Beryl 0.2.1 and VulkanMod 0.6.8. Whatever is not
- * found, or does not compile, leaves the foliage on the mod's own shader, as it is without this class.
+ * found, or does not compile, leaves the foliage on the mod's own shader and out of the shadow map, as it is without
+ * this class.
  */
 final class BerylBridge {
 
 	/** The name VulkanMod finds the region's transform by in what the render pass was handed. */
 	static final String REGION = "UBO " + BerylFoliageShader.REGION_BINDING;
-	/** The name Beryl's terrain pipeline reads the lightmap by. */
-	static final String LIGHT_TEXTURE = "LightTexture";
 
 	private static final boolean LOADED = ModTemplate.xplat().isModLoaded("beryl")
 			&& ModTemplate.xplat().isModLoaded("vulkanmod");
 	/** Vertex shader stage alone, as Vulkan numbers it. */
 	private static final int VERTEX_STAGE = 1;
+	/** The name Beryl's terrain pipeline reads the lightmap by, and the one its shadow pipeline does. */
+	private static final String LIT_LIGHT_TEXTURE = "LightTexture";
+	private static final String SHADOW_LIGHT_TEXTURE = "Sampler2";
 
-	/** The render pipelines Beryl's lit pipeline is under at the moment. */
-	private static final Set<Object> REDIRECTED = Collections.newSetFromMap(new IdentityHashMap<>());
+	/** What is under each of the mod's render pipelines at the moment, for those with one of these under them. */
+	private static final Map<Object, Object> UNDER = new IdentityHashMap<>();
 	private static Object litPipeline;
-	/** Which of Beryl's options the lit pipeline was built for; they change what its shaders declare. */
+	private static Object shadowPipeline;
+	/** Which of Beryl's options the pipelines were built for; they change what its shaders declare. */
 	private static String builtFor;
-	/** The first of the three bindings after Beryl's own, which the lit pipeline reads the sway's other blocks at. */
-	private static int firstFreeBinding;
-	private static boolean failed;
+	/** The first of the three bindings after Beryl's own in each pipeline, where it reads the sway's other blocks. */
+	private static int litFreeBinding;
+	private static int shadowFreeBinding;
+	/** The same, and the lightmap's name, for the pipeline put under the mod's last. */
+	private static int freeBinding;
+	private static String lightTexture = LIT_LIGHT_TEXTURE;
+	private static boolean litFailed;
+	private static boolean shadowFailed;
 
 	private BerylBridge() {
 	}
 
 	/**
-	 * Puts Beryl's lighting under the mod's render pipelines if Beryl is drawing the terrain with its shaders, and
-	 * takes it away if not. Returns whether they are lit by Beryl now, so the caller hands the pass what the lit
-	 * pipeline reads. Render thread only, and before the pass is opened.
+	 * Puts one of Beryl's pipelines under the mod's render pipelines: the lit one while Beryl draws the terrain with its
+	 * shaders, the shadow one while it draws its shadow map, and none otherwise. Returns whether one is under them now,
+	 * so the caller hands the pass what it reads. Render thread only, and before the pass is opened.
 	 *
 	 * @param vertexFormat the format of the foliage's vertices
 	 * @param swaySize the size of the block of sway settings
@@ -68,65 +81,107 @@ final class BerylBridge {
 	 * @param pipelines the render pipelines the foliage is about to be drawn with, each already compiled
 	 */
 	static boolean light(Object vertexFormat, int swaySize, int interactionSize, Object... pipelines) {
-		if (!LOADED || failed) {
+		if (!LOADED) {
 			return false;
 		}
+		boolean shadow = false;
 		try {
-			if (!Names.drawsTerrain()) {
+			String stage = Names.stage();
+			shadow = "SHADOW_MAP".equals(stage);
+			boolean terrain = "TERRAIN".equals(stage);
+			if (!(shadow && !shadowFailed || terrain && !litFailed)) {
 				unlight();
 				return false;
 			}
 			String options = Names.options();
-			if (litPipeline == null || !options.equals(builtFor)) {
+			if (!options.equals(builtFor)) {
+				// Beryl's options changed: its shaders are other ones now.
 				unlight();
-				if (litPipeline != null) {
-					Names.SCHEDULE_CLEAN_UP.invoke(litPipeline);
-					litPipeline = null;
+				for (Object built : new Object[] {litPipeline, shadowPipeline}) {
+					if (built != null) {
+						Names.SCHEDULE_CLEAN_UP.invoke(built);
+					}
 				}
-				litPipeline = Names.build(vertexFormat, swaySize, interactionSize);
+				litPipeline = null;
+				shadowPipeline = null;
 				builtFor = options;
-				if (litPipeline == null) {
-					failed = true;
-					ModTemplate.LOGGER.warn("Beryl's terrain shader is not the one the GPU foliage renderer knows how to "
-							+ "follow; foliage is drawn without Beryl's light and shadows");
-					return false;
-				}
 			}
-			// All of them or none: a lit pipeline drawn without what it reads has nothing to fall back on. Beryl keeps
-			// what was under a render pipeline the first time, to put it back, so that has to be there already -- which
-			// it is from the first time the pipeline was drawn with.
+			Object under;
+			if (shadow) {
+				if (shadowPipeline == null) {
+					shadowPipeline = Names.buildShadow(vertexFormat, swaySize, interactionSize);
+				}
+				under = shadowPipeline;
+				freeBinding = shadowFreeBinding;
+				lightTexture = SHADOW_LIGHT_TEXTURE;
+			} else {
+				if (litPipeline == null) {
+					litPipeline = Names.buildLit(vertexFormat, swaySize, interactionSize);
+				}
+				under = litPipeline;
+				freeBinding = litFreeBinding;
+				lightTexture = LIT_LIGHT_TEXTURE;
+			}
+			if (under == null) {
+				fail(shadow, null);
+				return false;
+			}
+			// All of them or none: a pipeline of Beryl's drawn without what it reads has nothing to fall back on. Beryl
+			// keeps what was under a render pipeline the first time, to put it back, so that has to be there already --
+			// which it is from the first time the pipeline was drawn with.
 			for (Object pipeline : pipelines) {
-				if (!REDIRECTED.contains(pipeline) && Names.GET_PIPELINE.invoke(pipeline) == null) {
+				if (!UNDER.containsKey(pipeline) && Names.GET_PIPELINE.invoke(pipeline) == null) {
 					unlight();
 					return false;
 				}
 			}
 			for (Object pipeline : pipelines) {
-				if (REDIRECTED.add(pipeline)) {
-					Names.REDIRECT.invoke(pipeline, litPipeline);
+				if (UNDER.put(pipeline, under) != under) {
+					Names.REDIRECT.invoke(pipeline, under);
 				}
 			}
 			return true;
 		} catch (Throwable e) {
-			failed = true;
-			REDIRECTED.clear();
-			ModTemplate.LOGGER.warn("The GPU foliage renderer can't draw through Beryl's shaders; foliage is drawn without "
-					+ "Beryl's light and shadows", e);
+			fail(shadow, e);
 			return false;
+		}
+	}
+
+	private static void fail(boolean shadow, Throwable cause) {
+		if (shadow) {
+			shadowFailed = true;
+		} else {
+			litFailed = true;
+		}
+		String what = shadow ? "foliage casts no shadow under Beryl" : "foliage is drawn without Beryl's light and shadows";
+		if (cause == null) {
+			ModTemplate.LOGGER.warn("Beryl's shaders are not the ones the GPU foliage renderer knows how to follow; " + what);
+		} else {
+			ModTemplate.LOGGER.warn("The GPU foliage renderer can't draw through Beryl's shaders; " + what, cause);
+		}
+		try {
+			unlight();
+		} catch (Throwable e) {
+			UNDER.clear();
 		}
 	}
 
 	/** The names VulkanMod finds the game's globals, the sway's settings and the pushes by, as {@link #REGION}. */
 	static String globals() {
-		return "UBO " + firstFreeBinding;
+		return "UBO " + freeBinding;
 	}
 
 	static String sway() {
-		return "UBO " + (firstFreeBinding + 1);
+		return "UBO " + (freeBinding + 1);
 	}
 
 	static String interaction() {
-		return "UBO " + (firstFreeBinding + 2);
+		return "UBO " + (freeBinding + 2);
+	}
+
+	/** The name the pipeline put under the mod's last reads the lightmap by. */
+	static String lightTexture() {
+		return lightTexture;
 	}
 
 	/**
@@ -136,7 +191,7 @@ final class BerylBridge {
 	 * and come out darker than one meshed outside it.
 	 */
 	static boolean straightensColours() {
-		if (!LOADED || failed) {
+		if (!LOADED || litFailed) {
 			return false;
 		}
 		try {
@@ -167,10 +222,10 @@ final class BerylBridge {
 
 	/** Puts back what each render pipeline had under it. */
 	private static void unlight() throws ReflectiveOperationException {
-		for (Object pipeline : REDIRECTED) {
+		for (Object pipeline : UNDER.keySet()) {
 			Names.RESET.invoke(pipeline);
 		}
-		REDIRECTED.clear();
+		UNDER.clear();
 	}
 
 	/** Found the first time the foliage is drawn with Beryl installed, when both mods' classes are certainly loaded. */
@@ -207,8 +262,9 @@ final class BerylBridge {
 		/** The defines Beryl compiles its terrain shaders with, in its own order. */
 		private static final String[] DEFINES = {"COLORED_SHADOWS", "TEXTURED_SUN", "WATER_WAVING", "SSR"};
 
-		static boolean drawsTerrain() throws ReflectiveOperationException {
-			return (boolean) USING_SHADERS.invoke(null) && "TERRAIN".equals(String.valueOf(STAGE.invoke(null)));
+		/** What Beryl is drawing with its shaders, by its own name for it, or null while they are off. */
+		static String stage() throws ReflectiveOperationException {
+			return (boolean) USING_SHADERS.invoke(null) ? String.valueOf(STAGE.invoke(null)) : null;
 		}
 
 		static String options() throws ReflectiveOperationException {
@@ -220,7 +276,7 @@ final class BerylBridge {
 		}
 
 		/** Beryl's terrain pipeline over the foliage's vertices, or null where its vertex shader is not the one known. */
-		static Object build(Object vertexFormat, int swaySize, int interactionSize) throws ReflectiveOperationException {
+		static Object buildLit(Object vertexFormat, int swaySize, int interactionSize) throws ReflectiveOperationException {
 			String options = options();
 			List<String> defines = new ArrayList<>();
 			for (int i = 0; i < DEFINES.length; i++) {
@@ -231,12 +287,9 @@ final class BerylBridge {
 			boolean coloredShadows = options.charAt(0) == '1';
 
 			// The sources, read and given their defines as Beryl reads its own.
-			Class<?> loader = Class.forName("net.vulkanmod.render.shader.ShaderLoadUtil");
-			String shaders = (String) Class.forName("net.beryl.render.util.SUtil").getField("SHADERS_PATH").get(null);
-			Object path = loader.getMethod("resolveShaderPath", String.class, String.class).invoke(null, shaders, "terrain");
-			Method load = loader.getMethod("loadShader", String.class, String.class, List.class);
-			String terrainVertex = (String) load.invoke(null, path, "terrain.vsh", defines);
-			String fragment = (String) load.invoke(null, path, "terrain.fsh", defines);
+			Object path = shaderPath("terrain");
+			String terrainVertex = load(path, "terrain.vsh", defines);
+			String fragment = load(path, "terrain.fsh", defines);
 			if (terrainVertex == null || fragment == null) {
 				return null;
 			}
@@ -250,40 +303,123 @@ final class BerylBridge {
 			// What the pipeline reads, as Beryl's terrain pipeline says it: its two blocks, then the sway's four by
 			// their size alone, and its textures.
 			Class<?> configs = Class.forName("net.beryl.render.shader.BerylPipelineConfigs");
-			Class<?> block = Class.forName(VULKAN + "PipelineConfig$UB");
 			Object config = Class.forName(VULKAN + "PipelineConfig").getMethod("builder").invoke(null);
-			Method addBlock = config.getClass().getMethod("addUB", block);
+			Method addBlock = config.getClass().getMethod("addUB", Class.forName(VULKAN + "PipelineConfig$UB"));
 			addBlock.invoke(config, configs.getField("COMMON_UB0").get(null));
 			addBlock.invoke(config, configs.getField("COMMON_UB1").get(null));
-			int[][] sized = {
-					{BerylFoliageShader.REGION_BINDING, BerylFoliageShader.REGION_SIZE},
-					{free, BerylFoliageShader.GLOBALS_SIZE},
-					{free + 1, swaySize},
-					{free + 2, interactionSize}};
-			firstFreeBinding = free;
-			Method blockBuilder = block.getMethod("builder", int.class, int.class);
-			for (int[] one : sized) {
-				Object builder = blockBuilder.invoke(null, one[0], VERTEX_STAGE);
-				builder.getClass().getMethod("setSize", int.class).invoke(builder, one[1]);
-				addBlock.invoke(config, builder.getClass().getMethod("build").invoke(builder));
-			}
+			addSwayBlocks(config, free, swaySize, interactionSize);
 			Method addTexture = config.getClass().getMethod("addImageDescriptor", int.class, String.class, String.class,
 					int.class);
 			addTexture.invoke(config, 3, "sampler2D", "Sampler0", 0);
-			addTexture.invoke(config, 4, "sampler2D", LIGHT_TEXTURE, 2);
+			addTexture.invoke(config, 4, "sampler2D", LIT_LIGHT_TEXTURE, 2);
 			addTexture.invoke(config, 5, "sampler2D", "ShadowMap", 3);
 			if (coloredShadows) {
 				addTexture.invoke(config, 6, "sampler2D", "ShadowMap1", 4);
 				addTexture.invoke(config, 7, "sampler2D", "ShadowColor", 5);
 			}
-			Object built = config.getClass().getMethod("build").invoke(config);
+			litFreeBinding = free;
+			return pipeline(vertexFormat, "mc2_foliage_beryl", config, vertex, fragment);
+		}
 
+		/**
+		 * The pipeline Beryl draws the terrain into its shadow map with, over the foliage's vertices, or null where it
+		 * is not the one known. What it reads is taken from the file Beryl says it in, less its block of section
+		 * offsets, whose place the region's transform takes.
+		 */
+		static Object buildShadow(Object vertexFormat, int swaySize, int interactionSize)
+				throws ReflectiveOperationException {
+			Object path = shaderPath("shadow");
+			String shadowVertex = load(path, "shadow.vsh", null);
+			String fragment = load(path, "shadow.fsh", null);
+			Class<?> loader = Class.forName("net.vulkanmod.render.shader.ShaderLoadUtil");
+			Object json = loader.getMethod("getJsonConfig", String.class, String.class).invoke(null, path, "shadow");
+			if (shadowVertex == null || fragment == null || json == null) {
+				return null;
+			}
+			Class<?> configClass = Class.forName(VULKAN + "PipelineConfig");
+			Object beryls = null;
+			for (Method method : configClass.getMethods()) {
+				if (method.getName().equals("fromJson") && method.getParameterCount() == 2) {
+					beryls = method.invoke(null, "shadow", json);
+				}
+			}
+			if (beryls == null) {
+				return null;
+			}
+
+			Class<?> block = Class.forName(VULKAN + "PipelineConfig$UB");
+			Object config = configClass.getMethod("builder").invoke(null);
+			Method addBlock = config.getClass().getMethod("addUB", block);
+			int last = -1;
+			boolean regionFree = false;
+			for (Object one : (List<?>) configClass.getField("ubs").get(beryls)) {
+				int binding = block.getField("binding").getInt(one);
+				if (((List<?>) block.getField("uniforms").get(one)).isEmpty()) {
+					// Declared by its size alone: the section offsets.
+					if (binding != BerylFoliageShader.REGION_BINDING) {
+						return null;
+					}
+					regionFree = true;
+					continue;
+				}
+				addBlock.invoke(config, one);
+				last = Math.max(last, binding);
+			}
+			for (Object texture : (List<?>) configClass.getField("imageDescriptors").get(beryls)) {
+				config.getClass().getMethod("addImageDescriptor", texture.getClass()).invoke(config, texture);
+				last = Math.max(last, (int) texture.getClass().getMethod("binding").invoke(texture));
+			}
+			if (!regionFree || last < BerylFoliageShader.REGION_BINDING) {
+				return null;
+			}
+			int free = last + 1;
+			String vertex = BerylFoliageShader.shadowVertex(shadowVertex, readSway(), free);
+			if (vertex == null) {
+				return null;
+			}
+			addSwayBlocks(config, free, swaySize, interactionSize);
+			shadowFreeBinding = free;
+			return pipeline(vertexFormat, "mc2_foliage_beryl_shadow", config, vertex, fragment);
+		}
+
+		private static Object shaderPath(String folder) throws ReflectiveOperationException {
+			String shaders = (String) Class.forName("net.beryl.render.util.SUtil").getField("SHADERS_PATH").get(null);
+			return Class.forName("net.vulkanmod.render.shader.ShaderLoadUtil")
+					.getMethod("resolveShaderPath", String.class, String.class).invoke(null, shaders, folder);
+		}
+
+		private static String load(Object path, String name, List<String> defines) throws ReflectiveOperationException {
+			return (String) Class.forName("net.vulkanmod.render.shader.ShaderLoadUtil")
+					.getMethod("loadShader", String.class, String.class, List.class).invoke(null, path, name, defines);
+		}
+
+		/** The four blocks the sway reads, each declared by its size alone, in the order of their bindings. */
+		private static void addSwayBlocks(Object config, int free, int swaySize, int interactionSize)
+				throws ReflectiveOperationException {
+			Class<?> block = Class.forName(VULKAN + "PipelineConfig$UB");
+			Method addBlock = config.getClass().getMethod("addUB", block);
+			Method blockBuilder = block.getMethod("builder", int.class, int.class);
+			int[][] sized = {
+					{BerylFoliageShader.REGION_BINDING, BerylFoliageShader.REGION_SIZE},
+					{free, BerylFoliageShader.GLOBALS_SIZE},
+					{free + 1, swaySize},
+					{free + 2, interactionSize}};
+			for (int[] one : sized) {
+				Object builder = blockBuilder.invoke(null, one[0], VERTEX_STAGE);
+				builder.getClass().getMethod("setSize", int.class).invoke(builder, one[1]);
+				addBlock.invoke(config, builder.getClass().getMethod("build").invoke(builder));
+			}
+		}
+
+		private static Object pipeline(Object vertexFormat, String name, Object config, String vertex, String fragment)
+				throws ReflectiveOperationException {
+			Object built = config.getClass().getMethod("build").invoke(config);
 			Class<?> builderClass = Class.forName(VULKAN + "Pipeline$Builder");
 			Object builder = null;
 			for (var constructor : builderClass.getConstructors()) {
 				Class<?>[] parameters = constructor.getParameterTypes();
 				if (parameters.length == 2 && parameters[1] == String.class) {
-					builder = constructor.newInstance(vertexFormat, "mc2_foliage_beryl");
+					builder = constructor.newInstance(vertexFormat, name);
 				}
 			}
 			if (builder == null) {

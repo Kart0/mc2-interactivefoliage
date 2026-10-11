@@ -8,6 +8,7 @@
   },
   "mixins": [],
   "client": [
+    "BerylShadowMixin",
     "ClientLevelMixin",
     "LevelExtractorMixin",
     "SectionMeshSwapMixin",

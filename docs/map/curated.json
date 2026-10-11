@@ -297,6 +297,20 @@
     {"id": "vulkanmod", "label": "VulkanMod", "group": "external", "kind": "mod", "loaders": ["fabric"], "versions": ["<26.2"],
      "summary": "Replaces the OpenGL renderer with Vulkan and owns chunk meshing and drawing, shaped like Sodium. Fabric only. 0.5.2 (1.20.1), 0.6.7 (1.21.1), 0.6.8 (1.21.11, 26.1.2); none from 26.2, where the game has its own Vulkan backend."},
 
+    {"id": "beryl-bridge", "label": "BerylBridge", "group": "vulkanmod", "kind": "component", "loaders": ["fabric"],
+     "files": ["gpu/BerylBridge.java", "gpu/BerylFoliageShader.java", "mixin/BerylShadowMixin.java"],
+     "summary": "Lights the foliage as Beryl lights its terrain and draws it into Beryl's shadow map. Beryl puts one of its Vulkan pipelines under the game's render pipelines while its shaders are on (ShaderRenderPipeline.redirectPipeline); the mod does the same for its own: a pipeline built from Beryl's terrain shaders while Beryl draws the terrain, one from its shadow shaders while it draws its shadow map, none otherwise. Everything by name, never compiled against.",
+     "details": [
+       "BerylFoliageShader copies Beryl's vertex shader from its jar as the game runs and changes it in place: plain vertices instead of VulkanMod's compressed ones (Beryl's source carries both), the region's corner from the mod's transform instead of Beryl's push constant and section block, the block id's input given to SwayCell and SwayWeights, material 13 (Beryl's foliage) for every plant, the sway before anything is worked out from the position. Each change has to find its place exactly once; where one does not there is no copy and the foliage stays on the mod's own shader. Beryl's fragment shaders are used untouched.",
+       "Uniforms: Beryl's shared blocks are filled by VulkanMod from suppliers it looks up by field name (MVP, LightSpaceMat, LightDir...). A block declared by its size alone is named \"UBO <binding>\" and is bound from the render pass when the pass holds a uniform of that name, which is how the region's transform, the game's globals, the sway settings and the pushes get in. VulkanMod lays a pipeline's bindings out by number, so they must be contiguous: the region takes binding 2 (Beryl's section block), the other three follow Beryl's last texture (6 on, or 8 on with coloured shadows; 5 on in the shadow pipeline).",
+       "Colours: Beryl overwrites BufferBuilder.setColor(int) to raise colours to 2.2 for as long as it draws a frame (RenderingPipeline.useSrgbColors), and its terrain shader does so again. The 1.21.1-1.21.11 vertex writer writes the colour raised to 1/2.2 while that is on, so the buffer always holds the plain colour.",
+       "Shadow map: BerylShadowMixin (@Pseudo, ShadowMap.renderShadowMap, at the VRenderSystem.applyProjectionMatrix call between Beryl's terrain and its entities) calls drawBerylShadow, which draws every section near the player into the targets Beryl has the game draw entity shadows into (RenderSystem.outputColorTextureOverride / outputDepthTextureOverride). The shadow shader places vertices by LightSpaceMat alone, so no matrix is handed over. Nothing is drawn unless Beryl's shadow pipeline went under the mod's.",
+       "Rebuilt when Beryl's options change (coloured shadows, textured sun, waving water, SSR: they are defines of its shaders). Written against Beryl 0.2.1-alpha and VulkanMod 0.6.8; tested on 1.21.11 Fabric (light, tint, shadows received and cast)."
+     ]},
+
+    {"id": "beryl", "label": "Beryl", "group": "external", "kind": "mod", "loaders": ["fabric"], "versions": ["<26.2"],
+     "summary": "A shader renderer for VulkanMod by the same author: not shader packs, one built-in set of shaders (shadow map, materials by block id, bloom, SSR, tone mapping), toggled by a key. Draws in plain light and converts at the end. 0.2.0 (1.21.1), 0.2.1 (1.21.11, 26.1.2)."},
+
     {"id": "srm", "label": "Snow! Real Magic", "group": "external", "kind": "mod",
      "summary": "Lets snow settle on plants: the plant's block becomes one of its snow blocks, which keeps the plant in its block entity (SnowBlockEntity.getContainedState) and draws it through the plant's own model, at the same position, before the snow. Grass, ferns, tall grass, large ferns and berry bushes get a snowy variant model (declared in .mcmeta files, kept in its SnowVariantModel wrapper).",
      "details": [
@@ -507,6 +521,11 @@
     ["vulkan-bridge", "vulkanmod", "reaches by name"],
     ["vulkan-bridge", "sway-glsl", "constrains"],
     ["vulkan-bridge", "sh-pipeline", "draws with"],
+    ["renderer", "beryl-bridge", "asks"],
+    ["beryl-bridge", "beryl", "reaches by name"],
+    ["beryl-bridge", "vulkanmod", "builds pipelines through"],
+    ["beryl-bridge", "sway-glsl", "splices"],
+    ["beryl-bridge", "vulkan-bridge", "needs"],
     ["level-pass", "iris", "view bobbing from"],
     ["stonecutter", "build-logic", "drives"],
     ["build-logic", "mixin-configs", "lists"],
@@ -618,6 +637,10 @@
         "1.20.1": "fabric: GPU renderer stays out (0.5.2, no device); Sway moves the foliage", "1.21.1": "fabric: GPU renderer stays out (0.6.7, no device); Sway moves the foliage",
         "1.21.11": "fabric: done (0.6.8: own shader, mesh split, handover)", "26.1.2": "fabric: written, not tested yet (0.6.8)",
         "26.2": "no VulkanMod (native Vulkan)", "26.3": "no VulkanMod (native Vulkan)"}},
+      {"label": "Beryl (VulkanMod shaders)", "cells": {
+        "1.20.1": "no Beryl", "1.21.1": "fabric: GPU renderer stays out with VulkanMod 0.6.7",
+        "1.21.11": "fabric: done (0.2.1: Beryl's light, shadows received and cast)", "26.1.2": "fabric: written, not tested yet (0.2.1)",
+        "26.2": "no VulkanMod", "26.3": "no VulkanMod"}},
       {"label": "Snow! Real Magic", "cells": {
         "1.20.1": "fabric: done (SwayVariantModels, GPU plant + snowy variant, particles) | forge: done (Indigo mixins, vanilla and Embeddium, particles)",
         "1.21.1": "fabric: done (SRM 12.x snow blocks, CPU, GPU, Iris, particles) | neoforge: done (SnowRenderApiMixin, vanilla, Sodium, Iris, particles)",

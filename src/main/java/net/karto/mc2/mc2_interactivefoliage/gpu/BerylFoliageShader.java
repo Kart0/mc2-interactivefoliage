@@ -12,7 +12,8 @@ import java.util.regex.Pattern;
  * push constant and a block of its own. The copy reads the mod's vertices instead -- Beryl's source already carries the
  * declarations for plain ones -- takes the region's corner from the transform the mod writes for it, and sways the
  * position before anything is worked out from it. Everything the shader does from there on is left as it is, so it
- * hands Beryl's own fragment shader, which is used untouched, what the terrain's hands it.
+ * hands Beryl's own fragment shader, which is used untouched, what the terrain's hands it. The shader Beryl draws the
+ * terrain into its shadow map with is written the same way, and copied the same way.
  * <p>
  * Nothing here is Beryl's text: the copy is made as the game runs, from the file in Beryl's jar, and every change has
  * to find its place exactly once. Where one does not -- another Beryl -- there is no copy, and the foliage is drawn
@@ -88,6 +89,19 @@ final class BerylFoliageShader {
 	 * this was written against. The sway's other three blocks take the three bindings from firstFreeBinding on.
 	 */
 	static String vertex(String terrain, String sway, int firstFreeBinding) {
+		return copy(terrain, sway, firstFreeBinding, true);
+	}
+
+	/**
+	 * The copy of the vertex shader Beryl draws its terrain into its shadow map with, for the foliage to be drawn into
+	 * it by: the same shader read the same way, which only places the vertex as the light sees it, so a plant's shadow
+	 * sways with the plant. Null where the shader is not the one this was written against.
+	 */
+	static String shadowVertex(String shadow, String sway, int firstFreeBinding) {
+		return copy(shadow, sway, firstFreeBinding, false);
+	}
+
+	private static String copy(String terrain, String sway, int firstFreeBinding, boolean lit) {
 		// The game's block of globals, read for the camera and the time the sway goes by, the sway's settings and the
 		// pushes, after the last of Beryl's own bindings.
 		String uniforms = UNIFORMS.formatted(REGION_BINDING, firstFreeBinding, firstFreeBinding + 1, firstFreeBinding + 2);
@@ -101,7 +115,8 @@ final class BerylFoliageShader {
 				{"(?s)vec3 getVertexPosition\\(\\) \\{.*?\\n\\}\\n", ""},
 				// The block id's place goes to the mod's two values, and every plant is foliage.
 				{"(?m)^layout\\s*\\(location = 5\\) in int BlockId;\\n", Matcher.quoteReplacement(INPUTS)},
-				{"getMaterial\\(BlockId\\)", "getMaterial(" + FOLIAGE_MATERIAL + ")"},
+				// The shadow's shader reads no material.
+				lit ? new String[] {"getMaterial\\(BlockId\\)", "getMaterial(" + FOLIAGE_MATERIAL + ")"} : null,
 				// What the compressed vertex was taken apart into is there as it is.
 				{"(?m)^\\s*const vec4 Color = unpackUnorm4x8\\(PackedColor\\);\\n", ""},
 				{"(?m)^\\s*const uint uv = Position\\.a;\\n", ""},
@@ -112,6 +127,9 @@ final class BerylFoliageShader {
 				{"(?m)^void main\\(\\) \\{", Matcher.quoteReplacement(uniforms + sway.replace("\r\n", "\n") + "\nvoid main() {")},
 		};
 		for (String[] change : changes) {
+			if (change == null) {
+				continue;
+			}
 			Matcher matcher = Pattern.compile(change[0]).matcher(source);
 			int found = 0;
 			while (matcher.find()) {

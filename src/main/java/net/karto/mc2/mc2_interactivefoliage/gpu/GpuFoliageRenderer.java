@@ -2423,6 +2423,39 @@ public final class GpuFoliageRenderer {
 		}
 	}
 
+	/** Set while the foliage is drawn into Beryl's shadow map, which only Beryl's own shadow shaders may draw into. */
+	private static boolean berylShadowPass;
+
+	/**
+	 * Draws the foliage into Beryl's shadow map, called once Beryl has drawn its terrain into it and before it draws the
+	 * entities, so plants cast shadows that sway with them. Beryl draws its shadow map from its own chunk meshes, which
+	 * the foliage was left out of. The targets are the ones Beryl has the game draw the entities' shadows into, and the
+	 * pipeline is Beryl's own for the shadow map, put under the mod's by {@link BerylBridge}: it places each vertex by
+	 * the light's matrix, which Beryl hands it, so no matrix is handed over here.
+	 * <p>
+	 * Every section near the player the chunk mesh left its foliage out of is drawn, as for a shader pack's shadow map:
+	 * the camera's frustum does not say what casts a shadow into view.
+	 */
+	public static void drawBerylShadow() {
+		//? >=1.21.11 && <26.2 {
+		/*Minecraft minecraft = Minecraft.getInstance();
+		GpuTextureView color = RenderSystem.outputColorTextureOverride;
+		GpuTextureView depth = RenderSystem.outputDepthTextureOverride;
+		if (!active || meshedForShaderPack || minecraft.level == null || color == null || depth == null) {
+			return;
+		}
+		Vec3 camera = minecraft.gameRenderer.getMainCamera().position();
+		if (collectDraws(null, null)) {
+			berylShadowPass = true;
+			try {
+				submitDraws(minecraft, camera, new Matrix4f(), new Matrix4f(), color, depth);
+			} finally {
+				berylShadowPass = false;
+			}
+		}
+		*///?}
+	}
+
 	//? iris {
 	/**
 	 * Draws the foliage into a shader pack's shadow map, called by Iris in the middle of its shadow pass, so plants cast
@@ -2995,8 +3028,13 @@ public final class GpuFoliageRenderer {
 		GpuBuffer interaction = GpuFoliageInteraction.upload(camera);
 		// While Beryl draws the terrain with its shaders, the mod's pipelines are lit by them: they read the sway's blocks
 		// and the lightmap by other names then.
-		boolean berylLit = !shadowPass && pipeline == PIPELINE && BerylBridge.light(FOLIAGE_FORMAT, (int) settings.size(),
+		// While it draws its shadow map they are the ones it draws the terrain into it with.
+		boolean berylLit = pipeline == PIPELINE && BerylBridge.light(FOLIAGE_FORMAT, (int) settings.size(),
 				(int) interaction.size(), pipeline, opaquePipeline);
+		if (berylShadowPass && !berylLit) {
+			// Beryl's shadow map takes nothing but what is drawn with its own shadow shaders.
+			return;
+		}
 		// The sun's projection, as Iris or Polytone hands it over: what the game holds as the projection by the time Iris
 		// hands over its shadow pass is not reliably the shadow map's, and plants projected any other way land at the wrong
 		// depth in it.
@@ -3043,7 +3081,7 @@ public final class GpuFoliageRenderer {
 						sodiumShaders || terrainShaders
 								? RenderSystem.getSamplerCache().getClampToEdge(FilterMode.LINEAR, true) : atlas.getSampler());
 				pass.bindTexture(sodiumShaders ? SodiumFoliageShader.LIGHT_TEXTURE
-								: berylLit ? BerylBridge.LIGHT_TEXTURE : "Sampler2",
+								: berylLit ? BerylBridge.lightTexture() : "Sampler2",
 						//? >=26.1.2 {
 						minecraft.gameRenderer.lightmap(),
 						//?} else {
