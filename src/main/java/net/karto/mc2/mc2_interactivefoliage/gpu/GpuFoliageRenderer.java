@@ -3359,7 +3359,7 @@ public final class GpuFoliageRenderer {
 	private static final it.unimi.dsi.fastutil.objects.Reference2BooleanOpenHashMap<net.minecraft.client.renderer.texture.TextureAtlasSprite> SPRITE_ANIMATES =
 			new it.unimi.dsi.fastutil.objects.Reference2BooleanOpenHashMap<>();
 	/** Before 26.1.2, where a block's quads are not handed over as it is meshed: each block state's, found once. */
-	private static final java.util.Map<BlockState, net.minecraft.client.renderer.texture.TextureAtlasSprite[]> STATE_SPRITES = new java.util.IdentityHashMap<>();
+	private static final java.util.Map<Object, net.minecraft.client.renderer.texture.TextureAtlasSprite[]> STATE_SPRITES = new java.util.IdentityHashMap<>();
 	private static final net.minecraft.client.renderer.texture.TextureAtlasSprite[] NO_SPRITES = new net.minecraft.client.renderer.texture.TextureAtlasSprite[0];
 	private static net.minecraft.client.renderer.texture.TextureAtlasSprite lastSprite;
 
@@ -3408,12 +3408,15 @@ public final class GpuFoliageRenderer {
 		}
 	}
 	*///?} elif <1.21.11 {
-	/*/^* Remembers the animated textures of a block state's model, read from the model it is meshed from. ^/
+	/*/^*
+	 * Remembers the animated textures of a model, read from the model a block is meshed from. By model rather than by
+	 * block state: a block may be meshed from more than one, see emissiveLayerOf.
+	 ^/
 	private static void noteSprites(BlockState state, BakedModel model, RandomSource random, long seed) {
 		if (!SodiumBridge.tracksSprites()) {
 			return;
 		}
-		net.minecraft.client.renderer.texture.TextureAtlasSprite[] sprites = STATE_SPRITES.get(state);
+		net.minecraft.client.renderer.texture.TextureAtlasSprite[] sprites = STATE_SPRITES.get(model);
 		if (sprites == null) {
 			java.util.Set<net.minecraft.client.renderer.texture.TextureAtlasSprite> found = new java.util.LinkedHashSet<>();
 			for (int side = -1; side < SIDES.length; side++) {
@@ -3426,11 +3429,63 @@ public final class GpuFoliageRenderer {
 				}
 			}
 			sprites = found.isEmpty() ? NO_SPRITES : found.toArray(NO_SPRITES);
-			STATE_SPRITES.put(state, sprites);
+			STATE_SPRITES.put(model, sprites);
 		}
 		for (net.minecraft.client.renderer.texture.TextureAtlasSprite sprite : sprites) {
 			SECTION_SPRITES.add(sprite);
 		}
+	}
+
+	private static final java.util.Map<BakedModel, Object> EMISSIVE_LAYERS = new java.util.IdentityHashMap<>();
+	private static final Object NO_EMISSIVE_LAYER = new Object();
+
+	/^*
+	 * The glowing layer a mod draws over a block's model, or null where there is none. Before 1.21.4 a model cannot say
+	 * that a part of it glows, so a mod that backports a block which does -- VanillaBackport's firefly bush and open
+	 * eyeblossom -- wraps the block's model and draws a second one over it at full light, through Fabric's rendering
+	 * API alone. The renderer meshes through vanilla's path, which only ever sees the first.
+	 * <p>
+	 * Found by the wrapper's shape rather than its name: among the models wrapped one inside another, the one kept in a
+	 * field called emissiveModel. Looked for once per model.
+	 ^/
+	private static BakedModel emissiveLayerOf(BakedModel model) {
+		//? fabric {
+		Object found = EMISSIVE_LAYERS.get(model);
+		if (found == null) {
+			found = NO_EMISSIVE_LAYER;
+			try {
+				Object current = model;
+				for (int depth = 0; current != null && depth < 8 && found == NO_EMISSIVE_LAYER; depth++) {
+					Object next = null;
+					for (Class<?> type = current.getClass(); type != null && type != Object.class; type = type.getSuperclass()) {
+						for (java.lang.reflect.Field field : type.getDeclaredFields()) {
+							if (java.lang.reflect.Modifier.isStatic(field.getModifiers())
+									|| !BakedModel.class.isAssignableFrom(field.getType())) {
+								continue;
+							}
+							field.setAccessible(true);
+							Object value = field.get(current);
+							if (value == null || value == current) {
+								continue;
+							}
+							if (field.getName().equals("emissiveModel")) {
+								found = value;
+							} else if (next == null) {
+								next = value;
+							}
+						}
+					}
+					current = next;
+				}
+			} catch (ReflectiveOperationException | RuntimeException e) {
+				found = NO_EMISSIVE_LAYER;
+			}
+			EMISSIVE_LAYERS.put(model, found);
+		}
+		return found == NO_EMISSIVE_LAYER ? null : (BakedModel) found;
+		//?} else {
+		/^return null;
+		^///?}
 	}
 	*///?}
 	/**
@@ -4003,6 +4058,8 @@ public final class GpuFoliageRenderer {
 		private final SwayAnchor anchor;
 		private final BlockPos regionOrigin;
 		private float blockY;
+		/^* Set while a layer that glows is written: every vertex at full light, whatever the light where it stands. ^/
+		boolean fullBright;
 
 		FoliageVertexWriter(VertexConsumer delegate, SwayAnchor anchor, BlockPos regionOrigin) {
 			this.delegate = delegate;
@@ -4057,6 +4114,10 @@ public final class GpuFoliageRenderer {
 
 		@Override
 		public VertexConsumer setUv2(int u, int v) {
+			if (fullBright) {
+				delegate.setUv2(240, 240);
+				return this;
+			}
 			delegate.setUv2(u, v);
 			return this;
 		}
@@ -4087,6 +4148,8 @@ public final class GpuFoliageRenderer {
 		private final SwayAnchor anchor;
 		private final BlockPos regionOrigin;
 		private float blockY;
+		/^* Set while a layer that glows is written: every vertex at full light, whatever the light where it stands. ^/
+		boolean fullBright;
 		/^* The position of a vertex being written element by element, kept until it is ended. ^/
 		private float pendingX;
 		private float pendingY;
@@ -4152,6 +4215,10 @@ public final class GpuFoliageRenderer {
 
 		@Override
 		public VertexConsumer uv2(int u, int v) {
+			if (fullBright) {
+				delegate.uv2(240, 240);
+				return this;
+			}
 			delegate.uv2(u, v);
 			return this;
 		}
@@ -4484,6 +4551,17 @@ public final class GpuFoliageRenderer {
 								models.getBlockModel(state)), state, level, pos, inSnow), state, pos, poseStack, output, random,
 								!(anchor.field && partsFromNeighbour(level, blocks, dx, dy, dz, pos, neighbour)));
 						poseStack.popPose();
+						// A glowing layer a mod draws over the block's own model, at full light, as that mod draws it.
+						BakedModel emissive = emissiveLayerOf(models.getBlockModel(state));
+						if (emissive != null) {
+							poseStack.pushPose();
+							poseStack.translate(offsetX + dx, offsetY + dy + lift, offsetZ + dz);
+							output.beginBlock(offsetY + dy + lift);
+							output.fullBright = true;
+							tesselate(level, emissive, state, pos, poseStack, output, random, true);
+							output.fullBright = false;
+							poseStack.popPose();
+						}
 						^///?}
 						*///?}
 					}

@@ -318,6 +318,19 @@ public class ModCompatRegistry {
 				"minecraft:red_shrub",
 				"minecraft:poplar_sapling"
 		);
+		// Plants of newer versions that a backport mod adds to an older one under vanilla's own ids (VanillaBackport):
+		// Sway only knows the plants of the version it is built for. Found by id like any other, so no mod is named, and
+		// left alone where Sway has them already.
+		registerPlantIfNew(
+				"minecraft:bush",
+				"minecraft:firefly_bush",
+				"minecraft:short_dry_grass",
+				"minecraft:tall_dry_grass",
+				"minecraft:closed_eyeblossom",
+				"minecraft:open_eyeblossom",
+				"minecraft:cactus_flower",
+				"minecraft:pale_oak_sapling"
+		);
 
 		registerHanging(
 				"minecraft:pale_hanging_moss",
@@ -380,6 +393,13 @@ public class ModCompatRegistry {
 						BuiltinBehaviors.multiplierKey(1.0F)
 				));
 			});
+		}
+	}
+
+	/** As registerPlant, for a block Sway may know already on this version, which is then left as Sway has it. */
+	private static void registerPlantIfNew(String... ids) {
+		for (String id : ids) {
+			lookup(id).filter(block -> !SwayAPI.isInteractive(block)).ifPresent(block -> SwayAPI.register(block, 1.0F));
 		}
 	}
 
