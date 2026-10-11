@@ -125,6 +125,7 @@ Takes the near foliage out of the chunk mesh, and hands it back and forth withou
   - Links: with Sodium sodium-upload
 - **Change tracking**: Keeps the mod's meshes in step: block changes (ClientLevel.setBlocksDirty), light changes (setSectionDirty), and allChanged (resource reload, world swap, video options).
   - The class that marks sections dirty is LevelRenderer before 26.2 and LevelExtractor from 26.2.
+  - The private setSectionDirty(IIIZ) every route ends in is followed too (onSectionAsked, queued in its turn, require = 0): LambDynamicLights needs no compatibility layer -- its light comes through vanilla's own brightness getter, which the mesher reads -- but before 26.2 (4.8 on 1.21.1) it asks for the sections around a carried light through an accessor to that private method, never the public one, so the foliage kept the dynamic light of wherever it was last meshed. From 26.2 (4.13) it calls the public one. Tested with it on 26.3 and 1.21.1 Fabric.
   - 1.21.11-26.1: also catches the cull frustum at prepareCullFrustum (from 26.1.2 the camera state carries it).
   - Files: `mixin/ClientLevelMixin.java`, `mixin/LevelExtractorMixin.java`
   - Links: follows block entity updates for srm-compat

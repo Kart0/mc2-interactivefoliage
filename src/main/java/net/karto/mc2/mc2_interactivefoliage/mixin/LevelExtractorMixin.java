@@ -41,6 +41,17 @@ public abstract class LevelExtractorMixin {
 		GpuFoliageRenderer.onLightChanged(sectionX, sectionY, sectionZ);
 	}
 
+	/**
+	 * The private method every one of those routes ends in. A mod may call it itself: LambDynamicLights does before 26.2,
+	 * through an accessor, for the sections around a light on the move, and those never pass through the public one. A
+	 * section asked for here is rebuilt in its turn; one whose light changed is hurried by the method above, which runs
+	 * after this.
+	 */
+	@Inject(method = "setSectionDirty(IIIZ)V", at = @At("HEAD"), require = 0)
+	private void mc2$foliageSectionAsked(int sectionX, int sectionY, int sectionZ, boolean onMainThread, CallbackInfo ci) {
+		GpuFoliageRenderer.onSectionAsked(sectionX, sectionY, sectionZ);
+	}
+
 	@Inject(method = "allChanged", at = @At("TAIL"))
 	private void mc2$foliageAllChanged(CallbackInfo ci) {
 		GpuFoliageRenderer.discardAll();

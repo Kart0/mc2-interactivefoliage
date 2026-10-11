@@ -1723,6 +1723,22 @@ public final class GpuFoliageRenderer {
 		return active;
 	}
 
+	/**
+	 * The chunk mesh of a section was asked to be built again, by whatever route. Only sections already holding foliage
+	 * care, and they are rebuilt in their turn: what asks without a block or the light engine saying so is a dynamic
+	 * lights mod, for the sections around a light on the move.
+	 */
+	public static void onSectionAsked(int sectionX, int sectionY, int sectionZ) {
+		if (!active) {
+			return;
+		}
+		long key = SectionPos.asLong(sectionX, sectionY, sectionZ);
+		Region region = REGIONS.get(regionKeyOf(key));
+		if (region != null && region.sections[slotOf(key)] != null && DIRTY.add(key)) {
+			burstAsked++;
+		}
+	}
+
 	/** Light arrived or changed in a section. Only sections already holding foliage care. */
 	public static void onLightChanged(int sectionX, int sectionY, int sectionZ) {
 		long key = SectionPos.asLong(sectionX, sectionY, sectionZ);
@@ -3432,14 +3448,15 @@ public final class GpuFoliageRenderer {
 	/** The regions the urgent sections rebuilt this frame are in. */
 	private static final LongOpenHashSet URGENT_REGIONS = new LongOpenHashSet();
 
-	/** Queues a section that is drawn already to be rebuilt at once; returns whether it was not queued yet. */
+	/** Queues a section that is drawn already to be rebuilt ahead of the rest; returns whether it was not hurried yet. */
 	private static boolean queueUrgent(long key) {
 		Region region = REGIONS.get(regionKeyOf(key));
 		if (region == null || region.sections[slotOf(key)] == null) {
 			return false;
 		}
-		URGENT.add(key);
-		return DIRTY.add(key);
+		// Queued already as a rule: the route every request takes has seen it first, see onSectionAsked.
+		DIRTY.add(key);
+		return URGENT.add(key);
 	}
 
 	/**
@@ -3518,6 +3535,7 @@ public final class GpuFoliageRenderer {
 	private static int burstFrames;
 	private static int burstLightQueued;
 	private static int burstLightStreamed;
+	private static int burstAsked;
 	private static int burstPeakQueue;
 	private static int burstRebuilt;
 	private static long burstMeshNanos;
@@ -3548,10 +3566,10 @@ public final class GpuFoliageRenderer {
 			}
 			ModTemplate.LOGGER.debug(String.format(java.util.Locale.ROOT,
 					"Foliage burst: %.0f ms over %d frames; %d sections rebuilt (%d queued by light, %d of them by a light "
-							+ "on the move, peak queue %d), "
+							+ "on the move, %d asked for by another route, peak queue %d), "
 							+ "meshing %.1f ms in all, %.1f ms the slowest; %d region uploads, %.1f ms in all, %.1f ms the "
 							+ "slowest, longest wait before upload %d ms",
-					(System.nanoTime() - burstStartNanos) / 1.0E6D, burstFrames, burstRebuilt, burstLightQueued, burstLightStreamed,
+					(System.nanoTime() - burstStartNanos) / 1.0E6D, burstFrames, burstRebuilt, burstLightQueued, burstLightStreamed, burstAsked,
 					burstPeakQueue, burstMeshNanos / 1.0E6D, burstMeshMaxNanos / 1.0E6D, burstUploads,
 					burstUploadNanos / 1.0E6D, burstUploadMaxNanos / 1.0E6D, burstWaitMaxMillis));
 		}
@@ -3559,6 +3577,7 @@ public final class GpuFoliageRenderer {
 		burstFrames = 0;
 		burstLightQueued = 0;
 		burstLightStreamed = 0;
+		burstAsked = 0;
 		burstPeakQueue = 0;
 		burstRebuilt = 0;
 		burstMeshNanos = 0L;
