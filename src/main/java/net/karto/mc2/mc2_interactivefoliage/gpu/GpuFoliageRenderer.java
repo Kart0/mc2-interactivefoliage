@@ -2993,6 +2993,10 @@ public final class GpuFoliageRenderer {
 		// Written before the pass opens: a buffer cannot be written to while a render pass is open.
 		GpuBuffer settings = swaySettings(camera);
 		GpuBuffer interaction = GpuFoliageInteraction.upload(camera);
+		// While Beryl draws the terrain with its shaders, the mod's pipelines are lit by them: they read the sway's blocks
+		// and the lightmap by other names then.
+		boolean berylLit = !shadowPass && pipeline == PIPELINE && BerylBridge.light(FOLIAGE_FORMAT, (int) settings.size(),
+				(int) interaction.size(), pipeline, opaquePipeline);
 		// The sun's projection, as Iris or Polytone hands it over: what the game holds as the projection by the time Iris
 		// hands over its shadow pass is not reliably the shadow map's, and plants projected any other way land at the wrong
 		// depth in it.
@@ -3038,7 +3042,8 @@ public final class GpuFoliageRenderer {
 				pass.bindTexture(sodiumShaders ? SodiumFoliageShader.BLOCK_TEXTURE : "Sampler0", atlas.getTextureView(),
 						sodiumShaders || terrainShaders
 								? RenderSystem.getSamplerCache().getClampToEdge(FilterMode.LINEAR, true) : atlas.getSampler());
-				pass.bindTexture(sodiumShaders ? SodiumFoliageShader.LIGHT_TEXTURE : "Sampler2",
+				pass.bindTexture(sodiumShaders ? SodiumFoliageShader.LIGHT_TEXTURE
+								: berylLit ? BerylBridge.LIGHT_TEXTURE : "Sampler2",
 						//? >=26.1.2 {
 						minecraft.gameRenderer.lightmap(),
 						//?} else {
@@ -3053,6 +3058,11 @@ public final class GpuFoliageRenderer {
 				pass.setIndexBuffer(indexBuffer, indices.type());
 				pass.setUniform(SWAY_SETTINGS_UNIFORM, settings);
 				pass.setUniform(GpuFoliageInteraction.UNIFORM, interaction);
+				if (berylLit) {
+					pass.setUniform(BerylBridge.sway(), settings);
+					pass.setUniform(BerylBridge.interaction(), interaction);
+					pass.setUniform(BerylBridge.globals(), RenderSystem.getGlobalSettingsUniform());
+				}
 
 				int boundRegion = -1;
 				for (int i = 0; i < listSize; i += 3) {
@@ -3060,6 +3070,9 @@ public final class GpuFoliageRenderer {
 					if (regionIndex != boundRegion) {
 						Region region = drawn.get(regionIndex);
 						pass.setUniform(regionUniform, offsets[regionIndex]);
+						if (berylLit) {
+							pass.setUniform(BerylBridge.REGION, offsets[regionIndex]);
+						}
 						//? >=26.2 {
 						pass.setVertexBuffer(0, region.vertices.slice());
 						//?} else {
@@ -4163,6 +4176,8 @@ public final class GpuFoliageRenderer {
 		private float blockY;
 		/^* Set while a layer that glows is written: every vertex at full light, whatever the light where it stands. ^/
 		boolean fullBright;
+		/^* Whether Beryl turns the colours written now into plain light, which its shaders do again; see BerylBridge. ^/
+		private final boolean straightened = BerylBridge.straightensColours();
 
 		FoliageVertexWriter(VertexConsumer delegate, SwayAnchor anchor, BlockPos regionOrigin) {
 			this.delegate = delegate;
@@ -4206,6 +4221,9 @@ public final class GpuFoliageRenderer {
 			// VulkanMod draws a block for any vertex consumer but its own with red and blue changed over.
 			if (VulkanBridge.drawsChunks()) {
 				packed = packed & 0xFF00FF00 | (packed & 0x00FF0000) >> 16 | (packed & 0x000000FF) << 16;
+			}
+			if (straightened) {
+				packed = BerylBridge.beforeStraightening(packed);
 			}
 			delegate.setColor(packed);
 			return this;
