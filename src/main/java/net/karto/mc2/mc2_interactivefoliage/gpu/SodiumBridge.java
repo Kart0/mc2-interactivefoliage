@@ -104,6 +104,78 @@ public final class SodiumBridge {
 	//?}
 
 	/** Whether Sodium draws the chunks, and so decides what the terrain around the foliage is drawn with. */
+	/**
+	 * Sodium only moves on the animated textures something marks as on screen each frame, which its chunk meshes do for
+	 * theirs. Foliage the chunk mesh left out is drawn by the mod, so the mod marks its textures instead: without it a
+	 * firefly bush's glow stood still unless another one was in view further out, drawn by Sodium.
+	 * <p>
+	 * This is Sodium's public API, the same from 0.5 to 0.9; Embeddium has only the class it grew out of.
+	 */
+	private static final Object SPRITE_UTIL;
+	private static final MethodHandle MARK_SPRITE_ACTIVE;
+	private static final MethodHandle SPRITE_HAS_ANIMATION;
+
+	static {
+		Object util = null;
+		MethodHandle mark = null;
+		MethodHandle animates = null;
+		if (ModTemplate.xplat().isModLoaded(MOD_ID)) {
+			MethodHandles.Lookup lookup = MethodHandles.publicLookup();
+			try {
+				Class<?> api = Class.forName("net.caffeinemc.mods.sodium.api.texture.SpriteUtil");
+				util = api.getField("INSTANCE").get(null);
+				mark = lookup.findVirtual(api, "markSpriteActive", MethodType.methodType(void.class, net.minecraft.client.renderer.texture.TextureAtlasSprite.class))
+						.asType(MethodType.methodType(void.class, Object.class, net.minecraft.client.renderer.texture.TextureAtlasSprite.class));
+				animates = lookup.findVirtual(api, "hasAnimation", MethodType.methodType(boolean.class, net.minecraft.client.renderer.texture.TextureAtlasSprite.class))
+						.asType(MethodType.methodType(boolean.class, Object.class, net.minecraft.client.renderer.texture.TextureAtlasSprite.class));
+			} catch (ReflectiveOperationException | LinkageError e) {
+				util = null;
+				try {
+					Class<?> old = Class.forName("me.jellysquid.mods.sodium.client.render.texture.SpriteUtil");
+					mark = lookup.findStatic(old, "markSpriteActive", MethodType.methodType(void.class, net.minecraft.client.renderer.texture.TextureAtlasSprite.class));
+					animates = lookup.findStatic(old, "hasAnimation", MethodType.methodType(boolean.class, net.minecraft.client.renderer.texture.TextureAtlasSprite.class));
+				} catch (ReflectiveOperationException | LinkageError missing) {
+					mark = null;
+					animates = null;
+					ModTemplate.LOGGER.warn("Sodium is installed, but not a version whose animated textures the GPU foliage "
+							+ "renderer can keep moving; animated foliage textures may stand still near the player");
+				}
+			}
+		}
+		SPRITE_UTIL = util;
+		MARK_SPRITE_ACTIVE = mark;
+		SPRITE_HAS_ANIMATION = animates;
+	}
+
+	/** Whether the textures of what the renderer draws have to be marked for Sodium to animate them. */
+	static boolean tracksSprites() {
+		return MARK_SPRITE_ACTIVE != null && SPRITE_HAS_ANIMATION != null;
+	}
+
+	static boolean animates(net.minecraft.client.renderer.texture.TextureAtlasSprite sprite) {
+		try {
+			return SPRITE_UTIL != null ? (boolean) SPRITE_HAS_ANIMATION.invokeExact(SPRITE_UTIL, sprite)
+					: (boolean) SPRITE_HAS_ANIMATION.invokeExact(sprite);
+		} catch (Throwable e) {
+			return false;
+		}
+	}
+
+	/** Marks the animated textures of a section drawn this frame as on screen. */
+	static void markActive(net.minecraft.client.renderer.texture.TextureAtlasSprite[] sprites) {
+		try {
+			for (net.minecraft.client.renderer.texture.TextureAtlasSprite sprite : sprites) {
+				if (SPRITE_UTIL != null) {
+					MARK_SPRITE_ACTIVE.invokeExact(SPRITE_UTIL, sprite);
+				} else {
+					MARK_SPRITE_ACTIVE.invokeExact(sprite);
+				}
+			}
+		} catch (Throwable e) {
+			// Left as it is: the texture stands still, which is where this started.
+		}
+	}
+
 	static boolean drawsChunks() {
 		return ModTemplate.xplat().isModLoaded(MOD_ID);
 	}

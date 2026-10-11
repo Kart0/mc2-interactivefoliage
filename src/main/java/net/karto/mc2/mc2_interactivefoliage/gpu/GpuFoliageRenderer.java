@@ -927,6 +927,9 @@ public final class GpuFoliageRenderer {
 		/** Which list of foliage it was meshed with; see GpuFoliageSplit.AWAITING_GROUP. */
 		int listGeneration;
 
+		/** The animated textures its blocks are drawn with, for Sodium, which has to be told; null where there are none. */
+		net.minecraft.client.renderer.texture.TextureAtlasSprite[] animatedSprites;
+
 		Section(long key, BlockPos origin, ByteBuffer data, int vertexCount, int opaqueVertexCount, int stride) {
 			this.opaqueVertexCount = opaqueVertexCount;
 			this.stride = stride;
@@ -1858,6 +1861,9 @@ public final class GpuFoliageRenderer {
 		DIRTY_REGIONS.clear();
 		URGENT.clear();
 		URGENT_REGIONS.clear();
+		// The textures are the atlas's, which a resource reload makes anew.
+		SPRITE_ANIMATES.clear();
+		STATE_SPRITES.clear();
 		// The renderer snapshots options such as smooth lighting, which are among the things that
 		// land here, so it is rebuilt from the current options on next use.
 		modelRenderer = null;
@@ -2385,6 +2391,9 @@ public final class GpuFoliageRenderer {
 						opaqueStart = -1;
 					}
 					continue;
+				}
+				if (section.animatedSprites != null) {
+					SodiumBridge.markActive(section.animatedSprites);
 				}
 				if (runStart < 0) {
 					runStart = region.firstVertex[slot];
@@ -3304,6 +3313,89 @@ public final class GpuFoliageRenderer {
 	}
 
 	private static final LongOpenHashSet REGIONS_WITH_QUEUED_SECTIONS = new LongOpenHashSet();
+
+	// ---- Animated textures, where Sodium has to be told which are on screen; see SodiumBridge.markActive.
+	/** The animated textures met while meshing the section in hand. */
+	private static final it.unimi.dsi.fastutil.objects.ReferenceOpenHashSet<net.minecraft.client.renderer.texture.TextureAtlasSprite> SECTION_SPRITES =
+			new it.unimi.dsi.fastutil.objects.ReferenceOpenHashSet<>();
+	/** Whether each texture met so far is animated, asked of Sodium once. */
+	private static final it.unimi.dsi.fastutil.objects.Reference2BooleanOpenHashMap<net.minecraft.client.renderer.texture.TextureAtlasSprite> SPRITE_ANIMATES =
+			new it.unimi.dsi.fastutil.objects.Reference2BooleanOpenHashMap<>();
+	/** Before 26.1.2, where a block's quads are not handed over as it is meshed: each block state's, found once. */
+	private static final java.util.Map<BlockState, net.minecraft.client.renderer.texture.TextureAtlasSprite[]> STATE_SPRITES = new java.util.IdentityHashMap<>();
+	private static final net.minecraft.client.renderer.texture.TextureAtlasSprite[] NO_SPRITES = new net.minecraft.client.renderer.texture.TextureAtlasSprite[0];
+	private static net.minecraft.client.renderer.texture.TextureAtlasSprite lastSprite;
+
+	/** Remembers a texture a quad of the section in hand is drawn with, if it is animated. */
+	private static void noteSprite(net.minecraft.client.renderer.texture.TextureAtlasSprite sprite) {
+		// A block's quads mostly share one texture.
+		if (sprite == lastSprite || !SodiumBridge.tracksSprites()) {
+			return;
+		}
+		lastSprite = sprite;
+		if (animates(sprite)) {
+			SECTION_SPRITES.add(sprite);
+		}
+	}
+
+	private static boolean animates(net.minecraft.client.renderer.texture.TextureAtlasSprite sprite) {
+		if (!SPRITE_ANIMATES.containsKey(sprite)) {
+			SPRITE_ANIMATES.put(sprite, SodiumBridge.animates(sprite));
+		}
+		return SPRITE_ANIMATES.getBoolean(sprite);
+	}
+
+	//? >=1.21.11 && <26.1.2 {
+	/*/^* Remembers the animated textures of a block state's model, read from the parts it is meshed from. ^/
+	private static void noteSprites(BlockState state, List<BlockModelPart> parts) {
+		if (!SodiumBridge.tracksSprites()) {
+			return;
+		}
+		net.minecraft.client.renderer.texture.TextureAtlasSprite[] sprites = STATE_SPRITES.get(state);
+		if (sprites == null) {
+			java.util.Set<net.minecraft.client.renderer.texture.TextureAtlasSprite> found = new java.util.LinkedHashSet<>();
+			for (BlockModelPart part : parts) {
+				for (int side = -1; side < SIDES.length; side++) {
+					for (net.minecraft.client.renderer.block.model.BakedQuad quad : part.getQuads(side < 0 ? null : SIDES[side])) {
+						if (animates(quad.sprite())) {
+							found.add(quad.sprite());
+						}
+					}
+				}
+			}
+			sprites = found.isEmpty() ? NO_SPRITES : found.toArray(NO_SPRITES);
+			STATE_SPRITES.put(state, sprites);
+		}
+		for (net.minecraft.client.renderer.texture.TextureAtlasSprite sprite : sprites) {
+			SECTION_SPRITES.add(sprite);
+		}
+	}
+	*///?} elif <1.21.11 {
+	/*/^* Remembers the animated textures of a block state's model, read from the model it is meshed from. ^/
+	private static void noteSprites(BlockState state, BakedModel model, RandomSource random, long seed) {
+		if (!SodiumBridge.tracksSprites()) {
+			return;
+		}
+		net.minecraft.client.renderer.texture.TextureAtlasSprite[] sprites = STATE_SPRITES.get(state);
+		if (sprites == null) {
+			java.util.Set<net.minecraft.client.renderer.texture.TextureAtlasSprite> found = new java.util.LinkedHashSet<>();
+			for (int side = -1; side < SIDES.length; side++) {
+				random.setSeed(seed);
+				for (net.minecraft.client.renderer.block.model.BakedQuad quad
+						: model.getQuads(state, side < 0 ? null : SIDES[side], random)) {
+					if (animates(quad.getSprite())) {
+						found.add(quad.getSprite());
+					}
+				}
+			}
+			sprites = found.isEmpty() ? NO_SPRITES : found.toArray(NO_SPRITES);
+			STATE_SPRITES.put(state, sprites);
+		}
+		for (net.minecraft.client.renderer.texture.TextureAtlasSprite sprite : sprites) {
+			SECTION_SPRITES.add(sprite);
+		}
+	}
+	*///?}
 	/**
 	 * The queued sections that are on screen already and show a change the player just made or saw: a block placed or
 	 * broken, the light of a torch. They are rebuilt before anything else, all of them on the frame they are queued
@@ -4183,11 +4275,14 @@ public final class GpuFoliageRenderer {
 		// Vanilla writes the standard attributes; alongside each quad we append the sway weight of its
 		// four vertices, so both bindings stay in step without touching its output.
 		SwayAnchor anchor = new SwayAnchor();
+		SECTION_SPRITES.clear();
+		lastSprite = null;
 		// A tree's leaves are sheltered corner by corner, on their own terms; see WindShelter.cornerExposure.
 		anchor.fieldShelter = shelter == null ? null : new WindShelter(level, origin, true);
 		//? >=26.1.2 {
 		BlockQuadOutput output = (x, y, z, quad, instance) -> {
 			builder.putBlockBakedQuad(x, y, z, quad, instance);
+			noteSprite(quad.materialInfo().sprite());
 			reserveWeights(WEIGHT_BYTES * 4);
 			float cell = packCell(anchor.cellX - regionOrigin.getX(),
 					anchor.cellY - regionOrigin.getY(),
@@ -4322,6 +4417,7 @@ public final class GpuFoliageRenderer {
 						List<BlockModelPart> parts = GpuFoliageSplit
 								.modelFor(state, models.getBlockModel(state))
 								.collectParts(random);
+						noteSprites(state, parts);
 						// The pose carries what the newer call took as arguments: where the block sits in
 						// its region. The writer subtracts it again to recover each vertex's height in
 						// its own block, which is what a sway weight is measured against.
@@ -4402,6 +4498,8 @@ public final class GpuFoliageRenderer {
 				data.put(vertex * stride + vertexBytes, weightScratch, vertex * WEIGHT_BYTES, WEIGHT_BYTES);
 			}
 			Section section = new Section(key, origin, data, vertexCount, vertexCount - cutoutVertices, stride);
+			section.animatedSprites = SECTION_SPRITES.isEmpty() ? null
+					: SECTION_SPRITES.toArray(new net.minecraft.client.renderer.texture.TextureAtlasSprite[0]);
 			section.sheltered = shelter != null;
 			section.listGeneration = GpuFoliageSplit.listGeneration();
 			putSection(key, section);
@@ -4446,6 +4544,7 @@ public final class GpuFoliageRenderer {
 		Vec3 offset = state.getOffset(level, pos);
 		poseStack.translate(offset.x, offset.y, offset.z);
 		long seed = state.getSeed(pos);
+		noteSprites(state, model, random, seed);
 		if (smoothLighting) {
 			modelRenderer.tesselateWithAO(level, model, state, pos, poseStack, output, cull, random, seed,
 					OverlayTexture.NO_OVERLAY);

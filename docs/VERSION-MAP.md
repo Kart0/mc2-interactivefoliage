@@ -217,6 +217,7 @@ Sodium, Embeddium and Indium: who meshes and draws the chunks when they are inst
 - **SodiumBridge**: Everything the renderer asks of Sodium, by reflection (Sodium is never on the compile classpath for this): whether it draws the chunks, whether meshes can be split, rebuild requests, visibility, and upload results.
   - Package me.jellysquid before Sodium 0.6 (1.20.1), net.caffeinemc after.
   - Forge 1.20.1: Embeddium, same Sodium 0.5 classes, mod ids embeddium/rubidium.
+  - Animated textures: Sodium only moves on the ones marked as on screen each frame, which its chunk meshes do for theirs; foliage the chunk mesh left out was never marked, so a firefly bush's glow stood still unless another was in view further out. A section remembers the animated textures met while it is meshed (Section.animatedSprites; from each quad from 26.1.2, from the block state's model, once per state, before) and collectDraws marks them each frame it is drawn (markActive), through Sodium's public SpriteUtil, the same from 0.5 to 0.9, or the class it grew out of on Embeddium. Tested on 26.3 Fabric so far.
   - Files: `gpu/SodiumBridge.java`
   - Links: reflects into sodium; reflects into embeddium
 - **Sodium upload hook**: @Pseudo mixin on RenderRegionManager: where Sodium puts a finished build in place. The public overload is named with its descriptor (a private one of the same name reports each section twice).
