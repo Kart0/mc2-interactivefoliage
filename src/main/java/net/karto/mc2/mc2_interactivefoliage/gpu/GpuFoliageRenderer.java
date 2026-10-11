@@ -1044,6 +1044,50 @@ public final class GpuFoliageRenderer {
 			return true;
 		}
 
+		/**
+		 * Writes a section over the stretch of the buffer the one in its slot was uploaded to, which is the same size:
+		 * its cutout part and its solid part, each where the last upload laid it. Returns whether it was written.
+		 */
+		boolean patch(int slot, Section section) {
+			int stride = section.stride;
+			int cutoutBytes = section.cutoutVertexCount() * stride;
+			int opaqueBytes = section.opaqueVertexCount * stride;
+			if (cutoutBytes + opaqueBytes == 0) {
+				return true;
+			}
+			//? >=1.21.11 {
+			var encoder = RenderSystem.getDevice().createCommandEncoder();
+			if (cutoutBytes > 0) {
+				encoder.writeToBuffer(vertices.slice(firstVertex[slot] * stride, cutoutBytes),
+						section.data.slice(0, cutoutBytes));
+			}
+			if (opaqueBytes > 0) {
+				encoder.writeToBuffer(vertices.slice(firstOpaqueVertex[slot] * stride, opaqueBytes),
+						section.data.slice(cutoutBytes, opaqueBytes));
+			}
+			return true;
+			//?} else {
+			/*// A vertex buffer keeps its buffer to itself; the array it binds says which one its attributes read from.
+			vertices.bind();
+			int buffer = org.lwjgl.opengl.GL20.glGetVertexAttribi(0, org.lwjgl.opengl.GL20.GL_VERTEX_ATTRIB_ARRAY_BUFFER_BINDING);
+			if (buffer == 0) {
+				VertexBuffer.unbind();
+				return false;
+			}
+			com.mojang.blaze3d.platform.GlStateManager._glBindBuffer(org.lwjgl.opengl.GL15.GL_ARRAY_BUFFER, buffer);
+			if (cutoutBytes > 0) {
+				org.lwjgl.opengl.GL15.glBufferSubData(org.lwjgl.opengl.GL15.GL_ARRAY_BUFFER, (long) firstVertex[slot] * stride,
+						section.data.slice(0, cutoutBytes));
+			}
+			if (opaqueBytes > 0) {
+				org.lwjgl.opengl.GL15.glBufferSubData(org.lwjgl.opengl.GL15.GL_ARRAY_BUFFER, (long) firstOpaqueVertex[slot] * stride,
+						section.data.slice(cutoutBytes, opaqueBytes));
+			}
+			VertexBuffer.unbind();
+			return true;
+			*///?}
+		}
+
 		void upload() {
 			// Before 1.21.11 the buffer is uploaded over rather than deleted and made again.
 			//? >=1.21.11 {
@@ -2018,7 +2062,25 @@ public final class GpuFoliageRenderer {
 
 	private static void putSection(long key, Section section) {
 		Region region = REGIONS.computeIfAbsent(regionKeyOf(key), Region::new);
-		region.put(slotOf(key), section);
+		int slot = slotOf(key);
+		// A section that comes out the size it is on screen -- its light changed, as a rule, and nothing else -- is
+		// written over its own stretch of the region's buffer rather than the region uploaded whole: a region is up to
+		// 256 sections, 8 ms and more to upload where the leaves wave, and a carried light asks for a few sections of
+		// it every tick.
+		Section shown = region.uploadedSections[slot];
+		boolean sameSize = shown != null && region.vertices != null && shown.stride == section.stride
+				&& shown.vertexCount == section.vertexCount && shown.opaqueVertexCount == section.opaqueVertexCount;
+		region.put(slot, section);
+		if (sameSize) {
+			long start = System.nanoTime();
+			if (region.patch(slot, section)) {
+				region.uploadedSections[slot] = section;
+				burstPatched++;
+				burstPatchNanos += System.nanoTime() - start;
+				// Unless it waits to be uploaded whole for another section's sake, it is up to date.
+				return;
+			}
+		}
 		if (DIRTY_REGIONS.add(region)) {
 			region.pendingSince = System.currentTimeMillis();
 		}
@@ -2153,7 +2215,7 @@ public final class GpuFoliageRenderer {
 			reseedLoadedChunks(minecraft, minecraft.level);
 		}
 		measureFrame();
-		buildNearest(minecraft, camera);
+		buildNearest(minecraft, camera, frustum);
 		// One region is uploaded a frame, and each is drawn as last uploaded meanwhile, so its buffers and the layout used
 		// to draw from them always agree.
 		uploadDueRegion(camera);
@@ -3514,38 +3576,6 @@ public final class GpuFoliageRenderer {
 		return URGENT.add(key);
 	}
 
-	/**
-	 * Rebuilds the urgent sections, and returns how long that took. Whatever is left when the time is up stays urgent
-	 * for the next frame.
-	 */
-	private static long buildUrgent(Minecraft minecraft) {
-		if (URGENT.isEmpty()) {
-			return 0L;
-		}
-		long begin = System.nanoTime();
-		long urgentBudget = Math.max(URGENT_BUDGET_MIN_NANOS, Math.min(frameBudgetNanos * 2L, URGENT_BUDGET_MAX_NANOS));
-		var urgent = URGENT.iterator();
-		while (urgent.hasNext()) {
-			long key = urgent.nextLong();
-			urgent.remove();
-			// Rebuilt since by the ordinary queue, or out of range by now.
-			if (!DIRTY.remove(key) || !withinRange(minecraft, key)) {
-				continue;
-			}
-			long start = System.nanoTime();
-			rebuild(minecraft, minecraft.level, key);
-			long taken = System.nanoTime() - start;
-			burstRebuilt++;
-			burstMeshNanos += taken;
-			burstMeshMaxNanos = Math.max(burstMeshMaxNanos, taken);
-			URGENT_REGIONS.add(regionKeyOf(key));
-			if (System.nanoTime() - begin >= urgentBudget) {
-				break;
-			}
-		}
-		return System.nanoTime() - begin;
-	}
-
 	/** Uploads the regions the urgent sections were rebuilt into, once none of their urgent sections is left queued. */
 	private static void uploadUrgentRegions() {
 		if (URGENT_REGIONS.isEmpty()) {
@@ -3586,11 +3616,19 @@ public final class GpuFoliageRenderer {
 
 	// ---- Measuring, written to the debug log only: how long a burst of rebuilds takes to reach the screen, from the
 	// first section queued until nothing is left queued or waiting to be uploaded.
+	/**
+	 * Whether the bursts are written to the ordinary log rather than the debug one, which not every loader keeps for a
+	 * mod: while a file of this name stands in the game's folder. For a report: make the file, play, send the log.
+	 */
+	private static final boolean MEASURE_TO_LOG = java.nio.file.Files.exists(java.nio.file.Path.of("mc2-foliage-timing"));
 	private static long burstStartNanos;
 	private static int burstFrames;
 	private static int burstLightQueued;
 	private static int burstLightStreamed;
 	private static int burstAsked;
+	private static int burstPatched;
+	private static int burstRebuiltHidden;
+	private static long burstPatchNanos;
 	private static int burstPeakQueue;
 	private static int burstRebuilt;
 	private static long burstMeshNanos;
@@ -3602,7 +3640,7 @@ public final class GpuFoliageRenderer {
 
 	/** Called once a frame, after the rebuilds and the upload. */
 	private static void measureBurst() {
-		if (!ModTemplate.LOGGER.isDebugEnabled()) {
+		if (!MEASURE_TO_LOG && !ModTemplate.LOGGER.isDebugEnabled()) {
 			return;
 		}
 		if (!DIRTY.isEmpty() || !DIRTY_REGIONS.isEmpty()) {
@@ -3619,20 +3657,29 @@ public final class GpuFoliageRenderer {
 				burstStartNanos = System.nanoTime();
 				burstFrames = 1;
 			}
-			ModTemplate.LOGGER.debug(String.format(java.util.Locale.ROOT,
+			String report = String.format(java.util.Locale.ROOT,
 					"Foliage burst: %.0f ms over %d frames; %d sections rebuilt (%d queued by light, %d of them by a light "
 							+ "on the move, %d asked for by another route, peak queue %d), "
 							+ "meshing %.1f ms in all, %.1f ms the slowest; %d region uploads, %.1f ms in all, %.1f ms the "
-							+ "slowest, longest wait before upload %d ms",
+							+ "slowest, longest wait before upload %d ms; %d sections written over their own, %.1f ms in all; %d of the sections rebuilt were out of view",
 					(System.nanoTime() - burstStartNanos) / 1.0E6D, burstFrames, burstRebuilt, burstLightQueued, burstLightStreamed, burstAsked,
 					burstPeakQueue, burstMeshNanos / 1.0E6D, burstMeshMaxNanos / 1.0E6D, burstUploads,
-					burstUploadNanos / 1.0E6D, burstUploadMaxNanos / 1.0E6D, burstWaitMaxMillis));
+					burstUploadNanos / 1.0E6D, burstUploadMaxNanos / 1.0E6D, burstWaitMaxMillis, burstPatched,
+					burstPatchNanos / 1.0E6D, burstRebuiltHidden);
+			if (MEASURE_TO_LOG) {
+				ModTemplate.LOGGER.info(report);
+			} else {
+				ModTemplate.LOGGER.debug(report);
+			}
 		}
 		burstStartNanos = 0L;
 		burstFrames = 0;
 		burstLightQueued = 0;
 		burstLightStreamed = 0;
 		burstAsked = 0;
+		burstPatched = 0;
+		burstRebuiltHidden = 0;
+		burstPatchNanos = 0L;
 		burstPeakQueue = 0;
 		burstRebuilt = 0;
 		burstMeshNanos = 0L;
@@ -3962,24 +4009,29 @@ public final class GpuFoliageRenderer {
 	 * storm can leave thousands of entries queued, and foliage appearing late at your feet is far
 	 * more noticeable than foliage appearing late further out.
 	 */
-	private static void buildNearest(Minecraft minecraft, Vec3 camera) {
-		// What the player is looking at change first; the rest only with what the frame has left.
-		if (buildUrgent(minecraft) >= frameBudgetNanos) {
-			return;
-		}
+	private static void buildNearest(Minecraft minecraft, Vec3 camera, Frustum frustum) {
 		long[] nearest = new long[REBUILD_BUDGET];
 		double[] distances = new double[REBUILD_BUDGET];
 		Arrays.fill(distances, Double.MAX_VALUE);
 		int found = 0;
+		Object sodium = SodiumBridge.renderer();
 
 		var pending = DIRTY.iterator();
 		while (pending.hasNext()) {
 			long key = pending.next();
 			if (!withinRange(minecraft, key)) {
 				pending.remove();
+				URGENT.remove(key);
 				continue;
 			}
+			// What is in view goes first, nearest first; what is not -- behind the player, or hidden as Sodium sees it --
+			// only after all of that, with whatever the frame has left. A light carried through a forest asks for every
+			// section around the player every tick, and half of them are behind: rebuilt in the order they came, they
+			// held up the ones being looked at.
 			double distance = distanceSqTo(key, camera);
+			if (!inView(key, frustum, sodium)) {
+				distance += OUT_OF_VIEW;
+			}
 			for (int slot = 0; slot < REBUILD_BUDGET; slot++) {
 				if (distance < distances[slot]) {
 					int tail = REBUILD_BUDGET - slot - 1;
@@ -3993,20 +4045,52 @@ public final class GpuFoliageRenderer {
 			}
 		}
 
-		long budgetEnd = System.nanoTime() + frameBudgetNanos;
+		long begin = System.nanoTime();
+		long budgetEnd = begin + frameBudgetNanos;
+		// A change the player just made or saw, in view, may take longer; see URGENT.
+		long urgentEnd = begin
+				+ Math.max(URGENT_BUDGET_MIN_NANOS, Math.min(frameBudgetNanos * 2L, URGENT_BUDGET_MAX_NANOS));
 		for (int i = 0; i < found; i++) {
+			long key = nearest[i];
+			boolean urgent = distances[i] < OUT_OF_VIEW && URGENT.contains(key);
 			// However few sections that is: a heavy resource pack makes a single one cost several milliseconds.
-			if (i > 0 && System.nanoTime() >= budgetEnd) {
-				break;
+			long now = System.nanoTime();
+			if (i > 0 && now >= (urgent ? urgentEnd : budgetEnd)) {
+				if (now >= urgentEnd) {
+					break;
+				}
+				continue;
 			}
-			DIRTY.remove(nearest[i]);
+			DIRTY.remove(key);
+			if (URGENT.remove(key)) {
+				URGENT_REGIONS.add(regionKeyOf(key));
+			}
 			long start = System.nanoTime();
-			rebuild(minecraft, minecraft.level, nearest[i]);
+			rebuild(minecraft, minecraft.level, key);
 			long taken = System.nanoTime() - start;
 			burstRebuilt++;
+			if (distances[i] >= OUT_OF_VIEW) {
+				burstRebuiltHidden++;
+			}
 			burstMeshNanos += taken;
 			burstMeshMaxNanos = Math.max(burstMeshMaxNanos, taken);
 		}
+	}
+
+	/** Added to the distance of a queued section that is out of view, so every one in view is rebuilt before it. */
+	private static final double OUT_OF_VIEW = 1.0E12D;
+
+	/** Whether a section is in the camera's view, and among what Sodium sees where Sodium draws the chunks. */
+	private static boolean inView(long key, Frustum frustum, Object sodium) {
+		int x = SectionPos.sectionToBlockCoord(SectionPos.x(key));
+		int y = SectionPos.sectionToBlockCoord(SectionPos.y(key));
+		int z = SectionPos.sectionToBlockCoord(SectionPos.z(key));
+		if (frustum != null && !frustum.isVisible(new AABB(x - SWAY_MARGIN, y - SWAY_MARGIN, z - SWAY_MARGIN,
+				x + SECTION_SIZE + SWAY_MARGIN, y + SECTION_SIZE + SWAY_MARGIN, z + SECTION_SIZE + SWAY_MARGIN))) {
+			return false;
+		}
+		return sodium == null || SodiumBridge.isVisible(sodium, x + 1, y + 1, z + 1,
+				x + SECTION_SIZE - 1, y + SECTION_SIZE - 1, z + SECTION_SIZE - 1);
 	}
 
 	private static double distanceSqTo(long key, Vec3 camera) {
