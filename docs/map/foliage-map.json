@@ -80,6 +80,11 @@
    "about": "The foliage in Polytone's shadow map."
   },
   {
+   "id": "vulkanmod",
+   "label": "VulkanMod",
+   "about": "The foliage drawn through VulkanMod, which meshes and draws the chunks itself on Vulkan."
+  },
+  {
    "id": "snowrealmagic",
    "label": "Snow! Real Magic",
    "about": "Plants held inside Snow! Real Magic's snow: pushed by Sway, bent, drawn snowy on the CPU and the GPU, shaking snow off when touched."
@@ -135,7 +140,7 @@
    "fileInfo": {
     "gpu/GpuFoliageRenderer.java": {
      "kind": "java",
-     "lines": 4788,
+     "lines": 4800,
      "guard": "//? >=1.20.1 {"
     }
    }
@@ -160,7 +165,7 @@
    "fileInfo": {
     "gpu/GpuFoliageRenderer.java": {
      "kind": "java",
-     "lines": 4788,
+     "lines": 4800,
      "guard": "//? >=1.20.1 {"
     }
    }
@@ -185,7 +190,7 @@
    "fileInfo": {
     "gpu/GpuFoliageRenderer.java": {
      "kind": "java",
-     "lines": 4788,
+     "lines": 4800,
      "guard": "//? >=1.20.1 {"
     }
    }
@@ -219,7 +224,7 @@
    "fileInfo": {
     "gpu/GpuFoliageRenderer.java": {
      "kind": "java",
-     "lines": 4788,
+     "lines": 4800,
      "guard": "//? >=1.20.1 {"
     },
     "mixin/LevelPassMixin.java": {
@@ -245,7 +250,7 @@
    "fileInfo": {
     "gpu/GpuFoliageRenderer.java": {
      "kind": "java",
-     "lines": 4788,
+     "lines": 4800,
      "guard": "//? >=1.20.1 {"
     }
    }
@@ -267,7 +272,7 @@
    "fileInfo": {
     "gpu/GpuFoliageSplit.java": {
      "kind": "java",
-     "lines": 641,
+     "lines": 642,
      "guard": "//? >=1.20.1 {"
     }
    }
@@ -386,7 +391,7 @@
     },
     "gpu/GpuFoliageSplit.java": {
      "kind": "java",
-     "lines": 641,
+     "lines": 642,
      "guard": "//? >=1.20.1 {"
     }
    }
@@ -627,10 +632,13 @@
     "shaders/include/sway.glsl"
    ],
    "summary": "The one place the motion is written: calm sway, pushes, rain wind. Spliced into every shader the foliage is drawn with: the mod's, the terrain's, Sodium's and a shader pack's.",
+   "details": [
+    "No function hands a value back through an 'out' parameter, and the pushes are read through mc2_cellPosition / mc2_cellForce: VulkanMod's shader converter drops the one and takes no arrays in a uniform block (see VulkanBridge)."
+   ],
    "fileInfo": {
     "shaders/include/sway.glsl": {
      "kind": "shader",
-     "lines": 227,
+     "lines": 250,
      "guard": ""
     }
    }
@@ -659,7 +667,7 @@
     },
     "shaders/core/foliage_legacy.vsh": {
      "kind": "shader",
-     "lines": 192,
+     "lines": 198,
      "guard": ""
     },
     "shaders/core/foliage_legacy.fsh": {
@@ -674,7 +682,7 @@
     },
     "shaders/core/foliage_legacy_1_20.vsh": {
      "kind": "shader",
-     "lines": 191,
+     "lines": 197,
      "guard": ""
     }
    }
@@ -697,7 +705,7 @@
    "fileInfo": {
     "shaders/core/foliage.vsh": {
      "kind": "shader",
-     "lines": 68,
+     "lines": 223,
      "guard": ""
     },
     "shaders/core/foliage.fsh": {
@@ -1144,6 +1152,54 @@
     ">=1.21.1"
    ],
    "summary": "Has a shadow map from 1.21.1 (not 1.20.1). No Polytone for 26.3 yet.",
+   "fileInfo": {}
+  },
+  {
+   "id": "vulkan-bridge",
+   "label": "VulkanBridge",
+   "group": "vulkanmod",
+   "kind": "component",
+   "loaders": [
+    "fabric"
+   ],
+   "files": [
+    "gpu/VulkanBridge.java",
+    "mixin/VulkanMeshSwapMixin.java"
+   ],
+   "summary": "What the renderer asks of VulkanMod, by name (never compiled against it): whether it draws the chunks, whether a model is asked for by one of its chunk builds (its RenderRegion), and when a finished build is put in place (TaskDispatcher.doSectionUpdate, a @Pseudo mixin, which hands the section over as Sodium's uploads do).",
+   "details": [
+    "Supported from VulkanMod 0.6.8 (1.21.11, 26.1.2), where it stands in for the game's graphics device, so the own-pass draw path runs through it unchanged. Tested on 1.21.11 Fabric; 26.1.2 not yet. Before that (0.6.7 on 1.21.1, 0.5.2 on 1.20.1) it emulates OpenGL call by call without the calls drawLegacy needs, so its chunk builds are not recognised there and the foliage stays in its chunk meshes (Sway still moves it).",
+    "The foliage is drawn with the mod's own shader, never the terrain's: VulkanMod reads its terrain shaders from its own jar, which no resource pack replaces.",
+    "Its shader converter (0.6.8's GLSLParser; the repository's dev branch has since replaced it) takes no arrays, structs or bools in a uniform block, so under the define MC2_NO_UNIFORM_ARRAYS foliage.vsh lays each vec4[128] out as 32 mat4 with the same bytes. It also drops the 'out' of a function's parameter, leaving the value undefined: no function in sway.glsl or the legacy vertex shaders hands a value back through a parameter. That one put every plant half a block off in height per block of north-south distance to the camera.",
+    "It overwrites VertexConsumer.putBulkData and packs the colour with red and blue changed over, right for its own buffers only; the 1.21.1-1.21.11 vertex writer changes them back.",
+    "It writes a non-mappable buffer through a staging copy, once a frame before the frame's draws run: such a buffer written twice in a frame shows every draw its last write.",
+    "Read the jar, not GitHub: decompile it and diff the converter's output against its input for every shader, compiling is not enough."
+   ],
+   "fileInfo": {
+    "gpu/VulkanBridge.java": {
+     "kind": "java",
+     "lines": 136,
+     "guard": "//? >=1.20.1 {"
+    },
+    "mixin/VulkanMeshSwapMixin.java": {
+     "kind": "java",
+     "lines": 32,
+     "guard": "//? >=1.20.1 {"
+    }
+   }
+  },
+  {
+   "id": "vulkanmod",
+   "label": "VulkanMod",
+   "group": "external",
+   "kind": "mod",
+   "loaders": [
+    "fabric"
+   ],
+   "versions": [
+    "<26.2"
+   ],
+   "summary": "Replaces the OpenGL renderer with Vulkan and owns chunk meshing and drawing, shaped like Sodium. Fabric only. 0.5.2 (1.20.1), 0.6.7 (1.21.1), 0.6.8 (1.21.11, 26.1.2); none from 26.2, where the game has its own Vulkan backend.",
    "fileInfo": {}
   },
   {
@@ -1985,6 +2041,36 @@
    "label": "hooks"
   },
   {
+   "source": "renderer",
+   "target": "vulkan-bridge",
+   "label": "asks"
+  },
+  {
+   "source": "split",
+   "target": "vulkan-bridge",
+   "label": "recognises builds through"
+  },
+  {
+   "source": "handover",
+   "target": "vulkan-bridge",
+   "label": "with VulkanMod"
+  },
+  {
+   "source": "vulkan-bridge",
+   "target": "vulkanmod",
+   "label": "reaches by name"
+  },
+  {
+   "source": "vulkan-bridge",
+   "target": "sway-glsl",
+   "label": "constrains"
+  },
+  {
+   "source": "vulkan-bridge",
+   "target": "sh-pipeline",
+   "label": "draws with"
+  },
+  {
    "source": "level-pass",
    "target": "iris",
    "label": "view bobbing from"
@@ -2356,6 +2442,17 @@
     }
    },
    {
+    "label": "VulkanMod",
+    "cells": {
+     "1.20.1": "fabric: GPU renderer stays out (0.5.2, no device); Sway moves the foliage",
+     "1.21.1": "fabric: GPU renderer stays out (0.6.7, no device); Sway moves the foliage",
+     "1.21.11": "fabric: done (0.6.8: own shader, mesh split, handover)",
+     "26.1.2": "fabric: written, not tested yet (0.6.8)",
+     "26.2": "no VulkanMod (native Vulkan)",
+     "26.3": "no VulkanMod (native Vulkan)"
+    }
+   },
+   {
     "label": "Snow! Real Magic",
     "cells": {
      "1.20.1": "fabric: done (SwayVariantModels, GPU plant + snowy variant, particles) | forge: done (Indigo mixins, vanilla and Embeddium, particles)",
@@ -2412,7 +2509,8 @@
     "LevelExtractorMixin",
     "SectionMeshSwapMixin",
     "SodiumMeshSwapMixin",
-    "SwayProximityForceMixin"
+    "SwayProximityForceMixin",
+    "VulkanMeshSwapMixin"
    ]
   },
   "mc2_interactivefoliage.iris.mixins.json": {
@@ -2481,12 +2579,12 @@
   },
   "gpu/GpuFoliageRenderer.java": {
    "kind": "java",
-   "lines": 4788,
+   "lines": 4800,
    "guard": "//? >=1.20.1 {"
   },
   "gpu/GpuFoliageSplit.java": {
    "kind": "java",
-   "lines": 641,
+   "lines": 642,
    "guard": "//? >=1.20.1 {"
   },
   "gpu/IrisCompat.java": {
@@ -2538,6 +2636,11 @@
    "kind": "java",
    "lines": 71,
    "guard": ""
+  },
+  "gpu/VulkanBridge.java": {
+   "kind": "java",
+   "lines": 136,
+   "guard": "//? >=1.20.1 {"
   },
   "gpu/WindShelter.java": {
    "kind": "java",
@@ -2637,6 +2740,11 @@
   "mixin/SwayProximityForceMixin.java": {
    "kind": "java",
    "lines": 40,
+   "guard": "//? >=1.20.1 {"
+  },
+  "mixin/VulkanMeshSwapMixin.java": {
+   "kind": "java",
+   "lines": 32,
    "guard": "//? >=1.20.1 {"
   },
   "ModCompatRegistry.java": {
@@ -2771,7 +2879,7 @@
   },
   "shaders/core/foliage.vsh": {
    "kind": "shader",
-   "lines": 68,
+   "lines": 223,
    "guard": ""
   },
   "shaders/core/foliage_legacy.fsh": {
@@ -2786,7 +2894,7 @@
   },
   "shaders/core/foliage_legacy.vsh": {
    "kind": "shader",
-   "lines": 192,
+   "lines": 198,
    "guard": ""
   },
   "shaders/core/foliage_legacy_1_20.json": {
@@ -2796,7 +2904,7 @@
   },
   "shaders/core/foliage_legacy_1_20.vsh": {
    "kind": "shader",
-   "lines": 191,
+   "lines": 197,
    "guard": ""
   },
   "shaders/core/foliage_modern.fsh": {
@@ -2821,7 +2929,7 @@
   },
   "shaders/include/sway.glsl": {
    "kind": "shader",
-   "lines": 227,
+   "lines": 250,
    "guard": ""
   }
  },

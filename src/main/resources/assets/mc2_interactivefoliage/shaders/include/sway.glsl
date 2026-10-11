@@ -83,6 +83,19 @@ float mc2_edgeEase(vec3 cell) {
     return smoothstep(0.0, MC2_EDGE_EASE_BLOCKS, inside);
 }
 
+// The cells are read through these two, so a shader whose renderer takes no arrays in a uniform block can lay them out
+// another way and say how they are read itself: it defines MC2_NO_UNIFORM_ARRAYS, and both functions, before this file.
+#ifdef MC2_NO_UNIFORM_ARRAYS
+#else
+vec4 mc2_cellPosition(int i) {
+    return mc2_CellPosition[i];
+}
+
+vec4 mc2_cellForce(int i) {
+    return mc2_CellForce[i];
+}
+#endif
+
 // Sway's push on the plant whose anchor block is at this cell, or none. Every vertex of a plant reads the same push,
 // so the whole plant leans as one piece.
 vec2 mc2_cellPush(vec3 cell) {
@@ -92,9 +105,10 @@ vec2 mc2_cellPush(vec3 cell) {
         return vec2(0.0);
     }
     for (int i = 0; i < mc2_CellCount; i++) {
-        if (all(lessThan(abs(mc2_CellPosition[i].xyz - cell), vec3(0.5)))) {
-            vec2 force = mc2_CellForce[i].xy;
-            float limit = mc2_CellForce[i].z;
+        if (all(lessThan(abs(mc2_cellPosition(i).xyz - cell), vec3(0.5)))) {
+            vec4 pushed = mc2_cellForce(i);
+            vec2 force = pushed.xy;
+            float limit = pushed.z;
             float amount = length(force);
             return amount > limit ? force * (limit / amount) : force;
         }
@@ -123,16 +137,24 @@ vec3 mc2_unpackCell(float bits) {
 // mod works out when it meshes the plant. A block hanging on leaves keeps three of those four bits for the wind and gives
 // the lowest to whether the leaves wave where the vertex is; mc2_sway takes z apart for it. x: the wind weight, y: the
 // push, z: the wind's reach, w: how much of the calm
-// sway the plant has, 1 or 0; steady: 1 for a block a push leaves swaying, 0 for a plant.
-vec4 mc2_unpackWeights(float bits, out float steady) {
+// sway the plant has, 1 or 0. Whether a push leaves the block swaying is read apart, by mc2_unpackSteady: no function
+// here hands a value back through a parameter, which not every renderer's shader converter keeps (VulkanMod's drops
+// the qualifier, and the value with it).
+vec4 mc2_unpackWeights(float bits) {
     float exposure = bits - floor(bits / 16.0) * 16.0;
     float rest = (bits - exposure) / 16.0;
-    steady = rest - floor(rest / 2.0) * 2.0;
+    float steady = rest - floor(rest / 2.0) * 2.0;
     rest = (rest - steady) / 2.0;
     float still = rest - floor(rest / 2.0) * 2.0;
     float weights = (rest - still) / 2.0;
     float wave = floor(weights / 256.0);
     return vec4(wave / 1023.0, (weights - wave * 256.0) / 255.0, exposure / 15.0, 1.0 - still);
+}
+
+// SwayWeights' fifth bit: 1 for a block a push leaves swaying, 0 for a plant.
+float mc2_unpackSteady(float bits) {
+    float rest = floor(bits / 16.0);
+    return rest - floor(rest / 2.0) * 2.0;
 }
 
 // How far rain's wind moves a vertex that may sway this far, along x and z: the plant leans downwind, gusts rolling
@@ -153,17 +175,17 @@ vec2 mc2_wind(vec3 world, float phase, float gameTime, float reach, float shake)
 }
 
 // The calm sway and rain's wind of a vertex that may sway this far, as far as the wind reaches it (exposure) and the
-// calm sway is its to have (calmShare); rain's reach eases off by where easeAt is. Returns the offset along x and z,
-// and the wind's own part of it in wind.
-vec2 mc2_motion(vec3 world, float phase, float gameTime, float reach, float shake, float calmShare, float exposure,
-                vec3 easeAt, out vec2 wind) {
+// calm sway is its to have (calmShare); rain's reach eases off by where easeAt is. Returns the offset along x and z
+// in xy, and the wind's own part of it in zw.
+vec4 mc2_motion(vec3 world, float phase, float gameTime, float reach, float shake, float calmShare, float exposure,
+                vec3 easeAt) {
     vec2 sway = vec2(sin(phase), cos(phase * 1.3) * 0.7) * reach * shake * mc2_CalmSway * calmShare;
     // The game eases rain in and out over a few seconds, and the sway turns into the wind along with it -- as far as
     // the wind reaches the plant: under a roof or behind a wall it keeps its calm sway.
     float rain = mc2_Weather.x * exposure
             * (1.0 - smoothstep(mc2_Weather.z - mc2_Weather.w, mc2_Weather.z, length(easeAt.xz + 0.5)));
-    wind = rain > 0.0 ? mc2_wind(world, phase, gameTime, reach, shake) * rain : vec2(0.0);
-    return mix(sway, vec2(0.0), rain) + wind;
+    vec2 wind = rain > 0.0 ? mc2_wind(world, phase, gameTime, reach, shake) * rain : vec2(0.0);
+    return vec4(mix(sway, vec2(0.0), rain) + wind, wind);
 }
 
 // Moves one vertex. pos is relative to the camera; modelOffset is its region's corner relative to the camera, which
@@ -179,8 +201,8 @@ vec3 mc2_sway(vec3 pos, vec3 modelOffset, ivec3 cameraBlockPos, vec3 cameraOffse
     float phase = (world.x + world.z) * MC2_SWAY_SCALE + gameTime * MC2_SWAY_SPEED;
     vec3 cell = mc2_unpackCell(swayCell) + modelOffset;
     vec2 force = mc2_cellPush(cell);
-    float steady;
-    vec4 weights = mc2_unpackWeights(swayWeights, steady);
+    float steady = mc2_unpackSteady(swayWeights);
+    vec4 weights = mc2_unpackWeights(swayWeights);
     // A block hanging on leaves -- a vine while they wave -- is marked still and steady at once, which nothing else is.
     // It sways as the plant it is, all of its calm sway, and moves as the leaves do on top of that, all over, at the
     // leaves' own weight; the wind reaches both as far as it reaches the leaves at the same corner.
@@ -206,15 +228,16 @@ vec3 mc2_sway(vec3 pos, vec3 modelOffset, ivec3 cameraBlockPos, vec3 cameraOffse
     // from the leaves, which nothing pushes.
     float shake = steady > 0.5 ? 1.0 : mix(1.0, MC2_PUSHED_SWAY, calm);
     vec2 push = force * weights.y * MC2_INTERACT_STRENGTH;
-    vec2 wind;
-    vec2 offset = mc2_motion(world, phase, gameTime, reach, shake, calmShare, exposure, easeAt, wind);
+    vec4 motion = mc2_motion(world, phase, gameTime, reach, shake, calmShare, exposure, easeAt);
+    vec2 offset = motion.xy;
+    vec2 wind = motion.zw;
     if (hanging) {
         // Where it hangs its own sway is nothing, and it moves exactly as the leaf beside it.
         vec3 atVertex = pos - 0.5;
         float leafReach = MC2_LEAVES_WAVE * leafWaves * MC2_SWAY_STRENGTH * mc2_SwayIntensity * mc2_edgeEase(atVertex);
-        vec2 leafWind;
-        offset += mc2_motion(world, phase, gameTime, leafReach, 1.0, 1.0, exposure, atVertex, leafWind);
-        wind += leafWind;
+        vec4 leafMotion = mc2_motion(world, phase, gameTime, leafReach, 1.0, 1.0, exposure, atVertex);
+        offset += leafMotion.xy;
+        wind += leafMotion.zw;
     }
     pos.xz += offset + push;
     // A plant bends rather than slides: the further its tip is pushed, the lower it sits. Up to a block of push the

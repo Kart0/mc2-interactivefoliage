@@ -531,6 +531,10 @@ public final class GpuFoliageRenderer {
 		if (cutout) {
 			builder.withShaderDefine("ALPHA_CUTOUT", 0.5F);
 		}
+		if (VulkanBridge.drawsChunks()) {
+			// VulkanMod's shader converter takes no arrays in a uniform block; see foliage.vsh.
+			builder.withShaderDefine("MC2_NO_UNIFORM_ARRAYS");
+		}
 		return builder.build();
 	}
 	*///?}
@@ -2848,6 +2852,10 @@ public final class GpuFoliageRenderer {
 	 * Sodium's while Sodium draws them, the terrain's otherwise -- where they compile, and the mod's own where they don't.
 	 ^/
 	private static RenderPipeline ownPipeline() {
+		if (VulkanBridge.drawsChunks()) {
+			// VulkanMod draws the chunks with shaders of its own, which are not the terrain's.
+			return PIPELINE;
+		}
 		if (SodiumBridge.drawsChunks()) {
 			// The terrain's own shaders are not what the chunks are drawn with then, so where Sodium's cannot be read the
 			// mod keeps to its own rather than following shaders the terrain around the foliage does not.
@@ -4195,6 +4203,10 @@ public final class GpuFoliageRenderer {
 
 		@Override
 		public VertexConsumer setColor(int packed) {
+			// VulkanMod draws a block for any vertex consumer but its own with red and blue changed over.
+			if (VulkanBridge.drawsChunks()) {
+				packed = packed & 0xFF00FF00 | (packed & 0x00FF0000) >> 16 | (packed & 0x000000FF) << 16;
+			}
 			delegate.setColor(packed);
 			return this;
 		}

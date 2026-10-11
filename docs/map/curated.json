@@ -23,6 +23,7 @@
     {"id": "sodium", "label": "Sodium & kin", "about": "Sodium, Embeddium and Indium: who meshes and draws the chunks when they are installed."},
     {"id": "iris", "label": "Shader packs", "about": "Iris and Oculus: the foliage drawn through a shader pack's own programs, swaying, into its shadow map too."},
     {"id": "polytone", "label": "Polytone", "about": "The foliage in Polytone's shadow map."},
+    {"id": "vulkanmod", "label": "VulkanMod", "about": "The foliage drawn through VulkanMod, which meshes and draws the chunks itself on Vulkan."},
     {"id": "snowrealmagic", "label": "Snow! Real Magic", "about": "Plants held inside Snow! Real Magic's snow: pushed by Sway, bent, drawn snowy on the CPU and the GPU, shaking snow off when touched."},
     {"id": "loader", "label": "Loaders", "about": "Where the mod meets Fabric, NeoForge and Forge."},
     {"id": "build", "label": "Build & dev", "about": "Stonecutter, build-logic, access wideners, mixin configs and the dev-run traps."},
@@ -156,7 +157,8 @@
 
     {"id": "sway-glsl", "label": "sway.glsl", "group": "shaders", "kind": "shader",
      "files": ["shaders/include/sway.glsl"],
-     "summary": "The one place the motion is written: calm sway, pushes, rain wind. Spliced into every shader the foliage is drawn with: the mod's, the terrain's, Sodium's and a shader pack's."},
+     "summary": "The one place the motion is written: calm sway, pushes, rain wind. Spliced into every shader the foliage is drawn with: the mod's, the terrain's, Sodium's and a shader pack's.",
+     "details": ["No function hands a value back through an 'out' parameter, and the pushes are read through mc2_cellPosition / mc2_cellForce: VulkanMod's shader converter drops the one and takes no arrays in a uniform block (see VulkanBridge)."]},
 
     {"id": "sh-legacy", "label": "foliage_legacy*", "group": "shaders", "kind": "shader", "versions": ["<1.21.11"],
      "files": ["shaders/core/foliage_legacy.json", "shaders/core/foliage_legacy.vsh", "shaders/core/foliage_legacy.fsh", "shaders/core/foliage_legacy_1_20.json", "shaders/core/foliage_legacy_1_20.vsh"],
@@ -279,6 +281,21 @@
 
     {"id": "polytone", "label": "Polytone", "group": "external", "kind": "mod", "versions": [">=1.21.1"],
      "summary": "Has a shadow map from 1.21.1 (not 1.20.1). No Polytone for 26.3 yet."},
+
+    {"id": "vulkan-bridge", "label": "VulkanBridge", "group": "vulkanmod", "kind": "component", "loaders": ["fabric"],
+     "files": ["gpu/VulkanBridge.java", "mixin/VulkanMeshSwapMixin.java"],
+     "summary": "What the renderer asks of VulkanMod, by name (never compiled against it): whether it draws the chunks, whether a model is asked for by one of its chunk builds (its RenderRegion), and when a finished build is put in place (TaskDispatcher.doSectionUpdate, a @Pseudo mixin, which hands the section over as Sodium's uploads do).",
+     "details": [
+       "Supported from VulkanMod 0.6.8 (1.21.11, 26.1.2), where it stands in for the game's graphics device, so the own-pass draw path runs through it unchanged. Tested on 1.21.11 Fabric; 26.1.2 not yet. Before that (0.6.7 on 1.21.1, 0.5.2 on 1.20.1) it emulates OpenGL call by call without the calls drawLegacy needs, so its chunk builds are not recognised there and the foliage stays in its chunk meshes (Sway still moves it).",
+       "The foliage is drawn with the mod's own shader, never the terrain's: VulkanMod reads its terrain shaders from its own jar, which no resource pack replaces.",
+       "Its shader converter (0.6.8's GLSLParser; the repository's dev branch has since replaced it) takes no arrays, structs or bools in a uniform block, so under the define MC2_NO_UNIFORM_ARRAYS foliage.vsh lays each vec4[128] out as 32 mat4 with the same bytes. It also drops the 'out' of a function's parameter, leaving the value undefined: no function in sway.glsl or the legacy vertex shaders hands a value back through a parameter. That one put every plant half a block off in height per block of north-south distance to the camera.",
+       "It overwrites VertexConsumer.putBulkData and packs the colour with red and blue changed over, right for its own buffers only; the 1.21.1-1.21.11 vertex writer changes them back.",
+       "It writes a non-mappable buffer through a staging copy, once a frame before the frame's draws run: such a buffer written twice in a frame shows every draw its last write.",
+       "Read the jar, not GitHub: decompile it and diff the converter's output against its input for every shader, compiling is not enough."
+     ]},
+
+    {"id": "vulkanmod", "label": "VulkanMod", "group": "external", "kind": "mod", "loaders": ["fabric"], "versions": ["<26.2"],
+     "summary": "Replaces the OpenGL renderer with Vulkan and owns chunk meshing and drawing, shaped like Sodium. Fabric only. 0.5.2 (1.20.1), 0.6.7 (1.21.1), 0.6.8 (1.21.11, 26.1.2); none from 26.2, where the game has its own Vulkan backend."},
 
     {"id": "srm", "label": "Snow! Real Magic", "group": "external", "kind": "mod",
      "summary": "Lets snow settle on plants: the plant's block becomes one of its snow blocks, which keeps the plant in its block entity (SnowBlockEntity.getContainedState) and draws it through the plant's own model, at the same position, before the snow. Grass, ferns, tall grass, large ferns and berry bushes get a snowy variant model (declared in .mcmeta files, kept in its SnowVariantModel wrapper).",
@@ -484,6 +501,12 @@
     ["iris-inject", "draw-split", "on 26.3 via"],
     ["polytone-shadow", "renderer", "calls drawPolytoneShadow"],
     ["polytone-shadow", "polytone", "hooks"],
+    ["renderer", "vulkan-bridge", "asks"],
+    ["split", "vulkan-bridge", "recognises builds through"],
+    ["handover", "vulkan-bridge", "with VulkanMod"],
+    ["vulkan-bridge", "vulkanmod", "reaches by name"],
+    ["vulkan-bridge", "sway-glsl", "constrains"],
+    ["vulkan-bridge", "sh-pipeline", "draws with"],
     ["level-pass", "iris", "view bobbing from"],
     ["stonecutter", "build-logic", "drives"],
     ["build-logic", "mixin-configs", "lists"],
@@ -591,6 +614,10 @@
       {"label": "Polytone shadow", "cells": {
         "1.20.1": "none (no shadow map)", "1.21.1": "ShadowMapRendererMixin", "1.21.11": "ShadowMapRendererMixin",
         "26.1.2": "ShadowMapRendererMixin", "26.2": "ShadowMapRendererMixin", "26.3": "none yet (no Polytone)"}},
+      {"label": "VulkanMod", "cells": {
+        "1.20.1": "fabric: GPU renderer stays out (0.5.2, no device); Sway moves the foliage", "1.21.1": "fabric: GPU renderer stays out (0.6.7, no device); Sway moves the foliage",
+        "1.21.11": "fabric: done (0.6.8: own shader, mesh split, handover)", "26.1.2": "fabric: written, not tested yet (0.6.8)",
+        "26.2": "no VulkanMod (native Vulkan)", "26.3": "no VulkanMod (native Vulkan)"}},
       {"label": "Snow! Real Magic", "cells": {
         "1.20.1": "fabric: done (SwayVariantModels, GPU plant + snowy variant, particles) | forge: done (Indigo mixins, vanilla and Embeddium, particles)",
         "1.21.1": "fabric: done (SRM 12.x snow blocks, CPU, GPU, Iris, particles) | neoforge: done (SnowRenderApiMixin, vanilla, Sodium, Iris, particles)",

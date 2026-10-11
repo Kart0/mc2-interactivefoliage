@@ -12,6 +12,7 @@
     "LevelExtractorMixin",
     "SectionMeshSwapMixin",
     "SodiumMeshSwapMixin",
+    "VulkanMeshSwapMixin",
     "SwayProximityForceMixin"
   ]
 }

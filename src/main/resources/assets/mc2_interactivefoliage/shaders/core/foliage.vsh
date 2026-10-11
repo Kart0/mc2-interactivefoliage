@@ -30,6 +30,160 @@ layout(std140) uniform FoliageSway {
 };
 
 #define MC2_MAX_CELLS 128
+#ifdef MC2_NO_UNIFORM_ARRAYS
+// For a renderer whose shader converter takes no arrays in a uniform block (VulkanMod's): the same bytes, each array
+// of 128 vec4 laid out as 32 mat4, whose columns are those vec4 in the same order, read through the two functions
+// sway.glsl asks for.
+layout(std140) uniform FoliageInteraction {
+    int mc2_CellCount;
+    vec4 mc2_CellBoundsMin;
+    vec4 mc2_CellBoundsMax;
+    mat4 mc2_CellPosition0;
+    mat4 mc2_CellPosition1;
+    mat4 mc2_CellPosition2;
+    mat4 mc2_CellPosition3;
+    mat4 mc2_CellPosition4;
+    mat4 mc2_CellPosition5;
+    mat4 mc2_CellPosition6;
+    mat4 mc2_CellPosition7;
+    mat4 mc2_CellPosition8;
+    mat4 mc2_CellPosition9;
+    mat4 mc2_CellPosition10;
+    mat4 mc2_CellPosition11;
+    mat4 mc2_CellPosition12;
+    mat4 mc2_CellPosition13;
+    mat4 mc2_CellPosition14;
+    mat4 mc2_CellPosition15;
+    mat4 mc2_CellPosition16;
+    mat4 mc2_CellPosition17;
+    mat4 mc2_CellPosition18;
+    mat4 mc2_CellPosition19;
+    mat4 mc2_CellPosition20;
+    mat4 mc2_CellPosition21;
+    mat4 mc2_CellPosition22;
+    mat4 mc2_CellPosition23;
+    mat4 mc2_CellPosition24;
+    mat4 mc2_CellPosition25;
+    mat4 mc2_CellPosition26;
+    mat4 mc2_CellPosition27;
+    mat4 mc2_CellPosition28;
+    mat4 mc2_CellPosition29;
+    mat4 mc2_CellPosition30;
+    mat4 mc2_CellPosition31;
+    mat4 mc2_CellForce0;
+    mat4 mc2_CellForce1;
+    mat4 mc2_CellForce2;
+    mat4 mc2_CellForce3;
+    mat4 mc2_CellForce4;
+    mat4 mc2_CellForce5;
+    mat4 mc2_CellForce6;
+    mat4 mc2_CellForce7;
+    mat4 mc2_CellForce8;
+    mat4 mc2_CellForce9;
+    mat4 mc2_CellForce10;
+    mat4 mc2_CellForce11;
+    mat4 mc2_CellForce12;
+    mat4 mc2_CellForce13;
+    mat4 mc2_CellForce14;
+    mat4 mc2_CellForce15;
+    mat4 mc2_CellForce16;
+    mat4 mc2_CellForce17;
+    mat4 mc2_CellForce18;
+    mat4 mc2_CellForce19;
+    mat4 mc2_CellForce20;
+    mat4 mc2_CellForce21;
+    mat4 mc2_CellForce22;
+    mat4 mc2_CellForce23;
+    mat4 mc2_CellForce24;
+    mat4 mc2_CellForce25;
+    mat4 mc2_CellForce26;
+    mat4 mc2_CellForce27;
+    mat4 mc2_CellForce28;
+    mat4 mc2_CellForce29;
+    mat4 mc2_CellForce30;
+    mat4 mc2_CellForce31;
+};
+
+vec4 mc2_cellPosition(int i) {
+    int field = i / 4;
+    int column = i - field * 4;
+    switch (field) {
+        case 0: return mc2_CellPosition0[column];
+        case 1: return mc2_CellPosition1[column];
+        case 2: return mc2_CellPosition2[column];
+        case 3: return mc2_CellPosition3[column];
+        case 4: return mc2_CellPosition4[column];
+        case 5: return mc2_CellPosition5[column];
+        case 6: return mc2_CellPosition6[column];
+        case 7: return mc2_CellPosition7[column];
+        case 8: return mc2_CellPosition8[column];
+        case 9: return mc2_CellPosition9[column];
+        case 10: return mc2_CellPosition10[column];
+        case 11: return mc2_CellPosition11[column];
+        case 12: return mc2_CellPosition12[column];
+        case 13: return mc2_CellPosition13[column];
+        case 14: return mc2_CellPosition14[column];
+        case 15: return mc2_CellPosition15[column];
+        case 16: return mc2_CellPosition16[column];
+        case 17: return mc2_CellPosition17[column];
+        case 18: return mc2_CellPosition18[column];
+        case 19: return mc2_CellPosition19[column];
+        case 20: return mc2_CellPosition20[column];
+        case 21: return mc2_CellPosition21[column];
+        case 22: return mc2_CellPosition22[column];
+        case 23: return mc2_CellPosition23[column];
+        case 24: return mc2_CellPosition24[column];
+        case 25: return mc2_CellPosition25[column];
+        case 26: return mc2_CellPosition26[column];
+        case 27: return mc2_CellPosition27[column];
+        case 28: return mc2_CellPosition28[column];
+        case 29: return mc2_CellPosition29[column];
+        case 30: return mc2_CellPosition30[column];
+        case 31: return mc2_CellPosition31[column];
+    }
+    return vec4(0.0);
+}
+
+vec4 mc2_cellForce(int i) {
+    int field = i / 4;
+    int column = i - field * 4;
+    switch (field) {
+        case 0: return mc2_CellForce0[column];
+        case 1: return mc2_CellForce1[column];
+        case 2: return mc2_CellForce2[column];
+        case 3: return mc2_CellForce3[column];
+        case 4: return mc2_CellForce4[column];
+        case 5: return mc2_CellForce5[column];
+        case 6: return mc2_CellForce6[column];
+        case 7: return mc2_CellForce7[column];
+        case 8: return mc2_CellForce8[column];
+        case 9: return mc2_CellForce9[column];
+        case 10: return mc2_CellForce10[column];
+        case 11: return mc2_CellForce11[column];
+        case 12: return mc2_CellForce12[column];
+        case 13: return mc2_CellForce13[column];
+        case 14: return mc2_CellForce14[column];
+        case 15: return mc2_CellForce15[column];
+        case 16: return mc2_CellForce16[column];
+        case 17: return mc2_CellForce17[column];
+        case 18: return mc2_CellForce18[column];
+        case 19: return mc2_CellForce19[column];
+        case 20: return mc2_CellForce20[column];
+        case 21: return mc2_CellForce21[column];
+        case 22: return mc2_CellForce22[column];
+        case 23: return mc2_CellForce23[column];
+        case 24: return mc2_CellForce24[column];
+        case 25: return mc2_CellForce25[column];
+        case 26: return mc2_CellForce26[column];
+        case 27: return mc2_CellForce27[column];
+        case 28: return mc2_CellForce28[column];
+        case 29: return mc2_CellForce29[column];
+        case 30: return mc2_CellForce30[column];
+        case 31: return mc2_CellForce31[column];
+    }
+    return vec4(0.0);
+}
+#else
 layout(std140) uniform FoliageInteraction {
     int mc2_CellCount;
     vec4 mc2_CellBoundsMin;
@@ -37,6 +191,7 @@ layout(std140) uniform FoliageInteraction {
     vec4 mc2_CellPosition[MC2_MAX_CELLS];
     vec4 mc2_CellForce[MC2_MAX_CELLS];
 };
+#endif
 
 #moj_import <mc2_interactivefoliage:sway.glsl>
 

@@ -214,7 +214,8 @@ public final class GpuFoliageSplit {
 		// snapshot itself, so it is known by name.
 		chunkBuild = chunkBuild || EMBEDDIUM_SLICE_VIEW.equals(level.getClass().getName());
 		*///?}
-		if (!chunkBuild &&(SODIUM_LEVEL_SLICE == null || !SODIUM_LEVEL_SLICE.isInstance(level))) {
+		if (!chunkBuild && (SODIUM_LEVEL_SLICE == null || !SODIUM_LEVEL_SLICE.isInstance(level))
+				&& !VulkanBridge.isChunkBuild(level)) {
 			return false;
 		}
 		return decide(pos);
