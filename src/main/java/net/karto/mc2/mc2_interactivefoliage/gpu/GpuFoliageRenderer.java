@@ -3576,25 +3576,22 @@ public final class GpuFoliageRenderer {
 		return URGENT.add(key);
 	}
 
-	/** Uploads the regions the urgent sections were rebuilt into, once none of their urgent sections is left queued. */
+	/**
+	 * Uploads the regions the urgent sections rebuilt this frame are in, on this frame, where they could not be written
+	 * over their own place: a section that changed size, which is a block placed or broken. Not once the rest of the
+	 * region's urgent sections are done, as it was: a torch set down on a bush changes the light of thirty sections
+	 * around it, and the bush stayed on screen, inside the torch, until the last of them was rebuilt -- half a second
+	 * with the ones out of view taking their turn.
+	 */
 	private static void uploadUrgentRegions() {
 		if (URGENT_REGIONS.isEmpty()) {
 			return;
 		}
-		REGIONS_WITH_QUEUED_SECTIONS.clear();
-		var left = URGENT.iterator();
-		while (left.hasNext()) {
-			REGIONS_WITH_QUEUED_SECTIONS.add(regionKeyOf(left.nextLong()));
-		}
 		long now = System.currentTimeMillis();
 		var regions = URGENT_REGIONS.iterator();
 		while (regions.hasNext()) {
-			long regionKey = regions.nextLong();
-			if (REGIONS_WITH_QUEUED_SECTIONS.contains(regionKey)) {
-				continue;
-			}
+			Region region = REGIONS.get(regions.nextLong());
 			regions.remove();
-			Region region = REGIONS.get(regionKey);
 			if (region != null && DIRTY_REGIONS.remove(region)) {
 				uploadMeasured(region, now);
 			}
@@ -3628,6 +3625,8 @@ public final class GpuFoliageRenderer {
 	private static int burstAsked;
 	private static int burstPatched;
 	private static int burstRebuiltHidden;
+	private static long burstAnchorNanos;
+	private static long burstWeightNanos;
 	private static long burstPatchNanos;
 	private static int burstPeakQueue;
 	private static int burstRebuilt;
@@ -3661,11 +3660,13 @@ public final class GpuFoliageRenderer {
 					"Foliage burst: %.0f ms over %d frames; %d sections rebuilt (%d queued by light, %d of them by a light "
 							+ "on the move, %d asked for by another route, peak queue %d), "
 							+ "meshing %.1f ms in all, %.1f ms the slowest; %d region uploads, %.1f ms in all, %.1f ms the "
-							+ "slowest, longest wait before upload %d ms; %d sections written over their own, %.1f ms in all; %d of the sections rebuilt were out of view",
+							+ "slowest, longest wait before upload %d ms; %d sections written over their own, %.1f ms in all; %d of the sections rebuilt were out of view; of the meshing, "
+							+ "%.1f ms setting each block up and %.1f ms on the vertices' weights",
 					(System.nanoTime() - burstStartNanos) / 1.0E6D, burstFrames, burstRebuilt, burstLightQueued, burstLightStreamed, burstAsked,
 					burstPeakQueue, burstMeshNanos / 1.0E6D, burstMeshMaxNanos / 1.0E6D, burstUploads,
 					burstUploadNanos / 1.0E6D, burstUploadMaxNanos / 1.0E6D, burstWaitMaxMillis, burstPatched,
-					burstPatchNanos / 1.0E6D, burstRebuiltHidden);
+					burstPatchNanos / 1.0E6D, burstRebuiltHidden, burstAnchorNanos / 1.0E6D,
+					burstWeightNanos / 1.0E6D);
 			if (MEASURE_TO_LOG) {
 				ModTemplate.LOGGER.info(report);
 			} else {
@@ -3679,6 +3680,8 @@ public final class GpuFoliageRenderer {
 		burstAsked = 0;
 		burstPatched = 0;
 		burstRebuiltHidden = 0;
+		burstAnchorNanos = 0L;
+		burstWeightNanos = 0L;
 		burstPatchNanos = 0L;
 		burstPeakQueue = 0;
 		burstRebuilt = 0;
@@ -4046,6 +4049,7 @@ public final class GpuFoliageRenderer {
 		}
 
 		long begin = System.nanoTime();
+		int hiddenBuilt = 0;
 		long budgetEnd = begin + frameBudgetNanos;
 		// A change the player just made or saw, in view, may take longer; see URGENT.
 		long urgentEnd = begin
@@ -4055,6 +4059,12 @@ public final class GpuFoliageRenderer {
 			boolean urgent = distances[i] < OUT_OF_VIEW && URGENT.contains(key);
 			// However few sections that is: a heavy resource pack makes a single one cost several milliseconds.
 			long now = System.nanoTime();
+			boolean hidden = distances[i] >= OUT_OF_VIEW;
+			// One a frame of what is out of view, so it is not left behind for good, and no more: a carried light asks for
+			// the sections behind the player again every tick, and rebuilding them as fast as they come is work nobody sees.
+			if (hidden && hiddenBuilt > 0) {
+				break;
+			}
 			if (i > 0 && now >= (urgent ? urgentEnd : budgetEnd)) {
 				if (now >= urgentEnd) {
 					break;
@@ -4069,7 +4079,8 @@ public final class GpuFoliageRenderer {
 			rebuild(minecraft, minecraft.level, key);
 			long taken = System.nanoTime() - start;
 			burstRebuilt++;
-			if (distances[i] >= OUT_OF_VIEW) {
+			if (hidden) {
+				hiddenBuilt++;
 				burstRebuiltHidden++;
 			}
 			burstMeshNanos += taken;
@@ -4159,6 +4170,7 @@ public final class GpuFoliageRenderer {
 		@Override
 		public VertexConsumer addVertex(float x, float y, float z) {
 			delegate.addVertex(x, y, z);
+			long weightStart = MEASURE_TO_LOG ? System.nanoTime() : 0L;
 			float localY = y - blockY;
 			reserveWeights(WEIGHT_BYTES);
 			weightScratch.putFloat(packCell(anchor.cellX - regionOrigin.getX(),
@@ -4169,6 +4181,9 @@ public final class GpuFoliageRenderer {
 					anchor.pushAt(localY, regionOrigin.getY() + y), anchor.still, anchor.steady, anchor.exposureAt(regionOrigin.getX() + x,
 							regionOrigin.getY() + y, regionOrigin.getZ() + z), anchor.leafHeldAt(regionOrigin.getX() + x,
 							regionOrigin.getY() + y, regionOrigin.getZ() + z)));
+			if (MEASURE_TO_LOG) {
+				burstWeightNanos += System.nanoTime() - weightStart;
+			}
 			return this;
 		}
 
@@ -4551,6 +4566,7 @@ public final class GpuFoliageRenderer {
 							continue;
 						}
 						pos.set(origin.getX() + dx, origin.getY() + dy, origin.getZ() + dz);
+						long anchorStart = MEASURE_TO_LOG ? System.nanoTime() : 0L;
 						anchor.prepare(state, pos, level);
 						// Measured at the anchor, so every block of a tall plant bends as one piece; plants stand in a column,
 						// so the anchor shares the block's.
@@ -4593,6 +4609,9 @@ public final class GpuFoliageRenderer {
 							anchor.still = true;
 							anchor.steady = true;
 							anchor.exposure = 1.0F;
+						}
+						if (MEASURE_TO_LOG) {
+							burstAnchorNanos += System.nanoTime() - anchorStart;
 						}
 						// Another mod may draw the plant lower than its block, as the chunk mesh shows it.
 						float lift = TerrainSlabsCompat.offsetY(level, pos, state) + raised;
