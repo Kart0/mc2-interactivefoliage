@@ -196,8 +196,11 @@ import java.util.function.Predicate;
  */
 public final class GpuFoliageRenderer {
 
-	/** Rebuilds run on the render thread, so only a few are allowed per frame. */
-	private static final int REBUILD_BUDGET = 6;
+	/**
+	 * Rebuilds run on the render thread, so only so many are allowed per frame, the nearest first. What really holds
+	 * them back is the time they may take, see {@link #frameBudgetNanos}; this is only how many are looked up.
+	 */
+	private static final int REBUILD_BUDGET = 16;
 	/**
 	 * A region is uploaded once the sections queued for it are built, so one whose sections arrive over several frames
 	 * is uploaded once rather than once a frame. If sections keep arriving for longer than this -- flying over new
@@ -213,8 +216,31 @@ public final class GpuFoliageRenderer {
 	 * And only for this long a frame, after the first one, so a frame is never held up by meshing: a heavy resource pack,
 	 * a slow processor or rain starting -- which meshes every section again -- would otherwise stall a frame for as long
 	 * as all of them take. A section not yet meshed again keeps what it showed, so this only spreads the work out.
+	 * <p>
+	 * This is the least a frame gets. A slow frame gets a share of its own length instead, see
+	 * {@link #frameBudgetNanos}: counted in frames alone, a change of light -- some thirty sections around a torch --
+	 * took three times as long to reach the foliage at 30 frames a second as at 90, while the chunk mesh, built off
+	 * the render thread, showed it at once.
 	 */
 	private static final long REBUILD_BUDGET_NANOS = 4_000_000L;
+	/** The share of a frame's length rebuilds may take, and the most that may come to. */
+	private static final long REBUILD_BUDGET_FRAME_SHARE = 4L;
+	private static final long REBUILD_BUDGET_MAX_NANOS = 16_000_000L;
+	/**
+	 * How long region uploads may take a frame after the first, by the same reckoning: regions are small as a rule,
+	 * a millisecond or so, and a light change touches several, which one a frame kept waiting as many frames.
+	 */
+	private static final long UPLOAD_BUDGET_SHARE = 2L;
+	/**
+	 * How long a frame may spend rebuilding sections already on screen whose light or blocks changed, see
+	 * {@link #URGENT}: long enough for the thirty-odd sections around a torch, so that their light reaches the foliage on
+	 * the frame it changes, as measured -- 25 to 55 ms in one frame, against 2 to 5 frames within the frame's own
+	 * budget and 10 to 27 before that. What does not fit goes on in the next frame, still ahead of everything else.
+	 */
+	private static final long URGENT_BUDGET_NANOS = 50_000_000L;
+	/** When the frame before this one was drawn, and how long rebuilds may take in this one. */
+	private static long lastFrameNanos;
+	private static long frameBudgetNanos = REBUILD_BUDGET_NANOS;
 	/**
 	 * Padding on cull boxes so foliage leaning into view is not culled away: room for the strongest push from an entity
 	 * -- about 1.8 blocks, on a tall plant with Sway's intensity turned up -- plus the furthest the wind reaches, a storm
@@ -1693,9 +1719,8 @@ public final class GpuFoliageRenderer {
 	/** Light arrived or changed in a section. Only sections already holding foliage care. */
 	public static void onLightChanged(int sectionX, int sectionY, int sectionZ) {
 		long key = SectionPos.asLong(sectionX, sectionY, sectionZ);
-		Region region = REGIONS.get(regionKeyOf(key));
-		if (region != null && region.sections[slotOf(key)] != null) {
-			DIRTY.add(key);
+		if (queueUrgent(key)) {
+			burstLightQueued++;
 		}
 	}
 
@@ -1724,18 +1749,19 @@ public final class GpuFoliageRenderer {
 		int sectionZ = SectionPos.blockToSectionCoord(pos.getZ());
 		int localX = pos.getX() & (SECTION_SIZE - 1);
 		int localZ = pos.getZ() & (SECTION_SIZE - 1);
+		// The ones on screen already show the change at once; one with nothing meshed yet waits its turn.
 		for (int dy = -1; dy <= 1; dy++) {
-			DIRTY.add(SectionPos.asLong(sectionX, sectionY + dy, sectionZ));
+			queueChanged(SectionPos.asLong(sectionX, sectionY + dy, sectionZ));
 		}
 		if (localX == 0) {
-			DIRTY.add(SectionPos.asLong(sectionX - 1, sectionY, sectionZ));
+			queueChanged(SectionPos.asLong(sectionX - 1, sectionY, sectionZ));
 		} else if (localX == SECTION_SIZE - 1) {
-			DIRTY.add(SectionPos.asLong(sectionX + 1, sectionY, sectionZ));
+			queueChanged(SectionPos.asLong(sectionX + 1, sectionY, sectionZ));
 		}
 		if (localZ == 0) {
-			DIRTY.add(SectionPos.asLong(sectionX, sectionY, sectionZ - 1));
+			queueChanged(SectionPos.asLong(sectionX, sectionY, sectionZ - 1));
 		} else if (localZ == SECTION_SIZE - 1) {
-			DIRTY.add(SectionPos.asLong(sectionX, sectionY, sectionZ + 1));
+			queueChanged(SectionPos.asLong(sectionX, sectionY, sectionZ + 1));
 		}
 		if (!shelterActive) {
 			return;
@@ -1810,6 +1836,13 @@ public final class GpuFoliageRenderer {
 	}
 
 	/** Queues a section to be meshed again, if it holds foliage the renderer draws. */
+	/** Queues a section a block changed in or beside: at once if it is drawn already, in its turn otherwise. */
+	private static void queueChanged(long key) {
+		if (!queueUrgent(key)) {
+			DIRTY.add(key);
+		}
+	}
+
 	private static void markIfHeld(long key) {
 		Region region = REGIONS.get(regionKeyOf(key));
 		if (region != null && region.sections[slotOf(key)] != null) {
@@ -1823,6 +1856,8 @@ public final class GpuFoliageRenderer {
 		REGIONS.clear();
 		DIRTY.clear();
 		DIRTY_REGIONS.clear();
+		URGENT.clear();
+		URGENT_REGIONS.clear();
 		// The renderer snapshots options such as smooth lighting, which are among the things that
 		// land here, so it is rebuilt from the current options on next use.
 		modelRenderer = null;
@@ -2074,10 +2109,12 @@ public final class GpuFoliageRenderer {
 			reseedPending = false;
 			reseedLoadedChunks(minecraft, minecraft.level);
 		}
+		measureFrame();
 		buildNearest(minecraft, camera);
 		// One region is uploaded a frame, and each is drawn as last uploaded meanwhile, so its buffers and the layout used
 		// to draw from them always agree.
 		uploadDueRegion(camera);
+		measureBurst();
 
 		//? <26.1.2 {
 		/*if (frustum == null) {
@@ -3267,26 +3304,190 @@ public final class GpuFoliageRenderer {
 	}
 
 	private static final LongOpenHashSet REGIONS_WITH_QUEUED_SECTIONS = new LongOpenHashSet();
+	/**
+	 * The queued sections that are on screen already and show a change the player just made or saw: a block placed or
+	 * broken, the light of a torch. They are rebuilt before anything else, all of them on the frame they are queued
+	 * where {@link #URGENT_BUDGET_NANOS} allows, and their regions uploaded on that frame too: the chunk mesh shows the
+	 * same change within a frame or two, and foliage that follows it several frames later reads as light arriving late.
+	 * A section meshed for the first time is not urgent: nothing of it is on screen yet.
+	 */
+	private static final LongOpenHashSet URGENT = new LongOpenHashSet();
+	/** The regions the urgent sections rebuilt this frame are in. */
+	private static final LongOpenHashSet URGENT_REGIONS = new LongOpenHashSet();
+
+	/** Queues a section that is drawn already to be rebuilt at once; returns whether it was not queued yet. */
+	private static boolean queueUrgent(long key) {
+		Region region = REGIONS.get(regionKeyOf(key));
+		if (region == null || region.sections[slotOf(key)] == null) {
+			return false;
+		}
+		URGENT.add(key);
+		return DIRTY.add(key);
+	}
 
 	/**
-	 * Uploads at most one region this frame: the one nearest the camera among those with nothing left in the queue, or
-	 * that have waited too long. A region upload can be tens of megabytes with a detailed resource pack or waving
-	 * leaves, and uploading a region for every section built into it, every frame, was most of what the renderer cost.
+	 * Rebuilds the urgent sections, and returns how long that took. Whatever is left when the time is up stays urgent
+	 * for the next frame.
+	 */
+	private static long buildUrgent(Minecraft minecraft) {
+		if (URGENT.isEmpty()) {
+			return 0L;
+		}
+		long begin = System.nanoTime();
+		var urgent = URGENT.iterator();
+		while (urgent.hasNext()) {
+			long key = urgent.nextLong();
+			urgent.remove();
+			// Rebuilt since by the ordinary queue, or out of range by now.
+			if (!DIRTY.remove(key) || !withinRange(minecraft, key)) {
+				continue;
+			}
+			long start = System.nanoTime();
+			rebuild(minecraft, minecraft.level, key);
+			long taken = System.nanoTime() - start;
+			burstRebuilt++;
+			burstMeshNanos += taken;
+			burstMeshMaxNanos = Math.max(burstMeshMaxNanos, taken);
+			URGENT_REGIONS.add(regionKeyOf(key));
+			if (System.nanoTime() - begin >= URGENT_BUDGET_NANOS) {
+				break;
+			}
+		}
+		return System.nanoTime() - begin;
+	}
+
+	/** Uploads the regions the urgent sections were rebuilt into, once none of their urgent sections is left queued. */
+	private static void uploadUrgentRegions() {
+		if (URGENT_REGIONS.isEmpty()) {
+			return;
+		}
+		REGIONS_WITH_QUEUED_SECTIONS.clear();
+		var left = URGENT.iterator();
+		while (left.hasNext()) {
+			REGIONS_WITH_QUEUED_SECTIONS.add(regionKeyOf(left.nextLong()));
+		}
+		long now = System.currentTimeMillis();
+		var regions = URGENT_REGIONS.iterator();
+		while (regions.hasNext()) {
+			long regionKey = regions.nextLong();
+			if (REGIONS_WITH_QUEUED_SECTIONS.contains(regionKey)) {
+				continue;
+			}
+			regions.remove();
+			Region region = REGIONS.get(regionKey);
+			if (region != null && DIRTY_REGIONS.remove(region)) {
+				uploadMeasured(region, now);
+			}
+		}
+	}
+
+	/**
+	 * Works out how long this frame's rebuilds may take: a quarter of the frame before it, never less than
+	 * {@link #REBUILD_BUDGET_NANOS} nor more than {@link #REBUILD_BUDGET_MAX_NANOS}. A slow frame is given more, so a
+	 * burst of rebuilds reaches the screen in about the same time whatever the frame rate, at the cost of the same share
+	 * of each frame while it lasts.
+	 */
+	private static void measureFrame() {
+		long now = System.nanoTime();
+		long frame = lastFrameNanos == 0L ? 0L : now - lastFrameNanos;
+		lastFrameNanos = now;
+		frameBudgetNanos = Math.max(REBUILD_BUDGET_NANOS, Math.min(frame / REBUILD_BUDGET_FRAME_SHARE, REBUILD_BUDGET_MAX_NANOS));
+	}
+
+	// ---- Measuring, written to the debug log only: how long a burst of rebuilds takes to reach the screen, from the
+	// first section queued until nothing is left queued or waiting to be uploaded.
+	private static long burstStartNanos;
+	private static int burstFrames;
+	private static int burstLightQueued;
+	private static int burstPeakQueue;
+	private static int burstRebuilt;
+	private static long burstMeshNanos;
+	private static long burstMeshMaxNanos;
+	private static int burstUploads;
+	private static long burstUploadNanos;
+	private static long burstUploadMaxNanos;
+	private static long burstWaitMaxMillis;
+
+	/** Called once a frame, after the rebuilds and the upload. */
+	private static void measureBurst() {
+		if (!ModTemplate.LOGGER.isDebugEnabled()) {
+			return;
+		}
+		if (!DIRTY.isEmpty() || !DIRTY_REGIONS.isEmpty()) {
+			if (burstStartNanos == 0L) {
+				burstStartNanos = System.nanoTime();
+			}
+			burstFrames++;
+			burstPeakQueue = Math.max(burstPeakQueue, DIRTY.size());
+			return;
+		}
+		if (burstRebuilt > 0) {
+			if (burstStartNanos == 0L) {
+				// Queued, rebuilt and uploaded within one frame.
+				burstStartNanos = System.nanoTime();
+				burstFrames = 1;
+			}
+			ModTemplate.LOGGER.debug(String.format(java.util.Locale.ROOT,
+					"Foliage burst: %.0f ms over %d frames; %d sections rebuilt (%d queued by light, peak queue %d), "
+							+ "meshing %.1f ms in all, %.1f ms the slowest; %d region uploads, %.1f ms in all, %.1f ms the "
+							+ "slowest, longest wait before upload %d ms",
+					(System.nanoTime() - burstStartNanos) / 1.0E6D, burstFrames, burstRebuilt, burstLightQueued,
+					burstPeakQueue, burstMeshNanos / 1.0E6D, burstMeshMaxNanos / 1.0E6D, burstUploads,
+					burstUploadNanos / 1.0E6D, burstUploadMaxNanos / 1.0E6D, burstWaitMaxMillis));
+		}
+		burstStartNanos = 0L;
+		burstFrames = 0;
+		burstLightQueued = 0;
+		burstPeakQueue = 0;
+		burstRebuilt = 0;
+		burstMeshNanos = 0L;
+		burstMeshMaxNanos = 0L;
+		burstUploads = 0;
+		burstUploadNanos = 0L;
+		burstUploadMaxNanos = 0L;
+		burstWaitMaxMillis = 0L;
+	}
+
+	private static void uploadMeasured(Region region, long now) {
+		long start = System.nanoTime();
+		burstWaitMaxMillis = Math.max(burstWaitMaxMillis, now - region.pendingSince);
+		region.upload();
+		long taken = System.nanoTime() - start;
+		burstUploads++;
+		burstUploadNanos += taken;
+		burstUploadMaxNanos = Math.max(burstUploadMaxNanos, taken);
+	}
+
+	/**
+	 * Uploads the regions that are due, one at least and more only while they are quick: the one nearest the camera
+	 * first among those with nothing left in the queue, or that have waited too long. A region upload can be tens of
+	 * megabytes with a detailed resource pack or waving leaves, and uploading a region for every section built into it,
+	 * every frame, was most of what the renderer cost.
 	 * <p>
 	 * Nearest first, as sections are built, so the foliage at your feet is not held up behind a region further out; one
 	 * left waiting past {@link #REGION_UPLOAD_STARVE_MILLIS} goes first, so walking on never keeps the far ones off screen.
 	 */
 	private static void uploadDueRegion(Vec3 camera) {
+		uploadUrgentRegions();
+		// One at least, and more while they are quick: a heavy one ends the frame's uploads.
+		long budgetEnd = System.nanoTime() + frameBudgetNanos / UPLOAD_BUDGET_SHARE;
+		while (uploadOneDueRegion(camera) && System.nanoTime() < budgetEnd) {
+			// Each call uploads the next.
+		}
+	}
+
+	/** Uploads the region that is due first, if any is, and returns whether one was. */
+	private static boolean uploadOneDueRegion(Vec3 camera) {
 		if (DIRTY_REGIONS.isEmpty()) {
-			return;
+			return false;
 		}
 		long now = System.currentTimeMillis();
 		// The set keeps the order regions started waiting in, so the first is the one waiting longest.
 		Region oldest = DIRTY_REGIONS.iterator().next();
 		if (now - oldest.pendingSince >= REGION_UPLOAD_STARVE_MILLIS) {
 			DIRTY_REGIONS.remove(oldest);
-			oldest.upload();
-			return;
+			uploadMeasured(oldest, now);
+			return true;
 		}
 		REGIONS_WITH_QUEUED_SECTIONS.clear();
 		for (long key : DIRTY) {
@@ -3307,8 +3508,10 @@ public final class GpuFoliageRenderer {
 		}
 		if (nearest != null) {
 			DIRTY_REGIONS.remove(nearest);
-			nearest.upload();
+			uploadMeasured(nearest, now);
+			return true;
 		}
+		return false;
 	}
 
 	private static boolean isVisible(Section section, Frustum frustum, Object sodium) {
@@ -3565,6 +3768,10 @@ public final class GpuFoliageRenderer {
 	 * more noticeable than foliage appearing late further out.
 	 */
 	private static void buildNearest(Minecraft minecraft, Vec3 camera) {
+		// What the player is looking at change first; the rest only with what the frame has left.
+		if (buildUrgent(minecraft) >= frameBudgetNanos) {
+			return;
+		}
 		long[] nearest = new long[REBUILD_BUDGET];
 		double[] distances = new double[REBUILD_BUDGET];
 		Arrays.fill(distances, Double.MAX_VALUE);
@@ -3591,14 +3798,19 @@ public final class GpuFoliageRenderer {
 			}
 		}
 
-		long budgetEnd = System.nanoTime() + REBUILD_BUDGET_NANOS;
+		long budgetEnd = System.nanoTime() + frameBudgetNanos;
 		for (int i = 0; i < found; i++) {
 			// However few sections that is: a heavy resource pack makes a single one cost several milliseconds.
 			if (i > 0 && System.nanoTime() >= budgetEnd) {
 				break;
 			}
 			DIRTY.remove(nearest[i]);
+			long start = System.nanoTime();
 			rebuild(minecraft, minecraft.level, nearest[i]);
+			long taken = System.nanoTime() - start;
+			burstRebuilt++;
+			burstMeshNanos += taken;
+			burstMeshMaxNanos = Math.max(burstMeshMaxNanos, taken);
 		}
 	}
 
