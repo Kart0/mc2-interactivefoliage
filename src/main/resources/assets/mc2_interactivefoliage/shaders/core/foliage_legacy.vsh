@@ -34,11 +34,26 @@ uniform vec4 SwayEdge;
 // What newer versions hand every shader: the camera's block, and that block's corner minus the camera.
 uniform ivec3 CameraBlockPos;
 uniform vec3 CameraOffset;
+// The world's down and the way rain's wind blows as a sub-level's plot sees them; see sublevel.glsl.
+uniform vec3 mc2_SubLevelDown;
+uniform vec2 mc2_SubLevelWind;
+uniform vec3 mc2_SubLevelHang;
 // A sub-level's faces are shaded by where they look once it has turned: its quaternion, all zero for the world itself,
 // and the shade of a face looking down, up, along z and along x. A quad that takes no shade -- a plant's -- is meshed
 // looking up, so it is shaded as the top of the block it grows on.
 uniform vec4 mc2_SubLevelTurn;
 uniform vec4 mc2_SubLevelShade;
+
+// Keeps the sway and the wind level on a sub-level lying over: what of them runs along the world's up is taken out,
+// so a plant only sways sideways as the world sees it. See sublevel.glsl.
+vec2 mc2_subLevelLevel(vec2 offset) {
+    vec2 up = -mc2_SubLevelDown.xz;
+    float leaning = dot(up, up);
+    if (leaning == 0.0) {
+        return offset;
+    }
+    return offset - up * (dot(offset, up) / max(leaning, 0.25));
+}
 
 float mc2_subLevelShade(vec3 normal) {
     if (mc2_SubLevelTurn == vec4(0.0)) {
@@ -78,7 +93,10 @@ const float LADEN_CALM = 0.25;
 const float EDGE_EASE_BLOCKS = 6.0;
 
 // Rain's wind, as in sway.glsl, where each value is explained.
-const vec2 WIND_DIRECTION = vec2(-1.0, 0.0);
+// On one of Sable's sub-levels the wind blows the world's west as the plot sees it, and plants hang toward the
+// world's down: sublevel.glsl, where each is explained, and which this follows.
+#define WIND_DIRECTION (mc2_SubLevelDown == vec3(0.0) ? vec2(-1.0, 0.0) : mc2_SubLevelWind)
+const float SUB_LEVEL_BUFFET = 0.5;
 const float WIND_LEAN = 2.5;
 const float WIND_GUST = 0.4;
 const float STORM_STRENGTH = 2.0;
@@ -201,9 +219,25 @@ void main() {
         offset += leafMoved.xy;
         windOffset += leafMoved.zw;
     }
-    pos.xz += offset + push;
+    pos.xz += mc2_subLevelLevel(offset) + push;
     float pushed = length(push + windOffset);
     pos.y -= min(pushed * pushed, pushed) * 0.5;
+    // On a sub-level a plant hangs toward the world's down and behind the sub-level as it moves, by Sway's curve along
+    // it; and rain's wind shakes a plant it meets head on. See sublevel.glsl, which this follows.
+    if (mc2_SubLevelDown != vec3(0.0)) {
+        float headOn = Weather.x * weights.z * (1.0 - min(length(mc2_SubLevelWind), 1.0));
+        if (headOn > 0.0) {
+            float buffetReach = weights.x * SWAY_STRENGTH * SwayIntensity * mix(1.0, STORM_STRENGTH, Weather.y);
+            // A tree's leaves go by where the vertex is, so the corners they share move together; see sublevel.glsl.
+            float buffetPhase = steady > 0.5 ? (world.x + world.y + world.z) * SWAY_SCALE * 4.0 : SwayCell * 0.37;
+            vec2 buffet = vec2(sin(buffetPhase + GameTime * FLUTTER_SPEED), sin(buffetPhase * 1.3 + GameTime * TUG_SPEED));
+            pos.xz += mc2_subLevelLevel(buffet) * (SUB_LEVEL_BUFFET * buffetReach * headOn);
+        }
+        vec2 hang = mc2_SubLevelHang.xz * weights.y;
+        pos.xz += hang;
+        float hung = length(hang);
+        pos.y -= min(hung * hung, hung) * 0.5;
+    }
 
     gl_Position = ProjMat * ModelViewMat * vec4(pos, 1.0);
 

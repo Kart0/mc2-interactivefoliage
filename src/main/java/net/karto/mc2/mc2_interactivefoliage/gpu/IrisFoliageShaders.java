@@ -342,8 +342,13 @@ public final class IrisFoliageShaders {
 	static void setSwayUniforms(ShaderInstance program, float intensity, float calmSway, float edgeMinX, float edgeMinZ,
 			float edgeMaxX,
 			float edgeMaxZ, int cameraX, int cameraY, int cameraZ, float offsetX, float offsetY, float offsetZ,
-			float gameTime, org.joml.Vector4f weather) {
+			float gameTime, org.joml.Vector4f weather, org.joml.Vector3f subLevelDown, float subLevelWindX,
+			float subLevelWindZ, org.joml.Vector3f subLevelHang) {
 		int id = program.getId();
+		// What a sub-level's foliage goes by, all zero for the world's; see sublevel.glsl.
+		GL20.glUniform3f(GL20.glGetUniformLocation(id, "mc2_SubLevelDown"), subLevelDown.x, subLevelDown.y, subLevelDown.z);
+		GL20.glUniform2f(GL20.glGetUniformLocation(id, "mc2_SubLevelWind"), subLevelWindX, subLevelWindZ);
+		GL20.glUniform3f(GL20.glGetUniformLocation(id, "mc2_SubLevelHang"), subLevelHang.x, subLevelHang.y, subLevelHang.z);
 		GL20.glUniform1f(GL20.glGetUniformLocation(id, "mc2_SwayIntensity"), intensity);
 		GL20.glUniform1f(GL20.glGetUniformLocation(id, "mc2_CalmSway"), calmSway);
 		GL20.glUniform4f(GL20.glGetUniformLocation(id, "mc2_SwayEdge"), edgeMinX, edgeMinZ, edgeMaxX, edgeMaxZ);
@@ -809,12 +814,14 @@ public final class IrisFoliageShaders {
 			    vec4 mc2_CellPosition[MC2_MAX_CELLS];
 			    vec4 mc2_CellForce[MC2_MAX_CELLS];
 			};
-			""" + readSway() + """
+			""" + SubLevelFoliageShader.withSway(readSway(), false) + """
 
 			void main() {
 			    vec3 mc2_offset = iris_ChunkOffset;
-			    mc2_swayedPosition = mc2_sway(iris_Position + mc2_offset, mc2_offset, mc2_CameraBlockPos,
-			            mc2_CameraOffset, mc2_GameTime, SwayCell, SwayWeights) - mc2_offset;
+			    mc2_swayedPosition = """ + SubLevelFoliageShader.BEND_OPEN + """
+			            mc2_sway(iris_Position + mc2_offset, mc2_offset, mc2_CameraBlockPos,
+			            mc2_CameraOffset, mc2_GameTime, SwayCell, SwayWeights)""" + SubLevelFoliageShader.BEND_CLOSE + """
+			             - mc2_offset;
 			    mc2_packMain();
 			}
 			""";

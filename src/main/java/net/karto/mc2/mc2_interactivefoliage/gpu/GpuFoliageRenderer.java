@@ -3256,6 +3256,7 @@ public final class GpuFoliageRenderer {
 	private static boolean subLevelPass;
 	/^* While that is set, whether it is drawn into a shader pack's shadow map rather than onto the screen. ^/
 	private static boolean subLevelInShadow;
+
 	/^* Whether Sable shades its sub-levels by where their faces look, as last asked; see SableBridge.shadesByFacing. ^/
 	private static boolean subLevelShading;
 	/^* Set while a section of a sub-level is meshed with no shade in it. ^/
@@ -3265,6 +3266,97 @@ public final class GpuFoliageRenderer {
 	private static final org.joml.Quaterniond POSE_ORIENTATION = new org.joml.Quaterniond();
 	private static final org.joml.Vector3d POSE_ROTATION_POINT = new org.joml.Vector3d();
 	private static long subLevelLoggedAt;
+
+	/^* How far the tip of a plant lying on its side hangs, in blocks. ^/
+	private static final float SUB_LEVEL_DROOP = 0.9F;
+	/^*
+	 * How a sub-level's foliage follows it. Each sub-level tows a weight on a spring, kept where the world is rather
+	 * than where the plot is: the weight is pulled toward the sub-level and slowed by the air, so it runs on past a
+	 * sub-level that stops -- a tree hitting the ground -- and swings back until it settles. How far the weight is
+	 * from the sub-level is how far its plants' tips are thrown, on top of hanging down.
+	 * <p>
+	 * A swing every second and a half or so, losing about half of each to the next; one that stops dead throws the
+	 * weight about its speed over the root of the stiffness. Settled by eye with the player, as the two below were.
+	 ^/
+	private static final float SWING_STIFFNESS = 20.0F;
+	private static final float SWING_DAMPING = 2.0F;
+	/^* How far a block of the weight's lag throws the tips, in the same measure as hanging straight down is 1. ^/
+	private static final float SWING_THROW = 2.5F;
+	/^*
+	 * How far a sub-level's own speed throws the tips back, in that measure for each block a second: the weight alone
+	 * trails a moving sub-level by too little to see, and foliage is seen to stream behind what carries it.
+	 ^/
+	private static final float SWING_TRAIL = 0.35F;
+	/^* The most the tips are thrown and hang together, in that measure. ^/
+	private static final float SWING_MOST = 5.0F;
+	/^* A sub-level that moves further than this in one frame was put there, not carried: nothing swings for it. ^/
+	private static final double SWING_JUMP = 8.0D;
+
+	/^* One sub-level's weight: where it is and how fast it moves, in the world. ^/
+	private static final class Swing {
+		final org.joml.Vector3d weight = new org.joml.Vector3d();
+		final org.joml.Vector3d speed = new org.joml.Vector3d();
+		/^* Where the sub-level was last frame, and how fast it has been moving, eased over a few frames. ^/
+		final org.joml.Vector3d lastPosition = new org.joml.Vector3d();
+		final org.joml.Vector3d moving = new org.joml.Vector3d();
+		/^* Where the tips hang to this frame, as the world sees it: down, and thrown by the weight's lag. ^/
+		final org.joml.Vector3f hang = new org.joml.Vector3f(0.0F, -1.0F, 0.0F);
+		boolean placed;
+	}
+
+	private static final Map<Object, Swing> SWINGS = new java.util.IdentityHashMap<>();
+	private static long swungNanos;
+	/^* Where the tips hang to for the sub-level being drawn, as its plot sees it, in blocks. ^/
+	private static final org.joml.Vector3f SUB_LEVEL_HANG = new org.joml.Vector3f();
+
+	/^*
+	 * Moves every sub-level's weight on by the time since the last frame, toward where the sub-level is drawn now.
+	 * Nothing is asked of Sable but the pose: the weight's own lag says how the sub-level has been moving.
+	 ^/
+	private static void swingSubLevels() {
+		long now = System.nanoTime();
+		float delta = swungNanos == 0L ? 0.0F : Math.min((now - swungNanos) / 1.0E9F, 0.1F);
+		swungNanos = now;
+		SWINGS.keySet().retainAll(SUB_LEVELS.keySet());
+		for (Object subLevel : SUB_LEVELS.keySet()) {
+			if (!SableBridge.pose(subLevel, POSE_POSITION, POSE_ORIENTATION, POSE_ROTATION_POINT)) {
+				continue;
+			}
+			Swing swing = SWINGS.computeIfAbsent(subLevel, found -> new Swing());
+			if (!swing.placed || swing.weight.distance(POSE_POSITION) > SWING_JUMP) {
+				swing.placed = true;
+				swing.weight.set(POSE_POSITION);
+				swing.speed.zero();
+				swing.lastPosition.set(POSE_POSITION);
+				swing.moving.zero();
+			}
+			if (delta > 0.0F) {
+				// The pose moves in the game's ticks, a step at a time: its speed is eased, or it would jump with them.
+				double ease = Math.min(1.0D, delta / 0.15D);
+				swing.moving.x += ((POSE_POSITION.x - swing.lastPosition.x) / delta - swing.moving.x) * ease;
+				swing.moving.y += ((POSE_POSITION.y - swing.lastPosition.y) / delta - swing.moving.y) * ease;
+				swing.moving.z += ((POSE_POSITION.z - swing.lastPosition.z) / delta - swing.moving.z) * ease;
+				swing.lastPosition.set(POSE_POSITION);
+			}
+			// In steps short enough for the spring to stay steady at any frame time.
+			int steps = Math.max(1, Mth.ceil(delta / 0.01F));
+			double step = delta / steps;
+			for (int i = 0; i < steps; i++) {
+				swing.speed.x += ((POSE_POSITION.x - swing.weight.x) * SWING_STIFFNESS - swing.speed.x * SWING_DAMPING) * step;
+				swing.speed.y += ((POSE_POSITION.y - swing.weight.y) * SWING_STIFFNESS - swing.speed.y * SWING_DAMPING) * step;
+				swing.speed.z += ((POSE_POSITION.z - swing.weight.z) * SWING_STIFFNESS - swing.speed.z * SWING_DAMPING) * step;
+				swing.weight.add(swing.speed.x * step, swing.speed.y * step, swing.speed.z * step);
+			}
+			swing.hang.set(
+					(float) ((swing.weight.x - POSE_POSITION.x) * SWING_THROW - swing.moving.x * SWING_TRAIL),
+					(float) ((swing.weight.y - POSE_POSITION.y) * SWING_THROW - swing.moving.y * SWING_TRAIL) - 1.0F,
+					(float) ((swing.weight.z - POSE_POSITION.z) * SWING_THROW - swing.moving.z * SWING_TRAIL));
+			float length = swing.hang.length();
+			if (length > SWING_MOST) {
+				swing.hang.mul(SWING_MOST / length);
+			}
+		}
+	}
 
 	/^*
 	 * Takes up the sections of a plot a chunk build has just met foliage in, and lets go of the sub-levels that are
@@ -3320,6 +3412,7 @@ public final class GpuFoliageRenderer {
 			followed.remove();
 		}
 		pushSubLevelPlants(minecraft);
+		swingSubLevels();
 	}
 
 	/^*
@@ -3408,6 +3501,14 @@ public final class GpuFoliageRenderer {
 			if (!SableBridge.pose(subLevel, POSE_POSITION, POSE_ORIENTATION, POSE_ROTATION_POINT)) {
 				continue;
 			}
+			// Where its plants' tips hang to, turned into the plot and given its length in blocks.
+			Swing swing = SWINGS.get(subLevel);
+			if (swing == null) {
+				SUB_LEVEL_HANG.set(0.0F, -1.0F, 0.0F);
+			} else {
+				SUB_LEVEL_HANG.set(swing.hang);
+			}
+			new org.joml.Quaternionf(POSE_ORIENTATION).transformInverse(SUB_LEVEL_HANG).mul(SUB_LEVEL_DROOP);
 			boolean anything = collectDraws(null, null, subLevel);
 			// Where the camera is in the plot: the pose undone.
 			org.joml.Vector3d inPlot = new org.joml.Vector3d(camera.x, camera.y, camera.z).sub(POSE_POSITION);
@@ -3656,6 +3757,19 @@ public final class GpuFoliageRenderer {
 				(float) (cameraBlock.getZ() - camera.z));
 		shader.safeGetUniform("mc2_Weather").set(weather.x, weather.y, weather.z, weather.w);
 		shader.safeGetUniform("mc2_GameTime").set(RenderSystem.getShaderGameTime());
+		// The world's down and its west as a sub-level's plot sees them, for its plants to hang by and its wind to blow
+		// by; nothing of either for the world's own foliage. See sublevel.glsl.
+		org.joml.Vector3f down = new org.joml.Vector3f();
+		org.joml.Vector3f west = new org.joml.Vector3f(-1.0F, 0.0F, 0.0F);
+		if (subLevelPass) {
+			org.joml.Quaternionf turn = new org.joml.Quaternionf(POSE_ORIENTATION);
+			turn.transformInverse(down.set(0.0F, -1.0F, 0.0F));
+			turn.transformInverse(west);
+		}
+		org.joml.Vector3f hang = subLevelPass ? SUB_LEVEL_HANG : down;
+		shader.safeGetUniform("mc2_SubLevelDown").set(down.x, down.y, down.z);
+		shader.safeGetUniform("mc2_SubLevelWind").set(west.x, west.z);
+		shader.safeGetUniform("mc2_SubLevelHang").set(hang.x, hang.y, hang.z);
 		if (subLevelPass && subLevelShading) {
 			shader.safeGetUniform("mc2_SubLevelTurn").set((float) POSE_ORIENTATION.x, (float) POSE_ORIENTATION.y,
 					(float) POSE_ORIENTATION.z, (float) POSE_ORIENTATION.w);
@@ -3679,7 +3793,8 @@ public final class GpuFoliageRenderer {
 			IrisCompat.setSwayUniforms(shader, swayIntensity(), calmSway(),
 					edge, cameraBlock.getX(), cameraBlock.getY(), cameraBlock.getZ(),
 					(float) (cameraBlock.getX() - camera.x), (float) (cameraBlock.getY() - camera.y),
-					(float) (cameraBlock.getZ() - camera.z), RenderSystem.getShaderGameTime(), weather);
+					(float) (cameraBlock.getZ() - camera.z), RenderSystem.getShaderGameTime(), weather, down, west.x, west.z,
+					hang);
 		}
 		//?}
 

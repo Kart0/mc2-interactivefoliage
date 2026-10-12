@@ -73,38 +73,22 @@ final class LegacyTerrainShader {
 	private static final String SWAYED_MAIN = """
 
 			void main() {
-			    mc2_Position = mc2_sway(Position + ChunkOffset, ChunkOffset, mc2_CameraBlockPos, mc2_CameraOffset,
-			            mc2_GameTime, SwayCell, SwayWeights) - ChunkOffset;
+			    mc2_Position = %smc2_sway(Position + ChunkOffset, ChunkOffset, mc2_CameraBlockPos, mc2_CameraOffset,
+			            mc2_GameTime, SwayCell, SwayWeights)%s - ChunkOffset;
 			    mc2_terrainMain();
 			%s}
 			""";
 
 	/^*
-	 * How a sub-level's foliage is shaded, for the shaders that read a normal and write the vertex's colour as the
-	 * game's own do; see the renderer's drawSubLevels. There are sub-levels on 1.21.1 alone.
+	 * Whether the shader is given what foliage does on one of Sable's sub-levels; see SubLevelFoliageShader. There
+	 * are sub-levels on 1.21.1 alone.
 	 ^/
 	//? >=1.21.1 {
-	private static final String SUB_LEVEL_SHADE = """
-			// A sub-level's faces are shaded by where they look once it has turned: its quaternion, all zero for the world itself,
-			// and the shade of a face looking down, up, along z and along x. A quad that takes no shade -- a plant's -- is meshed
-			// looking up, so it is shaded as the top of the block it grows on.
-			uniform vec4 mc2_SubLevelTurn;
-			uniform vec4 mc2_SubLevelShade;
-
-			float mc2_subLevelShade(vec3 normal) {
-			    if (mc2_SubLevelTurn == vec4(0.0)) {
-			        return 1.0;
-			    }
-			    vec3 axis = mc2_SubLevelTurn.xyz;
-			    vec3 turned = normal + 2.0 * cross(axis, cross(axis, normal) + mc2_SubLevelTurn.w * normal);
-			    return pow(clamp(-turned.y, 0.0, 1.0), 3.0) * mc2_SubLevelShade.x
-			            + pow(clamp(turned.y, 0.0, 1.0), 3.0) * mc2_SubLevelShade.y
-			            + turned.z * turned.z * mc2_SubLevelShade.z + turned.x * turned.x * mc2_SubLevelShade.w;
-			}
-			""";
+	private static final boolean SUB_LEVELS = true;
 	//?} else {
-	/^private static final String SUB_LEVEL_SHADE = "";
+	/^private static final boolean SUB_LEVELS = false;
 	^///?}
+	/^* What a shader has to read and write to shade a sub-level's faces by their normal, as the game's own do. ^/
 	private static final Pattern NORMAL_INPUT = Pattern.compile("\\bin\\s+vec3\\s+Normal\\s*;");
 	private static final Pattern COLOUR_OUTPUT = Pattern.compile("\\bout\\s+vec4\\s+vertexColor\\s*;");
 
@@ -113,7 +97,8 @@ final class LegacyTerrainShader {
 			{"mc2_SwayIntensity", "float", "1"}, {"mc2_CalmSway", "float", "1"}, {"mc2_SwayEdge", "float", "4"},
 			{"mc2_Weather", "float", "4"}, {"mc2_CameraBlockPos", "int", "3"}, {"mc2_CameraOffset", "float", "3"},
 			{"mc2_GameTime", "float", "1"}, {"ChunkOffset", "float", "3"},
-			{"mc2_SubLevelTurn", "float", "4"}, {"mc2_SubLevelShade", "float", "4"}};
+			{"mc2_SubLevelTurn", "float", "4"}, {"mc2_SubLevelShade", "float", "4"},
+			{"mc2_SubLevelDown", "float", "3"}, {"mc2_SubLevelWind", "float", "2"}, {"mc2_SubLevelHang", "float", "3"}};
 
 	private static final ShaderInstance[] SHADERS = new ShaderInstance[LAYERS.length];
 	/^* Whether each shader is due to be built, as it is once after every resource reload. ^/
@@ -277,12 +262,13 @@ final class LegacyTerrainShader {
 		if (!input.find()) {
 			return null;
 		}
-		boolean shaded = !SUB_LEVEL_SHADE.isEmpty() && NORMAL_INPUT.matcher(cutout).find()
-				&& COLOUR_OUTPUT.matcher(cutout).find();
+		boolean shaded = SUB_LEVELS && NORMAL_INPUT.matcher(cutout).find() && COLOUR_OUTPUT.matcher(cutout).find();
 		String declarations = input.group(1) + "in vec3 Position;\nvec3 mc2_Position;\n" + ADDITIONS
-				+ (shaded ? SUB_LEVEL_SHADE : "") + sway + "\n";
+				+ (SUB_LEVELS ? SubLevelFoliageShader.withSway(sway, shaded) : sway) + "\n";
 		return renamed.substring(0, input.start()) + declarations + renamed.substring(input.end())
-				+ SWAYED_MAIN.formatted(shaded ? "    vertexColor.rgb *= mc2_subLevelShade(Normal);\n" : "");
+				+ SWAYED_MAIN.formatted(SUB_LEVELS ? SubLevelFoliageShader.BEND_OPEN : "",
+						SUB_LEVELS ? SubLevelFoliageShader.BEND_CLOSE : "",
+						shaded ? "    vertexColor.rgb *= mc2_subLevelShade(Normal);\n" : "");
 	}
 
 	private static String readSway() throws IOException {
