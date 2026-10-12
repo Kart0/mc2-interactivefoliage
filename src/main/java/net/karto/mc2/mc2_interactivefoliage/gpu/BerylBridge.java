@@ -203,7 +203,7 @@ final class BerylBridge {
 			return false;
 		}
 		try {
-			return (boolean) Names.SRGB_COLOURS.invoke(null);
+			return (boolean) Shared.SRGB_COLOURS.invoke(null);
 		} catch (Throwable e) {
 			return false;
 		}
@@ -237,10 +237,77 @@ final class BerylBridge {
 			return 0;
 		}
 		try {
-			Method blockId = Names.blockId(blockState);
+			Method blockId = Shared.blockId(blockState);
 			return blockId == null ? 0 : Math.max((int) blockId.invoke(null, blockState), 0) << BerylFoliageShader.LIGHT_BITS;
 		} catch (Throwable e) {
 			return 0;
+		}
+	}
+
+	/** Beryl's lighting for the versions where the foliage is drawn through VulkanMod itself; see legacyLit. */
+	private static Object legacyPipeline;
+	private static String legacyBuiltFor;
+
+	/**
+	 * The pipeline the foliage is lit by Beryl with where it is drawn through VulkanMod's own pipelines (before
+	 * 1.21.11; see VulkanLegacyDraw), or null while Beryl is not drawing the terrain with its shaders: there is no
+	 * pipeline of the game's to put it under there, so the renderer binds this one in place of its own. It is built
+	 * from Beryl's terrain shaders as on later versions, with what the sway reads declared as named fields, which is
+	 * how VulkanMod feeds a pipeline there.
+	 */
+	static Object legacyLit(Object vertexFormat, int normalAt, int swayAt) {
+		if (!LOADED || litFailed) {
+			return null;
+		}
+		try {
+			if (!(boolean) Shared.USING_SHADERS.invoke(null) || !"TERRAIN".equals(String.valueOf(Shared.STAGE.invoke(null)))) {
+				return null;
+			}
+			String options = Shared.options();
+			if (!options.equals(legacyBuiltFor)) {
+				if (legacyPipeline != null) {
+					legacyPipeline.getClass().getMethod("scheduleCleanUp").invoke(legacyPipeline);
+				}
+				legacyPipeline = Shared.buildLegacyLit(vertexFormat, normalAt, swayAt, options);
+				legacyBuiltFor = options;
+				if (legacyPipeline == null) {
+					fail(false, null);
+				}
+			}
+			return legacyPipeline;
+		} catch (Throwable e) {
+			legacyPipeline = null;
+			fail(false, e);
+			return null;
+		}
+	}
+
+	private static Object legacyShadowPipeline;
+
+	/**
+	 * The pipeline the foliage is drawn into Beryl's shadow map with on the same versions, or null where there is
+	 * none: Beryl's own shadow shaders, copied as its terrain's are. Nothing else may be drawn into the shadow map.
+	 */
+	static Object legacyShadow(Object vertexFormat, int normalAt, int swayAt) {
+		if (!LOADED || shadowFailed) {
+			return null;
+		}
+		try {
+			if (!(boolean) Shared.USING_SHADERS.invoke(null)
+					|| !"SHADOW_MAP".equals(String.valueOf(Shared.STAGE.invoke(null)))) {
+				return null;
+			}
+			if (legacyShadowPipeline == null) {
+				legacyShadowPipeline = Shared.buildLegacyShadow(vertexFormat, normalAt, swayAt);
+				if (legacyShadowPipeline == null) {
+					fail(true, null);
+				}
+			}
+			return legacyShadowPipeline;
+		} catch (Throwable e) {
+			legacyShadowPipeline = null;
+			fail(true, e);
+			return null;
 		}
 	}
 
@@ -250,6 +317,124 @@ final class BerylBridge {
 			Names.RESET.invoke(pipeline);
 		}
 		UNDER.clear();
+	}
+
+	/**
+	 * What is asked of Beryl whichever way the foliage is drawn, found by name the first time it is: these have been
+	 * the same in every Beryl so far, 0.2.0 for 1.21.1 included.
+	 */
+	private static final class Shared {
+		static final Method USING_SHADERS;
+		static final Method STAGE;
+		static final Method SRGB_COLOURS;
+		/** Beryl 0.2.0's options, each a define of its terrain shaders, in its own order. */
+		static final Method[] OPTIONS;
+		private static final String[] DEFINES = {"COLORED_SHADOWS", "TEXTURED_SUN", "WATER_WAVING"};
+		private static Method blockId;
+		private static boolean blockIdSought;
+
+		static {
+			try {
+				Class<?> rendering = Class.forName("net.beryl.render.RenderingPipeline");
+				USING_SHADERS = rendering.getMethod("isUsingShaderPipeline");
+				STAGE = rendering.getMethod("getRenderingStage");
+				SRGB_COLOURS = rendering.getMethod("useSrgbColors");
+				OPTIONS = new Method[] {rendering.getMethod("coloredShadows"), rendering.getMethod("texturedSun"),
+						rendering.getMethod("wavingWater")};
+			} catch (ReflectiveOperationException e) {
+				throw new ExceptionInInitializerError(e);
+			}
+		}
+
+		static String options() throws ReflectiveOperationException {
+			StringBuilder options = new StringBuilder();
+			for (Method option : OPTIONS) {
+				options.append((boolean) option.invoke(null) ? '1' : '0');
+			}
+			return options.toString();
+		}
+
+		/** Beryl's lookup of a block state's id; it has one of a fluid state's by the same name. */
+		static Method blockId(Object blockState) throws ReflectiveOperationException {
+			if (!blockIdSought) {
+				blockIdSought = true;
+				for (Method method : Class.forName("net.beryl.render.ShaderRendererResources").getMethods()) {
+					if (method.getName().equals("getBlockId") && method.getParameterCount() == 1
+							&& method.getParameterTypes()[0].isInstance(blockState)) {
+						blockId = method;
+					}
+				}
+			}
+			return blockId;
+		}
+
+		/**
+		 * Beryl's terrain pipeline over the foliage's vertices for VulkanMod's own way of drawing, or null where its
+		 * vertex shader is not one this knows how to copy.
+		 */
+		static Object buildLegacyLit(Object vertexFormat, int normalAt, int swayAt, String options)
+				throws ReflectiveOperationException {
+			List<String> defines = new ArrayList<>();
+			for (int i = 0; i < DEFINES.length; i++) {
+				if (options.charAt(i) == '1') {
+					defines.add(DEFINES[i]);
+				}
+			}
+			boolean coloredShadows = options.charAt(0) == '1';
+			Class<?> loader = Class.forName("net.vulkanmod.render.shader.ShaderLoadUtil");
+			String shaders = (String) Class.forName("net.beryl.render.util.SUtil").getField("SHADERS_PATH").get(null);
+			Object path = loader.getMethod("resolveShaderPath", String.class, String.class).invoke(null, shaders, "terrain");
+			Method load = loader.getMethod("loadShader", String.class, String.class, List.class);
+			String terrainVertex = (String) load.invoke(null, path, "terrain.vsh", defines);
+			String fragment = (String) load.invoke(null, path, "terrain.fsh", defines);
+			if (terrainVertex == null || fragment == null) {
+				return null;
+			}
+			// Beryl's two blocks are at 0 and 1 and its textures follow them: three, or five with coloured shadows.
+			int free = coloredShadows ? 7 : 5;
+			String vertex = BerylFoliageShader.legacyVertex(terrainVertex, VulkanLegacyDraw.swayDeclarations(free),
+					VulkanFoliageShader.SWAYED, normalAt, swayAt, true);
+			if (vertex == null) {
+				return null;
+			}
+			Class<?> configs = Class.forName("net.beryl.render.shader.BerylPipelineConfigs");
+			Object[] blocks = {configs.getField("COMMON_UB0").get(null), configs.getField("COMMON_UB1").get(null)};
+			Object[][] textures = coloredShadows
+					? new Object[][] {{2, "Sampler0", 0}, {3, LIT_LIGHT_TEXTURE, 2}, {4, "ShadowMap", 3},
+							{5, "ShadowMap1", 4}, {6, "ShadowColor", 5}}
+					: new Object[][] {{2, "Sampler0", 0}, {3, LIT_LIGHT_TEXTURE, 2}, {4, "ShadowMap", 3}};
+			return VulkanLegacyDraw.berylPipeline(vertexFormat, blocks, free, textures, vertex, fragment);
+		}
+
+		/**
+		 * Beryl's shadow map pipeline over the foliage's vertices, the same way. Its blocks are the ones its own
+		 * pipeline is told in a file beside the shaders, which hold what these do.
+		 */
+		static Object buildLegacyShadow(Object vertexFormat, int normalAt, int swayAt) throws ReflectiveOperationException {
+			Class<?> loader = Class.forName("net.vulkanmod.render.shader.ShaderLoadUtil");
+			String shaders = (String) Class.forName("net.beryl.render.util.SUtil").getField("SHADERS_PATH").get(null);
+			Object path = loader.getMethod("resolveShaderPath", String.class, String.class).invoke(null, shaders, "shadow");
+			Method load = loader.getMethod("loadShader", String.class, String.class, List.class);
+			String shadowVertex = (String) load.invoke(null, path, "shadow.vsh", null);
+			String fragment = (String) load.invoke(null, path, "shadow.fsh", null);
+			if (shadowVertex == null || fragment == null) {
+				return null;
+			}
+			// Its two blocks are at 0 and 1, the texture at 2 and the lightmap, which it declares and never reads, at 3.
+			int free = 4;
+			String vertex = BerylFoliageShader.legacyVertex(shadowVertex, VulkanLegacyDraw.swayDeclarations(free),
+					VulkanFoliageShader.SWAYED, normalAt, swayAt, false);
+			if (vertex == null) {
+				return null;
+			}
+			Object[] blocks = {
+					VulkanLegacyDraw.block(0, 1, new String[][] {{"mat4", "MVP"}, {"mat4", "ModelViewMat"},
+							{"mat4", "LightSpaceMat"}}),
+					VulkanLegacyDraw.block(1, 31, new String[][] {{"vec4", "ColorModulator"}, {"vec4", "FogColor"},
+							{"float", "FogStart"}, {"float", "FogEnd"}, {"float", "ShadowDistortion"}})};
+			Object[][] textures = {{2, "Sampler0", 0}, {3, "Sampler2", 2}};
+			return VulkanLegacyDraw.berylPipeline(vertexFormat, blocks, free, textures, vertex, fragment);
+		}
 	}
 
 	/** Found the first time the foliage is drawn with Beryl installed, when both mods' classes are certainly loaded. */

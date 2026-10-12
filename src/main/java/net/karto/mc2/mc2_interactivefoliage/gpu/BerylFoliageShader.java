@@ -106,7 +106,7 @@ final class BerylFoliageShader {
 	 * this was written against. The sway's other three blocks take the three bindings from firstFreeBinding on.
 	 */
 	static String vertex(String terrain, String sway, int firstFreeBinding, int normalLocation, int swayLocation) {
-		return copy(terrain, sway, firstFreeBinding, normalLocation, swayLocation, true);
+		return copy(terrain, declarations(sway, firstFreeBinding), POSITION, normalLocation, swayLocation, true);
 	}
 
 	/**
@@ -115,7 +115,26 @@ final class BerylFoliageShader {
 	 * sways with the plant. Null where the shader is not the one this was written against.
 	 */
 	static String shadowVertex(String shadow, String sway, int firstFreeBinding, int normalLocation, int swayLocation) {
-		return copy(shadow, sway, firstFreeBinding, normalLocation, swayLocation, false);
+		return copy(shadow, declarations(sway, firstFreeBinding), POSITION, normalLocation, swayLocation, false);
+	}
+
+	/**
+	 * The same two copies for the versions where VulkanMod feeds a pipeline by named fields alone (before 1.21.11):
+	 * what the sway reads is declared the way {@link VulkanFoliageShader} declares it, which is handed over whole with
+	 * sway.glsl after it, and so is the expression that sways a vertex.
+	 */
+	static String legacyVertex(String beryls, String swayDeclarations, String swayed, int normalLocation,
+			int swayLocation, boolean lit) {
+		return copy(beryls, "\n" + swayDeclarations, "vec4 position = vec4(" + swayed + ", 1.0);", normalLocation,
+				swayLocation, lit);
+	}
+
+	/** The sway's blocks as the game's own graphics device binds them, and sway.glsl. */
+	private static String declarations(String sway, int firstFreeBinding) {
+		// The game's block of globals, read for the camera and the time the sway goes by, the sway's settings and the
+		// pushes, after the last of Beryl's own bindings.
+		return UNIFORMS.formatted(REGION_BINDING, firstFreeBinding, firstFreeBinding + 1, firstFreeBinding + 2)
+				+ sway.replace("\r\n", "\n");
 	}
 
 	/**
@@ -123,23 +142,21 @@ final class BerylFoliageShader {
 	 * format with the sway's two values after it -- which has a normal before 26.1.2 and none from then on. So the
 	 * normal's place, or -1 where there is none, and the place of the first of the sway's two are handed over.
 	 */
-	private static String copy(String terrain, String sway, int firstFreeBinding, int normalLocation, int swayLocation,
-			boolean lit) {
+	private static String copy(String terrain, String declarations, String position, int normalLocation,
+			int swayLocation, boolean lit) {
 		String inputs = INPUTS.formatted(swayLocation, swayLocation + 1);
 		String normal = normalLocation < 0 ? NO_NORMAL : "layout(location = " + normalLocation + ") in vec3 Normal;\n";
 		// Each block's own material where the faces say which way they look, as Beryl lights most blocks by that. Where
 		// they do not, the one material that needs no face: Beryl's foliage, lit by the sky.
 		String material = normalLocation < 0 ? "getMaterial(" + FOLIAGE_MATERIAL + ")"
 				: "getMaterial(mc2_UV2.x >> " + LIGHT_BITS + ")";
-		// The game's block of globals, read for the camera and the time the sway goes by, the sway's settings and the
-		// pushes, after the last of Beryl's own bindings.
-		String uniforms = UNIFORMS.formatted(REGION_BINDING, firstFreeBinding, firstFreeBinding + 1, firstFreeBinding + 2);
 		String source = terrain.replace("\r\n", "\n");
 		String[][] changes = {
 				// Plain vertices rather than VulkanMod's compressed ones: the declarations are Beryl's own.
 				{"(?m)^#define COMPRESSED_VERTEX[ \\t]*\\n", ""},
 				// Where a section is comes from the mod's transform, not from Beryl's push constant and section block.
-				{"(?s)layout\\s*\\(binding = 2\\) uniform UBO2 \\{.*?\\};\\n", ""},
+				// Beryl 0.2.0 has no section block, or has it commented out.
+				{"(?s)(?://)?layout\\s*\\(binding = 2\\) uniform UBO2 \\{.*?\\};\\n", "", "optional"},
 				{"(?s)layout\\s*\\(push_constant\\) uniform pushConstant \\{.*?\\};\\n", ""},
 				{"(?s)vec3 getVertexPosition\\(\\) \\{.*?\\n\\}\\n", ""},
 				// The block id's place goes to the mod's two values.
@@ -157,8 +174,8 @@ final class BerylFoliageShader {
 						"    const ivec2 UV2 = mc2_UV2 & " + LIGHT_MASK + ";\n"},
 				{"texCoord0 = UV0 \\* UV_INV;", "texCoord0 = UV0;"},
 				// The position, swayed before anything is worked out from it.
-				{"vec4 position = vec4\\(getVertexPosition\\(\\), 1\\.0\\);", Matcher.quoteReplacement(POSITION)},
-				{"(?m)^void main\\(\\) \\{", Matcher.quoteReplacement(uniforms + sway.replace("\r\n", "\n") + "\nvoid main() {")},
+				{"vec4 position = vec4\\(getVertexPosition\\(\\), 1\\.0\\);", Matcher.quoteReplacement(position)},
+				{"(?m)^void main\\(\\) \\{", Matcher.quoteReplacement(declarations + "\nvoid main() {")},
 		};
 		for (String[] change : changes) {
 			if (change == null) {
@@ -168,6 +185,10 @@ final class BerylFoliageShader {
 			int found = 0;
 			while (matcher.find()) {
 				found++;
+			}
+			if (found == 0 && change.length > 2) {
+				// Not in every Beryl: nothing to change.
+				continue;
 			}
 			if (found != 1) {
 				// Not there, or there twice: not the shader this was written against.

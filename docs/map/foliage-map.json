@@ -140,7 +140,7 @@
    "fileInfo": {
     "gpu/GpuFoliageRenderer.java": {
      "kind": "java",
-     "lines": 4934,
+     "lines": 4962,
      "guard": "//? >=1.20.1 {"
     }
    }
@@ -165,7 +165,7 @@
    "fileInfo": {
     "gpu/GpuFoliageRenderer.java": {
      "kind": "java",
-     "lines": 4934,
+     "lines": 4962,
      "guard": "//? >=1.20.1 {"
     }
    }
@@ -190,7 +190,7 @@
    "fileInfo": {
     "gpu/GpuFoliageRenderer.java": {
      "kind": "java",
-     "lines": 4934,
+     "lines": 4962,
      "guard": "//? >=1.20.1 {"
     }
    }
@@ -224,7 +224,7 @@
    "fileInfo": {
     "gpu/GpuFoliageRenderer.java": {
      "kind": "java",
-     "lines": 4934,
+     "lines": 4962,
      "guard": "//? >=1.20.1 {"
     },
     "mixin/LevelPassMixin.java": {
@@ -250,7 +250,7 @@
    "fileInfo": {
     "gpu/GpuFoliageRenderer.java": {
      "kind": "java",
-     "lines": 4934,
+     "lines": 4962,
      "guard": "//? >=1.20.1 {"
     }
    }
@@ -1191,12 +1191,12 @@
     },
     "gpu/VulkanLegacyDraw.java": {
      "kind": "java",
-     "lines": 382,
+     "lines": 463,
      "guard": "//? >=1.20.1 {"
     },
     "gpu/VulkanFoliageShader.java": {
      "kind": "java",
-     "lines": 149,
+     "lines": 177,
      "guard": ""
     }
    }
@@ -1236,17 +1236,18 @@
     "Shadow map: BerylShadowMixin (@Pseudo, ShadowMap.renderShadowMap, at the VRenderSystem.applyProjectionMatrix call between Beryl's terrain and its entities) calls drawBerylShadow, which draws every section near the player into the targets Beryl has the game draw entity shadows into (RenderSystem.outputColorTextureOverride / outputDepthTextureOverride). The shadow shader places vertices by LightSpaceMat alone, so no matrix is handed over. Nothing is drawn unless Beryl's shadow pipeline went under the mod's.",
     "Vertex inputs: VulkanMod numbers them by their place in the vertex format, and the game's block format has a normal on 1.21.11 and none from 26.1.2, so the normal's place and the sway values' are read from the format and written into the copy. Where there is no normal the copy declares a zero one: a normal looking up makes Beryl look a shadow up as far as 0.6 blocks toward the sun (LightSpaceOffset, meant for the ground), which let a plant miss the shadow of the plant in front of it at a low sun.",
     "Materials: Beryl picks a block's material by an id from a fixed list of its own (ShaderRendererResources.getBlockId): 13, lit by the sky from either side, for about seventeen vanilla plants; lit by which way each face looks for everything else, leaves and every modded plant among them. On 1.21.11 the vertex writer puts that id above the light (UV2.x, bits 8 up; materialBits) and the copy picks the material by it, taking the light from under it; the mod's own shader does the same through mc2_light, inside its VulkanMod branch. From 26.1.2 there is no normal to light a face by, so every plant gets material 13 there: leaves and unlisted plants are lit from behind where Beryl's own would be dark.",
-    "Rebuilt when Beryl's options change (coloured shadows, textured sun, waving water, SSR: they are defines of its shaders). Written against Beryl 0.2.1-alpha and VulkanMod 0.6.8; tested on 1.21.11 and 26.1.2 Fabric (light, tint, shadows received and cast)."
+    "Rebuilt when Beryl's options change (coloured shadows, textured sun, waving water, SSR: they are defines of its shaders). Written against Beryl 0.2.1-alpha and VulkanMod 0.6.8; tested on 1.21.11 and 26.1.2 Fabric (light, tint, shadows received and cast).",
+    "1.21.1 (Beryl 0.2.0, VulkanMod 0.6.7): there is no render pipeline of the game's to put anything under, and the foliage is drawn through VulkanLegacyDraw, so that binds a pipeline of Beryl's in place of its own: legacyLit while Beryl's stage is TERRAIN, legacyShadow while it is SHADOW_MAP (the same mixin hook; nothing is drawn into the shadow map without it, no render state is set there, since a render type's would bind the main target, and VulkanMod's matrices are left as Beryl set them). The copies are made by the same BerylFoliageShader (legacyVertex), with what the sway reads declared as named fields (VulkanFoliageShader.swayDeclarations) at the two bindings after Beryl's own: 5 on for the terrain (7 with coloured shadows), 4 on for the shadow map, whose blocks are the ones in Beryl's shadow.json. 0.2.0's terrain shader has no section block and three options; the block id rides above the light as on 1.21.11. Tested on 1.21.1 Fabric (light, shadows received and cast)."
    ],
    "fileInfo": {
     "gpu/BerylBridge.java": {
      "kind": "java",
-     "lines": 496,
+     "lines": 681,
      "guard": "//? >=1.20.1 {"
     },
     "gpu/BerylFoliageShader.java": {
      "kind": "java",
-     "lines": 181,
+     "lines": 202,
      "guard": ""
     },
     "mixin/BerylShadowMixin.java": {
@@ -2549,7 +2550,7 @@
     "label": "Beryl (VulkanMod shaders)",
     "cells": {
      "1.20.1": "no Beryl",
-     "1.21.1": "fabric: GPU renderer stays out with VulkanMod 0.6.7",
+     "1.21.1": "fabric: done (0.2.0: Beryl's light and materials, shadows received and cast, through VulkanLegacyDraw)",
      "1.21.11": "fabric: done (0.2.1: Beryl's light and materials, shadows received and cast)",
      "26.1.2": "fabric: done (0.2.1: Beryl's light, one material for every plant, shadows received and cast)",
      "26.2": "no VulkanMod",
@@ -2674,12 +2675,12 @@
   },
   "gpu/BerylBridge.java": {
    "kind": "java",
-   "lines": 496,
+   "lines": 681,
    "guard": "//? >=1.20.1 {"
   },
   "gpu/BerylFoliageShader.java": {
    "kind": "java",
-   "lines": 181,
+   "lines": 202,
    "guard": ""
   },
   "gpu/GpuFoliageInteraction.java": {
@@ -2694,7 +2695,7 @@
   },
   "gpu/GpuFoliageRenderer.java": {
    "kind": "java",
-   "lines": 4934,
+   "lines": 4962,
    "guard": "//? >=1.20.1 {"
   },
   "gpu/GpuFoliageSplit.java": {
@@ -2759,12 +2760,12 @@
   },
   "gpu/VulkanFoliageShader.java": {
    "kind": "java",
-   "lines": 149,
+   "lines": 177,
    "guard": ""
   },
   "gpu/VulkanLegacyDraw.java": {
    "kind": "java",
-   "lines": 382,
+   "lines": 463,
    "guard": "//? >=1.20.1 {"
   },
   "gpu/WindShelter.java": {

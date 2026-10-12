@@ -11,22 +11,26 @@ package net.karto.mc2.mc2_interactivefoliage.gpu;
  * Every value is a named field of a uniform block, which is how VulkanMod feeds a pipeline: it looks each field up by
  * its name. It takes no arrays there, so the pushes are laid out as matrices, sixteen floats being four of the
  * vectors, as in the mod's own shader under VulkanMod on later versions.
+ * <p>
+ * What the sway reads is declared apart, since the copy of Beryl's terrain shader the foliage is drawn with under
+ * Beryl on these versions reads the same, the same way ({@link BerylBridge}).
  */
 final class VulkanFoliageShader {
 
 	/** How many matrices hold the pushes' positions, and as many their forces: four cells each. */
 	static final int CELL_MATRICES = 32;
-	/** The fields of the three blocks in order, type then name, as the pipeline is told them. */
-	static final String[][] VERTEX_FIELDS = {
-			{"mat4", "MVP"},
+	/** What the sway reads beside the pushes, type then name, as a pipeline is told them. */
+	static final String[][] SWAY_FIELDS = {
 			{"vec4", "mc2_RegionOffset"},
 			{"vec4", "mc2_CameraBlock"},
 			{"vec4", "mc2_CameraOffset"},
 			{"vec4", "mc2_SwayEdge"},
 			{"vec4", "mc2_Weather"},
-			{"float", "GameTime"},
+			{"float", "mc2_GameTime"},
 			{"float", "mc2_SwayIntensity"},
 			{"float", "mc2_CalmSway"}};
+	/** The fields of the mod's own blocks in order: the matrix and the sway's, and the fragment shader's. */
+	static final String[][] VERTEX_FIELDS = withMatrix();
 	static final String[][] FRAGMENT_FIELDS = {
 			{"vec4", "FogColor"},
 			{"float", "FogStart"},
@@ -37,8 +41,21 @@ final class VulkanFoliageShader {
 	static final int FRAGMENT_BINDING = 2;
 	static final int TEXTURE_BINDING = 3;
 	static final int LIGHTMAP_BINDING = 4;
+	/**
+	 * A vertex moved by the sway: its position relative to the camera, the region's corner being relative to it, with
+	 * the camera's block handed over as floats.
+	 */
+	static final String SWAYED = "mc2_sway(Position + mc2_RegionOffset.xyz, mc2_RegionOffset.xyz, "
+			+ "ivec3(mc2_CameraBlock.xyz), mc2_CameraOffset.xyz, mc2_GameTime, SwayCell, SwayWeights)";
 
 	private VulkanFoliageShader() {
+	}
+
+	private static String[][] withMatrix() {
+		String[][] fields = new String[SWAY_FIELDS.length + 1][];
+		fields[0] = new String[] {"mat4", "MVP"};
+		System.arraycopy(SWAY_FIELDS, 0, fields, 1, SWAY_FIELDS.length);
+		return fields;
 	}
 
 	/** The fields of the block of pushes, in order: a count, the two bounds, the positions and the forces. */
@@ -55,6 +72,22 @@ final class VulkanFoliageShader {
 	}
 
 	/**
+	 * Everything sway.glsl reads, declared for a vertex shader, and sway.glsl after it: a block of the fields given at
+	 * one binding, the pushes at another, and the two functions the pushes are read through.
+	 */
+	static String swayDeclarations(String sway, String blockName, String[][] fields, int binding, int cellsBinding) {
+		StringBuilder source = new StringBuilder();
+		block(source, binding, blockName, fields);
+		block(source, cellsBinding, "FoliageInteraction", cellFields());
+		source.append("#define MC2_MAX_CELLS ").append(CELL_MATRICES * 4).append('\n');
+		source.append("#define MC2_NO_UNIFORM_ARRAYS\n\n");
+		cells(source, "mc2_cellPosition", "mc2_CellPosition");
+		cells(source, "mc2_cellForce", "mc2_CellForce");
+		source.append(sway.replace("\r\n", "\n")).append('\n');
+		return source.toString();
+	}
+
+	/**
 	 * The vertex shader. VulkanMod numbers a vertex's inputs by their place in its format, so the place of the first of
 	 * the sway's two values is handed over; the block format's own come first on every version.
 	 */
@@ -66,8 +99,6 @@ final class VulkanFoliageShader {
 				#include "fog.glsl"
 
 				""");
-		block(source, VERTEX_BINDING, "MC2Foliage", VERTEX_FIELDS);
-		block(source, CELLS_BINDING, "FoliageInteraction", cellFields());
 		source.append("layout(binding = ").append(LIGHTMAP_BINDING).append(") uniform sampler2D Sampler2;\n\n");
 		source.append("""
 				layout(location = 0) in vec3 Position;
@@ -77,11 +108,7 @@ final class VulkanFoliageShader {
 				""");
 		source.append("layout(location = ").append(swayLocation).append(") in float SwayCell;\n");
 		source.append("layout(location = ").append(swayLocation + 1).append(") in float SwayWeights;\n\n");
-		source.append("#define MC2_MAX_CELLS ").append(CELL_MATRICES * 4).append('\n');
-		source.append("#define MC2_NO_UNIFORM_ARRAYS\n\n");
-		cells(source, "mc2_cellPosition", "mc2_CellPosition");
-		cells(source, "mc2_cellForce", "mc2_CellForce");
-		source.append(sway.replace("\r\n", "\n"));
+		source.append(swayDeclarations(sway, "MC2Foliage", VERTEX_FIELDS, VERTEX_BINDING, CELLS_BINDING));
 		source.append("""
 
 				layout(location = 0) out vec4 vertexColor;
@@ -89,13 +116,14 @@ final class VulkanFoliageShader {
 				layout(location = 2) out float vertexDistance;
 
 				void main() {
-				    // Relative to the camera: the region's offset is its corner relative to it.
-				    vec3 pos = mc2_sway(Position + mc2_RegionOffset.xyz, mc2_RegionOffset.xyz, ivec3(mc2_CameraBlock.xyz),
-				            mc2_CameraOffset.xyz, GameTime, SwayCell, SwayWeights);
+				""");
+		source.append("    vec3 pos = ").append(SWAYED).append(";\n");
+		source.append("""
 				    gl_Position = MVP * vec4(pos, 1.0);
 
 				    vertexDistance = fog_distance(pos, 0);
-				    vertexColor = Color * sample_lightmap(Sampler2, UV2);
+				    // The light is the low eight bits of each number: under Beryl a block's id is written above it.
+				    vertexColor = Color * sample_lightmap(Sampler2, UV2 & 255);
 				    texCoord0 = UV0;
 				}
 				""");

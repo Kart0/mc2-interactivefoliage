@@ -2457,6 +2457,16 @@ public final class GpuFoliageRenderer {
 				berylShadowPass = false;
 			}
 		}
+		*///?} elif >=1.21.1 {
+		/*// Before 1.21.11 the foliage is drawn through VulkanMod itself, into whatever Beryl has bound: its shadow map.
+		Minecraft minecraft = Minecraft.getInstance();
+		if (!active || meshedForShaderPack || minecraft.level == null || !VulkanBridge.drawsThroughItself()) {
+			return;
+		}
+		Vec3 camera = minecraft.gameRenderer.getMainCamera().getPosition();
+		if (collectDraws(null, null)) {
+			drawLegacyThroughVulkanMod(minecraft, camera, DRAWN, null, null);
+		}
 		*///?}
 	}
 
@@ -3257,17 +3267,25 @@ public final class GpuFoliageRenderer {
 	 ^/
 	private static void drawLegacyThroughVulkanMod(Minecraft minecraft, Vec3 camera, List<Region> drawn,
 			Matrix4f modelView, Matrix4f projection) {
-		if (!VulkanLegacyDraw.ready(FOLIAGE_FORMAT, FOLIAGE_FORMAT.getElementAttributeNames().indexOf("SwayCell"),
-				GpuFoliageInteraction.legacyCells(camera))) {
+		// Into Beryl's shadow map there are no matrices to hand over, and no render state to set: see begin. The pushes
+		// are the ones the frame before was drawn with, which are worked out once a frame.
+		boolean shadowMap = modelView == null;
+		if (shadowMap ? !VulkanLegacyDraw.built()
+				: !VulkanLegacyDraw.ready(FOLIAGE_FORMAT, FOLIAGE_FORMAT.getElementAttributeNames().indexOf("Normal"),
+						FOLIAGE_FORMAT.getElementAttributeNames().indexOf("SwayCell"),
+						GpuFoliageInteraction.legacyCells(camera))) {
 			return;
 		}
 		Vector4f edge = windEdgeFrom(camera);
 		Vector4f weather = weather();
 		BlockPos cameraBlock = BlockPos.containing(camera);
-		VulkanLegacyDraw.begin(modelView, projection, cameraBlock.getX(), cameraBlock.getY(), cameraBlock.getZ(),
+		if (!VulkanLegacyDraw.begin(modelView, projection, cameraBlock.getX(), cameraBlock.getY(), cameraBlock.getZ(),
 				(float) (cameraBlock.getX() - camera.x), (float) (cameraBlock.getY() - camera.y),
-				(float) (cameraBlock.getZ() - camera.z), swayIntensity(), calmSway(), edge.x, edge.y, edge.z, edge.w,
-				weather.x, weather.y, weather.z, weather.w);
+				(float) (cameraBlock.getZ() - camera.z), RenderSystem.getShaderGameTime(), swayIntensity(), calmSway(),
+				edge.x, edge.y, edge.z, edge.w,
+				weather.x, weather.y, weather.z, weather.w)) {
+			return;
+		}
 		int longestRun = 0;
 		for (int i = 2; i < drawsSize; i += 3) {
 			longestRun = Math.max(longestRun, draws[i]);
@@ -3283,7 +3301,9 @@ public final class GpuFoliageRenderer {
 			}
 			boolean solid = kind == 0;
 			RenderType renderType = solid ? RenderType.solid() : RenderType.cutout();
-			renderType.setupRenderState();
+			if (!shadowMap) {
+				renderType.setupRenderState();
+			}
 			// What vanilla's cutout layer discards below, or nothing.
 			VulkanLegacyDraw.cutout(solid ? 0.0F : 0.1F);
 			int boundRegion = -1;
@@ -3299,9 +3319,13 @@ public final class GpuFoliageRenderer {
 				}
 				VulkanLegacyDraw.run(list[i + 1], indexCountFor(list[i + 2]));
 			}
-			renderType.clearRenderState();
+			if (!shadowMap) {
+				renderType.clearRenderState();
+			}
 		}
-		VulkanLegacyDraw.end(RenderSystem.getModelViewMatrix(), RenderSystem.getProjectionMatrix());
+		if (!shadowMap) {
+			VulkanLegacyDraw.end(RenderSystem.getModelViewMatrix(), RenderSystem.getProjectionMatrix());
+		}
 	}
 
 	/^*
@@ -4406,6 +4430,9 @@ public final class GpuFoliageRenderer {
 		}
 
 		/^* The height of the block about to be tesselated, relative to the region. ^/
+		/^* The block's id for Beryl, which is not there before 1.21.1; see the writer above. ^/
+		int lightBits;
+
 		void beginBlock(float blockY) {
 			this.blockY = blockY;
 		}
@@ -4796,6 +4823,7 @@ public final class GpuFoliageRenderer {
 						/^poseStack.pushPose();
 						poseStack.translate(offsetX + dx, offsetY + dy + lift, offsetZ + dz);
 						output.beginBlock(offsetY + dy + lift);
+						output.lightBits = BerylBridge.materialBits(state);
 						tesselate(level, SnowRealMagicCompat.snowyVariant(GpuFoliageSplit.modelFor(state,
 								models.getBlockModel(state)), state, level, pos, inSnow), state, pos, poseStack, output, random,
 								!(anchor.field && partsFromNeighbour(level, blocks, dx, dy, dz, pos, neighbour)));

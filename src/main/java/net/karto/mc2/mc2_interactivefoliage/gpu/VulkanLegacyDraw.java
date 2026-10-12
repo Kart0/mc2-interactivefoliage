@@ -55,10 +55,16 @@ final class VulkanLegacyDraw {
 	private static final int WEATHER = 64;
 	private static float swayIntensity;
 	private static float calmSway;
+	private static float gameTime;
 	private static float alphaCutout;
 	private static ByteBuffer cells;
 
+	/** The mod's own pipeline, and the one the runs are drawn with: that, Beryl's lighting, or its shadow map's. */
 	private static Object pipeline;
+	private static Object drawn;
+	private static Object format;
+	private static int normalAt;
+	private static int swayAt;
 	private static boolean failed;
 	private static final LongBuffer BUFFER = MemoryUtil.memAllocLong(1);
 	private static final LongBuffer OFFSET = MemoryUtil.memAllocLong(1);
@@ -70,10 +76,11 @@ final class VulkanLegacyDraw {
 	 * Whether the foliage can be drawn through VulkanMod, building the pipeline the first time. Render thread only.
 	 *
 	 * @param vertexFormat the format of the foliage's vertices
-	 * @param swayLocation the place of the first of the sway's two values among its elements
+	 * @param normalLocation the place of the normal among its elements, or -1 where it has none
+	 * @param swayLocation the place of the first of the sway's two values among them
 	 * @param cellData the pushes, laid out as the block of them is: a count, then vectors from byte 16 on
 	 */
-	static boolean ready(Object vertexFormat, int swayLocation, ByteBuffer cellData) {
+	static boolean ready(Object vertexFormat, int normalLocation, int swayLocation, ByteBuffer cellData) {
 		if (failed) {
 			return false;
 		}
@@ -82,6 +89,9 @@ final class VulkanLegacyDraw {
 		}
 		try {
 			cells = cellData;
+			format = vertexFormat;
+			normalAt = normalLocation;
+			swayAt = swayLocation;
 			Names.registerSuppliers();
 			pipeline = Names.build(vertexFormat, swayLocation);
 			return true;
@@ -93,14 +103,26 @@ final class VulkanLegacyDraw {
 		}
 	}
 
+	/** Whether the frame has been drawn through VulkanMod before, so there is everything to draw a shadow map with. */
+	static boolean built() {
+		return pipeline != null && !failed;
+	}
+
 	/** Whether drawing through VulkanMod was tried and cannot be done, so the renderer stays out. */
 	static boolean failed() {
 		return failed;
 	}
 
-	/** What every run of the frame shares: the matrices, the camera, and the sway's settings. */
-	static void begin(Matrix4f modelView, Matrix4f projection, int cameraBlockX, int cameraBlockY, int cameraBlockZ,
-			float cameraOffsetX, float cameraOffsetY, float cameraOffsetZ, float intensity, float calm,
+	/**
+	 * What every run of the frame shares: the matrices, the camera, the time and the sway's settings. The pipeline is
+	 * picked here too: Beryl's lighting while Beryl draws the terrain with its shaders, the mod's own otherwise.
+	 * <p>
+	 * Into Beryl's shadow map -- no matrices handed over -- the pipeline is Beryl's for that or there is nothing to
+	 * draw with, which is what is returned. It places a vertex by the light's matrix, which Beryl feeds it, and
+	 * VulkanMod's own are left as Beryl set them, as is the render state its terrain was just drawn with.
+	 */
+	static boolean begin(Matrix4f modelView, Matrix4f projection, int cameraBlockX, int cameraBlockY, int cameraBlockZ,
+			float cameraOffsetX, float cameraOffsetY, float cameraOffsetZ, float time, float intensity, float calm,
 			float edgeX, float edgeY, float edgeZ, float edgeW, float weatherX, float weatherY, float weatherZ,
 			float weatherW) {
 		put(CAMERA_BLOCK, cameraBlockX & BLOCK_BITS, cameraBlockY & BLOCK_BITS, cameraBlockZ & BLOCK_BITS, 0.0F);
@@ -109,12 +131,20 @@ final class VulkanLegacyDraw {
 		put(WEATHER, weatherX, weatherY, weatherZ, weatherW);
 		swayIntensity = intensity;
 		calmSway = calm;
+		gameTime = time;
+		if (modelView == null) {
+			drawn = BerylBridge.legacyShadow(format, normalAt, swayAt);
+			return drawn != null;
+		}
+		Object beryls = BerylBridge.legacyLit(format, normalAt, swayAt);
+		drawn = beryls != null ? beryls : pipeline;
 		try {
-			Names.APPLY_MVP.invoke(null, modelView, projection);
+			matrices(modelView, projection);
 			Names.SET_TOPOLOGY.invoke(null, TRIANGLES);
 		} catch (Throwable e) {
 			fail(e);
 		}
+		return !failed;
 	}
 
 	/** What the fragment shader discards below, for the runs that follow: the cutout layer's, or nothing. */
@@ -133,9 +163,9 @@ final class VulkanLegacyDraw {
 		put(REGION_OFFSET, x, y, z, 0.0F);
 		try {
 			Object renderer = Names.RENDERER.invoke(null);
-			Names.BIND_PIPELINE.invoke(renderer, pipeline);
-			Names.BIND_TEXTURES.invoke(null, pipeline);
-			Names.BIND_UNIFORMS.invoke(renderer, pipeline);
+			Names.BIND_PIPELINE.invoke(renderer, drawn);
+			Names.BIND_TEXTURES.invoke(null, drawn);
+			Names.BIND_UNIFORMS.invoke(renderer, drawn);
 
 			Object buffer = Names.vulkanBuffer(vertexBuffer);
 			Object commands = Names.COMMANDS.invoke(null);
@@ -170,10 +200,42 @@ final class VulkanLegacyDraw {
 	/** Hands VulkanMod back the matrices the game holds, as its own vertex buffers do once they have drawn. */
 	static void end(Matrix4f modelView, Matrix4f projection) {
 		try {
-			Names.APPLY_MVP.invoke(null, modelView, projection);
+			matrices(modelView, projection);
 		} catch (Throwable e) {
 			fail(e);
 		}
+	}
+
+	/**
+	 * The pipeline the foliage is lit by Beryl with on these versions, built as the mod's own is: Beryl's two blocks,
+	 * which VulkanMod fills by their fields' names, the two the sway reads at the two bindings after Beryl's textures,
+	 * and those textures. The sway's values are the ones the mod's own pipeline is handed.
+	 */
+	static Object berylPipeline(Object vertexFormat, Object[] berylBlocks, int firstFreeBinding, Object[][] textures,
+			String vertex, String fragment) throws ReflectiveOperationException {
+		Object[] blocks = new Object[berylBlocks.length + 2];
+		System.arraycopy(berylBlocks, 0, blocks, 0, berylBlocks.length);
+		blocks[berylBlocks.length] = Names.block(firstFreeBinding, VERTEX_STAGE, VulkanFoliageShader.SWAY_FIELDS);
+		blocks[berylBlocks.length + 1] = Names.block(firstFreeBinding + 1, VERTEX_STAGE, VulkanFoliageShader.cellFields());
+		return Names.pipeline(vertexFormat, "mc2_foliage_beryl", blocks, textures, vertex, fragment);
+	}
+
+	/** A block of named fields for a pipeline of Beryl's that Beryl itself is told in a file. */
+	static Object block(int binding, int stage, String[][] fields) throws ReflectiveOperationException {
+		return Names.block(binding, stage, fields);
+	}
+
+	/** sway.glsl, and what it reads declared before it, for the copy of one of Beryl's vertex shaders. */
+	static String swayDeclarations(int firstFreeBinding) {
+		return VulkanFoliageShader.swayDeclarations(Names.readSway(), "MC2FoliageSway", VulkanFoliageShader.SWAY_FIELDS,
+				firstFreeBinding, firstFreeBinding + 1);
+	}
+
+	/** The three VulkanMod keeps for its pipelines: Beryl's shaders read the view on its own beside the two together. */
+	private static void matrices(Matrix4f modelView, Matrix4f projection) throws ReflectiveOperationException {
+		Names.APPLY_MODEL_VIEW.invoke(null, modelView);
+		Names.APPLY_PROJECTION.invoke(null, projection);
+		Names.APPLY_MVP.invoke(null, modelView, projection);
 	}
 
 	private static void put(int at, float x, float y, float z, float w) {
@@ -197,6 +259,8 @@ final class VulkanLegacyDraw {
 		static final Method BIND_UNIFORMS;
 		static final Method BIND_TEXTURES;
 		static final Method APPLY_MVP;
+		static final Method APPLY_MODEL_VIEW;
+		static final Method APPLY_PROJECTION;
 		static final Method SET_TOPOLOGY;
 		static final Method QUAD_INDICES;
 		static final Method CHECK_CAPACITY;
@@ -232,6 +296,8 @@ final class VulkanLegacyDraw {
 				BIND_UNIFORMS = renderer.getMethod("uploadAndBindUBOs", anyPipeline);
 				BIND_TEXTURES = Class.forName(VULKAN + "texture.VTextureSelector").getMethod("bindShaderTextures", anyPipeline);
 				APPLY_MVP = system.getMethod("applyMVP", Matrix4f.class, Matrix4f.class);
+				APPLY_MODEL_VIEW = system.getMethod("applyModelViewMatrix", Matrix4f.class);
+				APPLY_PROJECTION = system.getMethod("applyProjectionMatrix", Matrix4f.class);
 				SET_TOPOLOGY = system.getMethod("setPrimitiveTopologyGL", int.class);
 				QUAD_INDICES = drawer.getMethod("getQuadsIndexBuffer");
 				CHECK_CAPACITY = quads.getMethod("checkCapacity", int.class);
@@ -290,6 +356,7 @@ final class VulkanLegacyDraw {
 			vectors.put("mc2_CameraOffset", fixed(mapped, VECTORS, CAMERA_OFFSET, 16));
 			vectors.put("mc2_SwayEdge", fixed(mapped, VECTORS, SWAY_EDGE, 16));
 			vectors.put("mc2_Weather", fixed(mapped, VECTORS, WEATHER, 16));
+			floats.put("mc2_GameTime", (Supplier<Float>) () -> gameTime);
 			floats.put("mc2_SwayIntensity", (Supplier<Float>) () -> swayIntensity);
 			floats.put("mc2_CalmSway", (Supplier<Float>) () -> calmSway);
 			floats.put("mc2_AlphaCutout", (Supplier<Float>) () -> alphaCutout);
@@ -315,20 +382,34 @@ final class VulkanLegacyDraw {
 		}
 
 		static Object build(Object vertexFormat, int swayLocation) throws ReflectiveOperationException {
+			Object[] blocks = {
+					block(VulkanFoliageShader.VERTEX_BINDING, VERTEX_STAGE, VulkanFoliageShader.VERTEX_FIELDS),
+					block(VulkanFoliageShader.CELLS_BINDING, VERTEX_STAGE, VulkanFoliageShader.cellFields()),
+					block(VulkanFoliageShader.FRAGMENT_BINDING, FRAGMENT_STAGE, VulkanFoliageShader.FRAGMENT_FIELDS)};
+			Object[][] textures = {
+					{VulkanFoliageShader.TEXTURE_BINDING, "Sampler0", 0},
+					{VulkanFoliageShader.LIGHTMAP_BINDING, "Sampler2", 2}};
+			return pipeline(vertexFormat, "mc2_foliage", blocks, textures,
+					VulkanFoliageShader.vertex(readSway(), swayLocation), VulkanFoliageShader.fragment());
+		}
+
+		/**
+		 * A pipeline as VulkanMod builds its own: its blocks of named fields in the order of their bindings, its
+		 * textures as a binding, the name VulkanMod knows the texture by and the slot it is bound at, and its shaders.
+		 */
+		static Object pipeline(Object vertexFormat, String name, Object[] blocks, Object[][] textures, String vertex,
+				String fragment) throws ReflectiveOperationException {
 			String shader = VULKAN + "shader.";
-			Class<?> block = Class.forName(shader + "PipelineConfig$UB");
 			Object config = Class.forName(shader + "PipelineConfig").getMethod("builder").invoke(null);
-			Method addBlock = config.getClass().getMethod("addUB", block);
-			addBlock.invoke(config, block(block, VulkanFoliageShader.VERTEX_BINDING, VERTEX_STAGE,
-					VulkanFoliageShader.VERTEX_FIELDS));
-			addBlock.invoke(config, block(block, VulkanFoliageShader.CELLS_BINDING, VERTEX_STAGE,
-					VulkanFoliageShader.cellFields()));
-			addBlock.invoke(config, block(block, VulkanFoliageShader.FRAGMENT_BINDING, FRAGMENT_STAGE,
-					VulkanFoliageShader.FRAGMENT_FIELDS));
+			Method addBlock = config.getClass().getMethod("addUB", Class.forName(shader + "PipelineConfig$UB"));
+			for (Object block : blocks) {
+				addBlock.invoke(config, block);
+			}
 			Method addTexture = config.getClass().getMethod("addImageDescriptor", int.class, String.class, String.class,
 					int.class);
-			addTexture.invoke(config, VulkanFoliageShader.TEXTURE_BINDING, "sampler2D", "Sampler0", 0);
-			addTexture.invoke(config, VulkanFoliageShader.LIGHTMAP_BINDING, "sampler2D", "Sampler2", 2);
+			for (Object[] texture : textures) {
+				addTexture.invoke(config, texture[0], "sampler2D", texture[1], texture[2]);
+			}
 			Object built = config.getClass().getMethod("build").invoke(config);
 
 			Class<?> builderClass = Class.forName(shader + "Pipeline$Builder");
@@ -336,7 +417,7 @@ final class VulkanLegacyDraw {
 			for (var constructor : builderClass.getConstructors()) {
 				Class<?>[] parameters = constructor.getParameterTypes();
 				if (parameters.length == 2 && parameters[1] == String.class) {
-					builder = constructor.newInstance(vertexFormat, "mc2_foliage");
+					builder = constructor.newInstance(vertexFormat, name);
 				}
 			}
 			if (builder == null) {
@@ -345,13 +426,13 @@ final class VulkanLegacyDraw {
 			builderClass.getMethod("applyConfig", built.getClass()).invoke(builder, built);
 			Class<?> kind = Class.forName(shader + "SPIRVUtils$ShaderKind");
 			Method setSource = builderClass.getMethod("setShaderSrc", kind, String.class);
-			setSource.invoke(builder, enumValue(kind, "VERTEX_SHADER"), VulkanFoliageShader.vertex(readSway(), swayLocation));
-			setSource.invoke(builder, enumValue(kind, "FRAGMENT_SHADER"), VulkanFoliageShader.fragment());
+			setSource.invoke(builder, enumValue(kind, "VERTEX_SHADER"), vertex);
+			setSource.invoke(builder, enumValue(kind, "FRAGMENT_SHADER"), fragment);
 			return builderClass.getMethod("createGraphicsPipeline").invoke(builder);
 		}
 
-		private static Object block(Class<?> block, int binding, int stage, String[][] fields)
-				throws ReflectiveOperationException {
+		static Object block(int binding, int stage, String[][] fields) throws ReflectiveOperationException {
+			Class<?> block = Class.forName(VULKAN + "shader.PipelineConfig$UB");
 			Object builder = block.getMethod("builder", int.class, int.class).invoke(null, binding, stage);
 			Method add = builder.getClass().getMethod("addUniform", String.class, String.class);
 			for (String[] field : fields) {
@@ -365,7 +446,7 @@ final class VulkanLegacyDraw {
 			return Enum.valueOf((Class) type, name);
 		}
 
-		private static String readSway() {
+		static String readSway() {
 			String path = "/assets/" + ModTemplate.MOD_ID + "/shaders/include/sway.glsl";
 			try (InputStream in = VulkanLegacyDraw.class.getResourceAsStream(path)) {
 				if (in == null) {
