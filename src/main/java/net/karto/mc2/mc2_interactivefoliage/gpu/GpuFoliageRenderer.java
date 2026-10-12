@@ -3411,6 +3411,13 @@ public final class GpuFoliageRenderer {
 		shader.safeGetUniform("mc2_Weather").set(weather.x, weather.y, weather.z, weather.w);
 		shader.safeGetUniform("mc2_GameTime").set(RenderSystem.getShaderGameTime());
 		shader.apply();
+		// The pushes' block is tied to its binding again on the program now in use. A mod may build a shader's program
+		// anew as the game runs -- Veil, which Sable brings, does as the shader is applied -- and a new program reads
+		// every uniform block from binding 0, where the pushes are not: the plants swayed and nothing pushed them.
+		int interactionBlock = GL31.glGetUniformBlockIndex(shader.getId(), GpuFoliageInteraction.UNIFORM);
+		if (interactionBlock != GL31.GL_INVALID_INDEX) {
+			GL31.glUniformBlockBinding(shader.getId(), interactionBlock, INTERACTION_BINDING);
+		}
 		//? iris {
 		if (meshedForShaderPack) {
 			// A pack's program knows only the uniforms Iris lists, so the sway's are set on it directly once it is in use.

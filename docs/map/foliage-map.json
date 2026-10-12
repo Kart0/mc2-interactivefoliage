@@ -140,7 +140,7 @@
    "fileInfo": {
     "gpu/GpuFoliageRenderer.java": {
      "kind": "java",
-     "lines": 4962,
+     "lines": 4969,
      "guard": "//? >=1.20.1 {"
     }
    }
@@ -165,7 +165,7 @@
    "fileInfo": {
     "gpu/GpuFoliageRenderer.java": {
      "kind": "java",
-     "lines": 4962,
+     "lines": 4969,
      "guard": "//? >=1.20.1 {"
     }
    }
@@ -190,7 +190,7 @@
    "fileInfo": {
     "gpu/GpuFoliageRenderer.java": {
      "kind": "java",
-     "lines": 4962,
+     "lines": 4969,
      "guard": "//? >=1.20.1 {"
     }
    }
@@ -224,7 +224,7 @@
    "fileInfo": {
     "gpu/GpuFoliageRenderer.java": {
      "kind": "java",
-     "lines": 4962,
+     "lines": 4969,
      "guard": "//? >=1.20.1 {"
     },
     "mixin/LevelPassMixin.java": {
@@ -250,7 +250,7 @@
    "fileInfo": {
     "gpu/GpuFoliageRenderer.java": {
      "kind": "java",
-     "lines": 4962,
+     "lines": 4969,
      "guard": "//? >=1.20.1 {"
     }
    }
@@ -449,7 +449,8 @@
    ],
    "summary": "Sway's push for each plant, followed through a damped spring and sent to the shader as a uniform block (up to 128 cells), keyed by the plant's anchor block.",
    "details": [
-    "upload() also steps the springs: call it once per frame. A second draw in the same frame (shadow map) reuses uploaded()."
+    "upload() also steps the springs: call it once per frame. A second draw in the same frame (shadow map) reuses uploaded().",
+    "Before 1.21.11 the block is tied to its binding point (12) on the program in use at every draw, not only as the shader loads: Veil, which Sable brings, builds a vanilla shader's program anew as it is applied, and a new program reads every uniform block from binding 0, so the plants swayed and nothing pushed them. Tested with Sable 2.0.6 on 1.21.1."
    ],
    "fileInfo": {
     "gpu/GpuFoliageInteraction.java": {
@@ -2695,7 +2696,7 @@
   },
   "gpu/GpuFoliageRenderer.java": {
    "kind": "java",
-   "lines": 4962,
+   "lines": 4969,
    "guard": "//? >=1.20.1 {"
   },
   "gpu/GpuFoliageSplit.java": {

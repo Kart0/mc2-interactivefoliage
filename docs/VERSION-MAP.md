@@ -142,6 +142,7 @@ What moves the plants: Sway's pushes, the calm sway, the rain wind and its shelt
 
 - **GpuFoliageInteraction**: Sway's push for each plant, followed through a damped spring and sent to the shader as a uniform block (up to 128 cells), keyed by the plant's anchor block.
   - upload() also steps the springs: call it once per frame. A second draw in the same frame (shadow map) reuses uploaded().
+  - Before 1.21.11 the block is tied to its binding point (12) on the program in use at every draw, not only as the shader loads: Veil, which Sable brings, builds a vanilla shader's program anew as it is applied, and a new program reads every uniform block from binding 0, so the plants swayed and nothing pushed them. Tested with Sable 2.0.6 on 1.21.1.
   - Files: `gpu/GpuFoliageInteraction.java`
   - Links: follows pushes of sway-api; read by sway-glsl
 - **SwayProximityForceMixin**: While the GPU draws, entities push plants from a little further and a little harder than Sway alone, only as Sway reads it.
