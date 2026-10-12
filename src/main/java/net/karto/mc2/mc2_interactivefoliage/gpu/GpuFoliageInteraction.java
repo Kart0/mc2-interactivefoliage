@@ -140,6 +140,8 @@ public final class GpuFoliageInteraction {
 	}
 
 	private static final Map<BlockPos, Cell> CELLS = new HashMap<>();
+	/** How far from where it is drawn from a pushed plant can be and still be sent, squared: 256 blocks. */
+	private static final double CELL_REACH_SQ = 256.0D * 256.0D;
 	private static final List<Cell> NEAREST = new ArrayList<>();
 	private static final Comparator<Cell> BY_DISTANCE = Comparator.comparingDouble(cell -> cell.distanceSq);
 
@@ -233,7 +235,16 @@ public final class GpuFoliageInteraction {
 			cell.targetX = 0.0F;
 			cell.targetZ = 0.0F;
 		}
-		for (Map.Entry<BlockPos, SwayData> entry : SWAY_FORCES.entrySet()) {
+		followForces(SWAY_FORCES);
+		//? <1.21.11 {
+		/*followForces(PLOT_FORCES);
+		*///?}
+		stepSprings(delta);
+	}
+
+	/** Aims every spring Sway pushes at its push: its own forces, or the ones worked out for a sub-level's plants. */
+	private static void followForces(Map<BlockPos, SwayData> forces) {
+		for (Map.Entry<BlockPos, SwayData> entry : forces.entrySet()) {
 			SwayData force = entry.getValue();
 			if (force.intensity < 0.01F) {
 				continue;
@@ -248,7 +259,9 @@ public final class GpuFoliageInteraction {
 			cell.targetX = force.nx * force.intensity;
 			cell.targetZ = force.nz * force.intensity;
 		}
+	}
 
+	private static void stepSprings(float delta) {
 		Iterator<Cell> iterator = CELLS.values().iterator();
 		while (iterator.hasNext()) {
 			Cell cell = iterator.next();
@@ -281,7 +294,11 @@ public final class GpuFoliageInteraction {
 			double dy = cell.pos.getY() + 0.5D - camera.y;
 			double dz = cell.pos.getZ() + 0.5D - camera.z;
 			cell.distanceSq = dx * dx + dy * dy + dz * dz;
-			NEAREST.add(cell);
+			// A sub-level's plants are kept far from everything, and are no nearer the camera than the world's are the
+			// place a sub-level is drawn from: each is left out of the other's.
+			if (cell.distanceSq < CELL_REACH_SQ) {
+				NEAREST.add(cell);
+			}
 		}
 		NEAREST.sort(BY_DISTANCE);
 
@@ -353,21 +370,68 @@ public final class GpuFoliageInteraction {
 		GL30.glBindBufferBase(GL31.GL_UNIFORM_BUFFER, binding, legacyBuffer);
 	}
 
-	private static int legacyNoneBuffer;
+	/^*
+	 * Sway's pushes on the plants of Sable's sub-levels, worked out again every frame. Sway looks for plants around
+	 * each entity where the entity is, and a sub-level's plants are kept somewhere else altogether, in its plot: so
+	 * the same is asked of Sway for an entity standing where this one would be inside the plot, and what it answers
+	 * is followed beside its own forces. The plants' places are the plot's, which are no plant's in the world.
+	 ^/
+	private static final Map<BlockPos, SwayData> PLOT_FORCES = new HashMap<>();
+	private static java.lang.reflect.Method processBlock;
+	private static boolean processBlockSought;
+	private static net.minecraft.world.entity.Entity standIn;
+
+	/^* Forgets last frame's pushes on the sub-levels' plants, before this frame's are worked out. ^/
+	static void beginPlotForces() {
+		PLOT_FORCES.clear();
+	}
 
 	/^*
-	 * Binds a block of no pushes at all where the foliage shader reads them, for what is drawn from another place
-	 * than the camera's -- a sub-level, whose plants are not where the pushes were worked out for.
+	 * Works out an entity's pushes on the plants its box reaches in a plot: the box as the sub-level's pose puts it
+	 * there, which for a sub-level lying on its side is the entity lying across the plot. Sway reads nothing of an
+	 * entity but its box while it does, so a stand-in that is in no level is given that box and handed to Sway's own
+	 * working-out of a block -- which is not part of its API, and is reached by name: without it the plants are not
+	 * pushed.
 	 ^/
-	static void bindLegacyNone(int binding) {
-		if (legacyNoneBuffer == 0) {
-			legacyNoneBuffer = GlStateManager._glGenBuffers();
-			GL15.glBindBuffer(GL31.GL_UNIFORM_BUFFER, legacyNoneBuffer);
-			ByteBuffer none = MemoryUtil.memCalloc(LEGACY_BUFFER_SIZE);
-			GL15.glBufferData(GL31.GL_UNIFORM_BUFFER, none, GL15.GL_STATIC_DRAW);
-			MemoryUtil.memFree(none);
+	static void pushPlot(net.minecraft.client.multiplayer.ClientLevel level, AABB box) {
+		try {
+			if (!processBlockSought) {
+				processBlockSought = true;
+				processBlock = SwayEngine.class.getDeclaredMethod("processBlock", BlockPos.MutableBlockPos.class,
+						net.minecraft.client.multiplayer.ClientLevel.class, net.minecraft.world.entity.Entity.class,
+						com.github.razorplay01.sway.api.behavior.context.SwayBehaviorContext.class, Map.class, float.class,
+						float.class);
+				processBlock.setAccessible(true);
+			}
+			if (processBlock == null) {
+				return;
+			}
+			if (standIn == null || standIn.level() != level) {
+				standIn = new net.minecraft.world.entity.Marker(net.minecraft.world.entity.EntityType.MARKER, level);
+			}
+			standIn.setPos((box.minX + box.maxX) * 0.5D, box.minY, (box.minZ + box.maxZ) * 0.5D);
+			standIn.setBoundingBox(box);
+			var context = new com.github.razorplay01.sway.api.behavior.context.SwayBehaviorContext(level, standIn,
+					SwayConfig.INSTANCE, 0.016F);
+			// Every block the box comes within Sway's reach of. Its own update looks around an entity's feet and well
+			// above them, for an entity standing; here the box may lie any way, so it is its whole length.
+			float radius = SwayConfig.INSTANCE.influenceRadius;
+			int reach = (int) Math.ceil(radius);
+			BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos();
+			for (int x = (int) Math.floor(box.minX - reach); x <= (int) Math.floor(box.maxX + reach); x++) {
+				for (int z = (int) Math.floor(box.minZ - reach); z <= (int) Math.floor(box.maxZ + reach); z++) {
+					for (int y = (int) Math.floor(box.minY - reach); y <= (int) Math.floor(box.maxY + reach); y++) {
+						pos.set(x, y, z);
+						processBlock.invoke(null, pos, level, standIn, context, PLOT_FORCES, radius,
+								SwayConfig.INSTANCE.intensity);
+					}
+				}
+			}
+		} catch (ReflectiveOperationException | RuntimeException e) {
+			processBlock = null;
+			ModTemplate.LOGGER.warn("Sway's forces can't be worked out for the plants of Sable's sub-levels; they sway "
+					+ "but are not pushed", e);
 		}
-		GL30.glBindBufferBase(GL31.GL_UNIFORM_BUFFER, binding, legacyNoneBuffer);
 	}
 
 	/^*

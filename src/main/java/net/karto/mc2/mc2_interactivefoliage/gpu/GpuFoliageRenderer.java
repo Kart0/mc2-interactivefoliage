@@ -3232,7 +3232,7 @@ public final class GpuFoliageRenderer {
 		}
 	}
 
-	/^* Set while a sub-level's foliage is drawn: from a camera in its plot, with no pushes and no edge to the wind. ^/
+	/^* Set while a sub-level's foliage is drawn: from a camera in its plot, with no edge to the wind. ^/
 	private static boolean subLevelPass;
 	/^* Whether Sable shades its sub-levels by where their faces look, as last asked; see SableBridge.shadesByFacing. ^/
 	private static boolean subLevelShading;
@@ -3298,6 +3298,72 @@ public final class GpuFoliageRenderer {
 			}
 			followed.remove();
 		}
+		pushSubLevelPlants(minecraft);
+	}
+
+	/^*
+	 * Has the entities near the player push the plants of the sub-levels they are on, as they push the world's: each
+	 * entity's box is put where it is inside the plot of every sub-level it is near, and Sway is asked from there.
+	 * The box is turned with the plot, so on a sub-level lying on its side the entity lies across the plants, and
+	 * pushes them walking past as it would standing ones; the box that holds the turned one is what Sway is given.
+	 ^/
+	private static void pushSubLevelPlants(Minecraft minecraft) {
+		GpuFoliageInteraction.beginPlotForces();
+		if (SUB_LEVELS.isEmpty() || minecraft.player == null || !SwayConfig.INSTANCE.enabled) {
+			return;
+		}
+		List<net.minecraft.world.entity.Entity> entities = minecraft.level.getEntities((net.minecraft.world.entity.Entity) null,
+				minecraft.player.getBoundingBox().inflate(SwayConfig.INSTANCE.maxDistance),
+				entity -> !entity.isSpectator() && entity.isAlive());
+		org.joml.Vector3d corner = new org.joml.Vector3d();
+		org.joml.Vector3d centre = new org.joml.Vector3d();
+		for (var subLevel : SUB_LEVELS.entrySet()) {
+			if (!SableBridge.pose(subLevel.getKey(), POSE_POSITION, POSE_ORIENTATION, POSE_ROTATION_POINT)) {
+				continue;
+			}
+			LongOpenHashSet sections = subLevel.getValue();
+			for (net.minecraft.world.entity.Entity entity : entities) {
+				AABB box = entity.getBoundingBox();
+				double minX = Double.MAX_VALUE;
+				double minY = Double.MAX_VALUE;
+				double minZ = Double.MAX_VALUE;
+				double maxX = -Double.MAX_VALUE;
+				double maxY = -Double.MAX_VALUE;
+				double maxZ = -Double.MAX_VALUE;
+				for (int i = 0; i < 8; i++) {
+					corner.set((i & 1) == 0 ? box.minX : box.maxX, (i & 2) == 0 ? box.minY : box.maxY,
+							(i & 4) == 0 ? box.minZ : box.maxZ).sub(POSE_POSITION);
+					POSE_ORIENTATION.transformInverse(corner).add(POSE_ROTATION_POINT);
+					minX = Math.min(minX, corner.x);
+					minY = Math.min(minY, corner.y);
+					minZ = Math.min(minZ, corner.z);
+					maxX = Math.max(maxX, corner.x);
+					maxY = Math.max(maxY, corner.y);
+					maxZ = Math.max(maxZ, corner.z);
+				}
+				centre.set((minX + maxX) * 0.5D, (minY + maxY) * 0.5D, (minZ + maxZ) * 0.5D);
+				if (nearSection(sections, centre)) {
+					GpuFoliageInteraction.pushPlot(minecraft.level, new AABB(minX, minY, minZ, maxX, maxY, maxZ));
+				}
+			}
+		}
+	}
+
+	/^* Whether a place in a plot is in or beside one of the sections held there: within a few blocks of it. ^/
+	private static boolean nearSection(LongOpenHashSet sections, org.joml.Vector3d place) {
+		for (int dx = -4; dx <= 4; dx += 8) {
+			for (int dz = -4; dz <= 4; dz += 8) {
+				for (int dy = -4; dy <= 4; dy += 8) {
+					if (sections.contains(SectionPos.asLong(
+							SectionPos.blockToSectionCoord(Mth.floor(place.x + dx)),
+							SectionPos.blockToSectionCoord(Mth.floor(place.y + dy)),
+							SectionPos.blockToSectionCoord(Mth.floor(place.z + dz))))) {
+						return true;
+					}
+				}
+			}
+		}
+		return false;
 	}
 
 	/^*
@@ -3403,11 +3469,8 @@ public final class GpuFoliageRenderer {
 				continue;
 			}
 			if (!uploaded) {
-				if (subLevelPass) {
-					GpuFoliageInteraction.bindLegacyNone(INTERACTION_BINDING);
-				} else {
-					GpuFoliageInteraction.uploadLegacy(camera, INTERACTION_BINDING);
-				}
+				// For a sub-level the camera is the one inside its plot, and so are the pushes: those on its own plants.
+				GpuFoliageInteraction.uploadLegacy(camera, INTERACTION_BINDING);
 				uploaded = true;
 			}
 			drawLegacyRuns(minecraft, camera, drawn, shader, solid, modelView, projection, list, listSize);
