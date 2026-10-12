@@ -64,6 +64,9 @@ final class BerylBridge {
 	/** The same, and the lightmap's name, for the pipeline put under the mod's last. */
 	private static int freeBinding;
 	private static String lightTexture = LIT_LIGHT_TEXTURE;
+	/** Where the normal, if any, and the first of the sway's two values are among the foliage's vertex inputs. */
+	private static int normalLocation;
+	private static int swayLocation;
 	private static boolean litFailed;
 	private static boolean shadowFailed;
 
@@ -76,14 +79,19 @@ final class BerylBridge {
 	 * so the caller hands the pass what it reads. Render thread only, and before the pass is opened.
 	 *
 	 * @param vertexFormat the format of the foliage's vertices
+	 * @param normalAt the place of the normal among its elements, or -1 where it has none
+	 * @param swayAt the place of the first of the sway's two values among them
 	 * @param swaySize the size of the block of sway settings
 	 * @param interactionSize the size of the block of pushes
 	 * @param pipelines the render pipelines the foliage is about to be drawn with, each already compiled
 	 */
-	static boolean light(Object vertexFormat, int swaySize, int interactionSize, Object... pipelines) {
+	static boolean light(Object vertexFormat, int normalAt, int swayAt, int swaySize, int interactionSize,
+			Object... pipelines) {
 		if (!LOADED) {
 			return false;
 		}
+		normalLocation = normalAt;
+		swayLocation = swayAt;
 		boolean shadow = false;
 		try {
 			String stage = Names.stage();
@@ -220,6 +228,22 @@ final class BerylBridge {
 		}
 	}
 
+	/**
+	 * The id Beryl gives a block, which it picks the block's material by, where the mesher writes it above a vertex's
+	 * light; nothing where Beryl is not installed or gives the block none.
+	 */
+	static int materialBits(Object blockState) {
+		if (!LOADED) {
+			return 0;
+		}
+		try {
+			Method blockId = Names.blockId(blockState);
+			return blockId == null ? 0 : Math.max((int) blockId.invoke(null, blockState), 0) << BerylFoliageShader.LIGHT_BITS;
+		} catch (Throwable e) {
+			return 0;
+		}
+	}
+
 	/** Puts back what each render pipeline had under it. */
 	private static void unlight() throws ReflectiveOperationException {
 		for (Object pipeline : UNDER.keySet()) {
@@ -259,6 +283,23 @@ final class BerylBridge {
 			}
 		}
 
+		private static Method blockId;
+		private static boolean blockIdSought;
+
+		/** Beryl's lookup of a block state's id; it has one of a fluid state's by the same name. */
+		static Method blockId(Object blockState) throws ReflectiveOperationException {
+			if (!blockIdSought) {
+				blockIdSought = true;
+				for (Method method : Class.forName("net.beryl.render.ShaderRendererResources").getMethods()) {
+					if (method.getName().equals("getBlockId") && method.getParameterCount() == 1
+							&& method.getParameterTypes()[0].isInstance(blockState)) {
+						blockId = method;
+					}
+				}
+			}
+			return blockId;
+		}
+
 		/** The defines Beryl compiles its terrain shaders with, in its own order. */
 		private static final String[] DEFINES = {"COLORED_SHADOWS", "TEXTURED_SUN", "WATER_WAVING", "SSR"};
 
@@ -295,7 +336,7 @@ final class BerylBridge {
 			}
 			// Beryl's textures are at 3 to 5, and with coloured shadows two more follow them.
 			int free = coloredShadows ? 8 : 6;
-			String vertex = BerylFoliageShader.vertex(terrainVertex, readSway(), free);
+			String vertex = BerylFoliageShader.vertex(terrainVertex, readSway(), free, normalLocation, swayLocation);
 			if (vertex == null) {
 				return null;
 			}
@@ -373,7 +414,7 @@ final class BerylBridge {
 				return null;
 			}
 			int free = last + 1;
-			String vertex = BerylFoliageShader.shadowVertex(shadowVertex, readSway(), free);
+			String vertex = BerylFoliageShader.shadowVertex(shadowVertex, readSway(), free, normalLocation, swayLocation);
 			if (vertex == null) {
 				return null;
 			}

@@ -3029,8 +3029,15 @@ public final class GpuFoliageRenderer {
 		// While Beryl draws the terrain with its shaders, the mod's pipelines are lit by them: they read the sway's blocks
 		// and the lightmap by other names then.
 		// While it draws its shadow map they are the ones it draws the terrain into it with.
-		boolean berylLit = pipeline == PIPELINE && BerylBridge.light(FOLIAGE_FORMAT, (int) settings.size(),
+		//? <26.2 {
+		/^boolean berylLit = pipeline == PIPELINE && BerylBridge.light(FOLIAGE_FORMAT,
+				FOLIAGE_FORMAT.getElementAttributeNames().indexOf("Normal"),
+				FOLIAGE_FORMAT.getElementAttributeNames().indexOf("SwayCell"), (int) settings.size(),
 				(int) interaction.size(), pipeline, opaquePipeline);
+		^///?} else {
+		// There is no VulkanMod from 26.2 on, and so no Beryl.
+		boolean berylLit = false;
+		//?}
 		if (berylShadowPass && !berylLit) {
 			// Beryl's shadow map takes nothing but what is drawn with its own shadow shaders.
 			return;
@@ -4214,6 +4221,8 @@ public final class GpuFoliageRenderer {
 		private float blockY;
 		/^* Set while a layer that glows is written: every vertex at full light, whatever the light where it stands. ^/
 		boolean fullBright;
+		/^* What goes above each vertex's light: the block's id for Beryl, where it is installed. See BerylFoliageShader. ^/
+		int lightBits;
 		/^* Whether Beryl turns the colours written now into plain light, which its shaders do again; see BerylBridge. ^/
 		private final boolean straightened = BerylBridge.straightensColours();
 
@@ -4282,10 +4291,10 @@ public final class GpuFoliageRenderer {
 		@Override
 		public VertexConsumer setUv2(int u, int v) {
 			if (fullBright) {
-				delegate.setUv2(240, 240);
+				delegate.setUv2(240 | lightBits, 240);
 				return this;
 			}
-			delegate.setUv2(u, v);
+			delegate.setUv2(u | lightBits, v);
 			return this;
 		}
 
@@ -4710,6 +4719,7 @@ public final class GpuFoliageRenderer {
 						poseStack.pushPose();
 						poseStack.translate(offsetX + dx, offsetY + dy + lift, offsetZ + dz);
 						output.beginBlock(offsetY + dy + lift);
+						output.lightBits = BerylBridge.materialBits(state);
 						modelRenderer.tesselateBlock(level, parts, state, pos, poseStack, output,
 								!(anchor.field && partsFromNeighbour(level, blocks, dx, dy, dz, pos, neighbour)),
 								OverlayTexture.NO_OVERLAY);

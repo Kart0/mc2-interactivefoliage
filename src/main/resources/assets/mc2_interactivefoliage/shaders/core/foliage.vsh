@@ -183,6 +183,11 @@ vec4 mc2_cellForce(int i) {
     }
     return vec4(0.0);
 }
+
+// Under that renderer the mesher may write a block's id for its shader renderer above the light; see BerylFoliageShader.
+ivec2 mc2_light(ivec2 uv) {
+    return uv & 255;
+}
 #else
 layout(std140) uniform FoliageInteraction {
     int mc2_CellCount;
@@ -191,6 +196,10 @@ layout(std140) uniform FoliageInteraction {
     vec4 mc2_CellPosition[MC2_MAX_CELLS];
     vec4 mc2_CellForce[MC2_MAX_CELLS];
 };
+
+ivec2 mc2_light(ivec2 uv) {
+    return uv;
+}
 #endif
 
 #moj_import <mc2_interactivefoliage:sway.glsl>
@@ -217,6 +226,6 @@ void main() {
 
     sphericalVertexDistance = fog_spherical_distance(pos);
     cylindricalVertexDistance = fog_cylindrical_distance(pos);
-    vertexColor = Color * mc2_sample_lightmap(Sampler2, UV2);
+    vertexColor = Color * mc2_sample_lightmap(Sampler2, mc2_light(UV2));
     texCoord0 = UV0;
 }
