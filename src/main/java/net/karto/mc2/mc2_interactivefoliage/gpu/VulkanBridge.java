@@ -30,9 +30,16 @@ public final class VulkanBridge {
 
 	private static final String VULKAN = "net.vulkanmod.render.chunk.";
 	private static final boolean LOADED = ModTemplate.xplat().isModLoaded("vulkanmod");
-	// Before 0.6.8, which is to say before 1.21.11, it stands in for OpenGL call by call and has none of the calls the
-	// renderer draws with there, so its chunk builds are left alone and the foliage stays in its chunk meshes.
+	// From 0.6.8, which is to say from 1.21.11, it stands in for the game's graphics device, and the renderer draws
+	// through it as through the game's own. Before that it stands in for OpenGL call by call and has none of the calls
+	// the renderer draws with, so the foliage is drawn through VulkanMod itself (see VulkanLegacyDraw), which is
+	// written against 0.6.7 on 1.21.1; on 1.20.1 its chunk builds are left alone and the foliage stays in them.
 	//? >=1.21.11 {
+	private static final boolean DEVICE = true;
+	//?} else {
+	/*private static final boolean DEVICE = false;
+	*///?}
+	//? >=1.21.1 {
 	private static final boolean SUPPORTED = true;
 	//?} else {
 	/*private static final boolean SUPPORTED = false;
@@ -46,6 +53,27 @@ public final class VulkanBridge {
 	/** Whether VulkanMod draws the chunks, with shaders of its own rather than the game's. */
 	static boolean drawsChunks() {
 		return LOADED;
+	}
+
+	/**
+	 * Whether VulkanMod is installed in a version the renderer cannot draw through: the GPU renderer stays out
+	 * altogether then, and the foliage stays in VulkanMod's chunk meshes, where Sway moves it.
+	 */
+	static boolean keepsRendererOut() {
+		return LOADED && (!SUPPORTED || !DEVICE && VulkanLegacyDraw.failed());
+	}
+
+	/** Whether the foliage is drawn through VulkanMod's own pipelines rather than through the game's. */
+	static boolean drawsThroughItself() {
+		return LOADED && SUPPORTED && !DEVICE;
+	}
+
+	/**
+	 * Whether a block's colours reach a vertex consumer other than VulkanMod's own with red and blue changed over: it
+	 * packs them its own way where it writes a block's quads, which it does itself from 0.6.8.
+	 */
+	static boolean swapsColours() {
+		return LOADED && DEVICE;
 	}
 
 	/** Whether a model is asked for its geometry by one of VulkanMod's chunk builds. */
@@ -109,9 +137,16 @@ public final class VulkanBridge {
 						.asType(MethodType.methodType(Object.class, Object.class));
 				MethodType offset = MethodType.methodType(int.class);
 				MethodType erased = MethodType.methodType(int.class, Object.class);
-				x = lookup.findVirtual(renderSection, "xOffset", offset).asType(erased);
-				y = lookup.findVirtual(renderSection, "yOffset", offset).asType(erased);
-				z = lookup.findVirtual(renderSection, "zOffset", offset).asType(erased);
+				try {
+					x = lookup.findVirtual(renderSection, "xOffset", offset).asType(erased);
+					y = lookup.findVirtual(renderSection, "yOffset", offset).asType(erased);
+					z = lookup.findVirtual(renderSection, "zOffset", offset).asType(erased);
+				} catch (ReflectiveOperationException e) {
+					// Before 0.6.8 they are fields.
+					x = lookup.findGetter(renderSection, "xOffset", int.class).asType(erased);
+					y = lookup.findGetter(renderSection, "yOffset", int.class).asType(erased);
+					z = lookup.findGetter(renderSection, "zOffset", int.class).asType(erased);
+				}
 				try {
 					fullUpdate = lookup.findGetter(result, "fullUpdate", boolean.class)
 							.asType(MethodType.methodType(boolean.class, Object.class));

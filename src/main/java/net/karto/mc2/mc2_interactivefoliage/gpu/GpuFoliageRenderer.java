@@ -1071,7 +1071,11 @@ public final class GpuFoliageRenderer {
 			}
 			return true;
 			//?} else {
-			/*// A vertex buffer keeps its buffer to itself; the array it binds says which one its attributes read from.
+			/*if (VulkanBridge.drawsChunks()) {
+				// No OpenGL to write into the buffer with: the region is uploaded whole.
+				return false;
+			}
+			// A vertex buffer keeps its buffer to itself; the array it binds says which one its attributes read from.
 			vertices.bind();
 			int buffer = org.lwjgl.opengl.GL20.glGetVertexAttribi(0, org.lwjgl.opengl.GL20.GL_VERTEX_ATTRIB_ARRAY_BUFFER_BINDING);
 			if (buffer == 0) {
@@ -2169,7 +2173,7 @@ public final class GpuFoliageRenderer {
 		}
 		// Where the chunk mesher cannot be told to leave foliage out, the renderer stays out of the way too, or every
 		// plant it drew would be drawn twice.
-		if (!FoliageSettings.gpuRenderer() || !SodiumBridge.canSplitChunkMeshes()) {
+		if (!FoliageSettings.gpuRenderer() || !SodiumBridge.canSplitChunkMeshes() || VulkanBridge.keepsRendererOut()) {
 			if (active) {
 				deactivate(minecraft);
 			}
@@ -3172,6 +3176,10 @@ public final class GpuFoliageRenderer {
 		// The resources just changed, so the cutout shaders foliage follows may have too.
 		LegacyTerrainShader.invalidate();
 		//?}
+		if (VulkanBridge.drawsChunks()) {
+			// No OpenGL under VulkanMod, which draws the foliage with a pipeline of its own; see VulkanLegacyDraw.
+			return;
+		}
 		int index = GL31.glGetUniformBlockIndex(shader.getId(), GpuFoliageInteraction.UNIFORM);
 		if (index != GL31.GL_INVALID_INDEX) {
 			GL31.glUniformBlockBinding(shader.getId(), index, INTERACTION_BINDING);
@@ -3189,6 +3197,12 @@ public final class GpuFoliageRenderer {
 		Matrix4f modelView = shadowPass ? shadowModelView : legacyModelView;
 		Matrix4f projection = shadowPass ? shadowProjection : legacyProjection;
 		if (modelView == null || projection == null) {
+			return;
+		}
+		if (VulkanBridge.drawsThroughItself()) {
+			if (!shadowPass) {
+				drawLegacyThroughVulkanMod(minecraft, camera, drawn, modelView, projection);
+			}
 			return;
 		}
 		boolean uploaded = false;
@@ -3234,6 +3248,60 @@ public final class GpuFoliageRenderer {
 			}
 			drawLegacyRuns(minecraft, camera, drawn, shader, solid, modelView, projection, list, listSize);
 		}
+	}
+
+	/^*
+	 * Draws the queued runs through VulkanMod's own pipelines, where it stands in for OpenGL call by call and the draw
+	 * below, which is OpenGL's, cannot be made: the same two kinds in the same order, each with its layer's render
+	 * state, which VulkanMod follows, and one pipeline for both, told what to discard. See VulkanLegacyDraw.
+	 ^/
+	private static void drawLegacyThroughVulkanMod(Minecraft minecraft, Vec3 camera, List<Region> drawn,
+			Matrix4f modelView, Matrix4f projection) {
+		if (!VulkanLegacyDraw.ready(FOLIAGE_FORMAT, FOLIAGE_FORMAT.getElementAttributeNames().indexOf("SwayCell"),
+				GpuFoliageInteraction.legacyCells(camera))) {
+			return;
+		}
+		Vector4f edge = windEdgeFrom(camera);
+		Vector4f weather = weather();
+		BlockPos cameraBlock = BlockPos.containing(camera);
+		VulkanLegacyDraw.begin(modelView, projection, cameraBlock.getX(), cameraBlock.getY(), cameraBlock.getZ(),
+				(float) (cameraBlock.getX() - camera.x), (float) (cameraBlock.getY() - camera.y),
+				(float) (cameraBlock.getZ() - camera.z), swayIntensity(), calmSway(), edge.x, edge.y, edge.z, edge.w,
+				weather.x, weather.y, weather.z, weather.w);
+		int longestRun = 0;
+		for (int i = 2; i < drawsSize; i += 3) {
+			longestRun = Math.max(longestRun, draws[i]);
+		}
+		for (int i = 2; i < opaqueDrawsSize; i += 3) {
+			longestRun = Math.max(longestRun, opaqueDraws[i]);
+		}
+		for (int kind = 0; kind < 2; kind++) {
+			int[] list = kind == 0 ? opaqueDraws : draws;
+			int listSize = kind == 0 ? opaqueDrawsSize : drawsSize;
+			if (listSize == 0) {
+				continue;
+			}
+			boolean solid = kind == 0;
+			RenderType renderType = solid ? RenderType.solid() : RenderType.cutout();
+			renderType.setupRenderState();
+			// What vanilla's cutout layer discards below, or nothing.
+			VulkanLegacyDraw.cutout(solid ? 0.0F : 0.1F);
+			int boundRegion = -1;
+			for (int i = 0; i < listSize; i += 3) {
+				int regionIndex = list[i];
+				if (regionIndex != boundRegion) {
+					Region region = drawn.get(regionIndex);
+					VulkanLegacyDraw.region(region.vertices,
+							(float) (region.origin.getX() - camera.x),
+							(float) (region.origin.getY() - camera.y),
+							(float) (region.origin.getZ() - camera.z), longestRun);
+					boundRegion = regionIndex;
+				}
+				VulkanLegacyDraw.run(list[i + 1], indexCountFor(list[i + 2]));
+			}
+			renderType.clearRenderState();
+		}
+		VulkanLegacyDraw.end(RenderSystem.getModelViewMatrix(), RenderSystem.getProjectionMatrix());
 	}
 
 	/^*
@@ -4266,7 +4334,7 @@ public final class GpuFoliageRenderer {
 		@Override
 		public VertexConsumer setColor(int packed) {
 			// VulkanMod draws a block for any vertex consumer but its own with red and blue changed over.
-			if (VulkanBridge.drawsChunks()) {
+			if (VulkanBridge.swapsColours()) {
 				packed = packed & 0xFF00FF00 | (packed & 0x00FF0000) >> 16 | (packed & 0x000000FF) << 16;
 			}
 			if (straightened) {

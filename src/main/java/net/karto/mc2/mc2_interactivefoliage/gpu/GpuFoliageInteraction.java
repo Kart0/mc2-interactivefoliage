@@ -342,6 +342,22 @@ public final class GpuFoliageInteraction {
 	 * is too large for the loose uniforms a shader's JSON can declare.
 	 ^/
 	static void uploadLegacy(Vec3 camera, int binding) {
+		ByteBuffer data = legacyCells(camera);
+		if (legacyBuffer == 0) {
+			legacyBuffer = GlStateManager._glGenBuffers();
+			GL15.glBindBuffer(GL31.GL_UNIFORM_BUFFER, legacyBuffer);
+			GL15.glBufferData(GL31.GL_UNIFORM_BUFFER, LEGACY_BUFFER_SIZE, GL15.GL_DYNAMIC_DRAW);
+		}
+		GL15.glBindBuffer(GL31.GL_UNIFORM_BUFFER, legacyBuffer);
+		GL15.glBufferSubData(GL31.GL_UNIFORM_BUFFER, 0L, data);
+		GL30.glBindBufferBase(GL31.GL_UNIFORM_BUFFER, binding, legacyBuffer);
+	}
+
+	/^*
+	 * This frame's pushes laid out as the block of them is, in memory that stays where it is: for the uniform buffer
+	 * above, and for VulkanMod, which reads them from there itself. Render thread only.
+	 ^/
+	static ByteBuffer legacyCells(Vec3 camera) {
 		int cellCount = update(camera);
 		if (legacyData == null) {
 			legacyData = MemoryUtil.memCalloc(LEGACY_BUFFER_SIZE);
@@ -357,14 +373,7 @@ public final class GpuFoliageInteraction {
 			putVec4(data, 2 + MAX_CELLS + i,
 					CELL_FORCES[at], CELL_FORCES[at + 1], CELL_FORCES[at + 2], CELL_FORCES[at + 3]);
 		}
-		if (legacyBuffer == 0) {
-			legacyBuffer = GlStateManager._glGenBuffers();
-			GL15.glBindBuffer(GL31.GL_UNIFORM_BUFFER, legacyBuffer);
-			GL15.glBufferData(GL31.GL_UNIFORM_BUFFER, LEGACY_BUFFER_SIZE, GL15.GL_DYNAMIC_DRAW);
-		}
-		GL15.glBindBuffer(GL31.GL_UNIFORM_BUFFER, legacyBuffer);
-		GL15.glBufferSubData(GL31.GL_UNIFORM_BUFFER, 0L, data);
-		GL30.glBindBufferBase(GL31.GL_UNIFORM_BUFFER, binding, legacyBuffer);
+		return data;
 	}
 
 	private static void putVec4(ByteBuffer data, int vec4, float x, float y, float z, float w) {

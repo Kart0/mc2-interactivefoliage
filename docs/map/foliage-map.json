@@ -140,7 +140,7 @@
    "fileInfo": {
     "gpu/GpuFoliageRenderer.java": {
      "kind": "java",
-     "lines": 4866,
+     "lines": 4934,
      "guard": "//? >=1.20.1 {"
     }
    }
@@ -165,7 +165,7 @@
    "fileInfo": {
     "gpu/GpuFoliageRenderer.java": {
      "kind": "java",
-     "lines": 4866,
+     "lines": 4934,
      "guard": "//? >=1.20.1 {"
     }
    }
@@ -190,7 +190,7 @@
    "fileInfo": {
     "gpu/GpuFoliageRenderer.java": {
      "kind": "java",
-     "lines": 4866,
+     "lines": 4934,
      "guard": "//? >=1.20.1 {"
     }
    }
@@ -224,7 +224,7 @@
    "fileInfo": {
     "gpu/GpuFoliageRenderer.java": {
      "kind": "java",
-     "lines": 4866,
+     "lines": 4934,
      "guard": "//? >=1.20.1 {"
     },
     "mixin/LevelPassMixin.java": {
@@ -250,7 +250,7 @@
    "fileInfo": {
     "gpu/GpuFoliageRenderer.java": {
      "kind": "java",
-     "lines": 4866,
+     "lines": 4934,
      "guard": "//? >=1.20.1 {"
     }
    }
@@ -454,7 +454,7 @@
    "fileInfo": {
     "gpu/GpuFoliageInteraction.java": {
      "kind": "java",
-     "lines": 394,
+     "lines": 403,
      "guard": "//? >=1.20.1 {"
     }
    }
@@ -1164,11 +1164,14 @@
    ],
    "files": [
     "gpu/VulkanBridge.java",
-    "mixin/VulkanMeshSwapMixin.java"
+    "mixin/VulkanMeshSwapMixin.java",
+    "gpu/VulkanLegacyDraw.java",
+    "gpu/VulkanFoliageShader.java"
    ],
    "summary": "What the renderer asks of VulkanMod, by name (never compiled against it): whether it draws the chunks, whether a model is asked for by one of its chunk builds (its RenderRegion), and when a finished build is put in place (TaskDispatcher.doSectionUpdate, a @Pseudo mixin, which hands the section over as Sodium's uploads do).",
    "details": [
-    "Supported from VulkanMod 0.6.8 (1.21.11, 26.1.2), where it stands in for the game's graphics device, so the own-pass draw path runs through it unchanged. Tested on 1.21.11 and 26.1.2 Fabric. Before that (0.6.7 on 1.21.1, 0.5.2 on 1.20.1) it emulates OpenGL call by call without the calls drawLegacy needs, so its chunk builds are not recognised there and the foliage stays in its chunk meshes (Sway still moves it).",
+    "Two ways through it. From VulkanMod 0.6.8 (1.21.11, 26.1.2) it stands in for the game's graphics device, so the own-pass draw path runs through it unchanged. On 0.6.7 (1.21.1) it stands in for OpenGL call by call, and not for the calls drawLegacy makes (a uniform block bound by hand, a draw from a base vertex, glBufferSubData), so the foliage is drawn through VulkanMod's own interface instead: VulkanLegacyDraw. On 0.5.2 (1.20.1) its chunk builds are not recognised and the renderer stays out (keepsRendererOut); Sway still moves the foliage. Tested on 1.21.1, 1.21.11 and 26.1.2 Fabric.",
+    "VulkanLegacyDraw (1.21.1): the shader classes of 0.6.7 are those of 0.6.8, so a pipeline is built the same way, from Vulkan GLSL the mod generates (VulkanFoliageShader: VulkanMod's terrain look -- colour times lightmap, cutout, linear fog -- with the sway; named fields only, the pushes as 64 matrices). Its values are suppliers the mod puts into VulkanMod's public maps (Uniforms.vec4f_uniformMap and its like) over buffers it writes before drawing; VulkanMod copies them each time the pipeline's uniforms are bound, so the region's offset can change between draws. A region is still uploaded as one of the game's vertex buffers, which VulkanMod emulates; the Vulkan buffer behind it is found by the types of two fields (VBO, then its VertexBuffer). VulkanMod's own draw call has no base vertex, so a run is drawn by recording vkCmdBindVertexBuffers and vkCmdDrawIndexed directly into its command buffer, with its shared quad indices. Region.patch does nothing there (whole upload), the legacy shader's OpenGL set-up is skipped, and the colour swap below does not apply (0.6.7 leaves VertexConsumer.putBulkData alone). Shadow passes are not drawn on this path yet.",
     "The foliage is drawn with the mod's own shader, never the terrain's: VulkanMod reads its terrain shaders from its own jar, which no resource pack replaces.",
     "Its shader converter (0.6.8's GLSLParser; the repository's dev branch has since replaced it) takes no arrays, structs or bools in a uniform block, so under the define MC2_NO_UNIFORM_ARRAYS foliage.vsh lays each vec4[128] out as 32 mat4 with the same bytes. It also drops the 'out' of a function's parameter, leaving the value undefined: no function in sway.glsl or the legacy vertex shaders hands a value back through a parameter. That one put every plant half a block off in height per block of north-south distance to the camera.",
     "It overwrites VertexConsumer.putBulkData and packs the colour with red and blue changed over, right for its own buffers only; the 1.21.1-1.21.11 vertex writer changes them back.",
@@ -1178,13 +1181,23 @@
    "fileInfo": {
     "gpu/VulkanBridge.java": {
      "kind": "java",
-     "lines": 136,
+     "lines": 171,
      "guard": "//? >=1.20.1 {"
     },
     "mixin/VulkanMeshSwapMixin.java": {
      "kind": "java",
      "lines": 32,
      "guard": "//? >=1.20.1 {"
+    },
+    "gpu/VulkanLegacyDraw.java": {
+     "kind": "java",
+     "lines": 382,
+     "guard": "//? >=1.20.1 {"
+    },
+    "gpu/VulkanFoliageShader.java": {
+     "kind": "java",
+     "lines": 149,
+     "guard": ""
     }
    }
   },
@@ -2524,8 +2537,8 @@
    {
     "label": "VulkanMod",
     "cells": {
-     "1.20.1": "fabric: GPU renderer stays out (0.5.2, no device); Sway moves the foliage",
-     "1.21.1": "fabric: GPU renderer stays out (0.6.7, no device); Sway moves the foliage",
+     "1.20.1": "fabric: GPU renderer stays out (0.5.2); Sway moves the foliage",
+     "1.21.1": "fabric: done (0.6.7: drawn through VulkanMod's own pipelines, VulkanLegacyDraw)",
      "1.21.11": "fabric: done (0.6.8: own shader, mesh split, handover)",
      "26.1.2": "fabric: done (0.6.8)",
      "26.2": "no VulkanMod (native Vulkan)",
@@ -2671,7 +2684,7 @@
   },
   "gpu/GpuFoliageInteraction.java": {
    "kind": "java",
-   "lines": 394,
+   "lines": 403,
    "guard": "//? >=1.20.1 {"
   },
   "gpu/GpuFoliageModel.java": {
@@ -2681,7 +2694,7 @@
   },
   "gpu/GpuFoliageRenderer.java": {
    "kind": "java",
-   "lines": 4866,
+   "lines": 4934,
    "guard": "//? >=1.20.1 {"
   },
   "gpu/GpuFoliageSplit.java": {
@@ -2741,7 +2754,17 @@
   },
   "gpu/VulkanBridge.java": {
    "kind": "java",
-   "lines": 136,
+   "lines": 171,
+   "guard": "//? >=1.20.1 {"
+  },
+  "gpu/VulkanFoliageShader.java": {
+   "kind": "java",
+   "lines": 149,
+   "guard": ""
+  },
+  "gpu/VulkanLegacyDraw.java": {
+   "kind": "java",
+   "lines": 382,
    "guard": "//? >=1.20.1 {"
   },
   "gpu/WindShelter.java": {
