@@ -810,8 +810,9 @@ public final class GpuFoliageRenderer {
 	 */
 	private static final Long2ObjectOpenHashMap<Object> PLOT_OWNERS = new Long2ObjectOpenHashMap<>();
 	/**
-	 * Set as a section of a sub-level is meshed while the quad being written takes no shade: its vertices are written
-	 * with no normal, which is how the shader tells them from the ones it shades; see drawSubLevels.
+	 * Set as a section of a sub-level is meshed while the quad being written takes no shade, as a plant's does not: its
+	 * vertices are written looking up, as Sable writes them, so a plant is shaded as the top of the block it grows on
+	 * once the sub-level has turned; see drawSubLevels.
 	 */
 	private static boolean normalsDropped;
 	private static final Map<Object, LongOpenHashSet> SUB_LEVELS = new java.util.IdentityHashMap<>();
@@ -3395,7 +3396,7 @@ public final class GpuFoliageRenderer {
 	 * The shade of a face is the one thing that does not: the game works it out as a block is meshed, from where the
 	 * face looks then, and a felled tree's faces look elsewhere. Sable meshes its sub-levels with no shade and works
 	 * it out in the shader, from the normal turned as the sub-level is, where its dynamic shading is on; the renderer
-	 * does the same then, so the leaves match the trunk they hang on.
+	 * does the same then, so the leaves match the trunk they hang on, and a plant the block it grows on.
 	 ^/
 	private static void drawSubLevels(Minecraft minecraft, Vec3 camera, Matrix4f view, Matrix4f projection,
 			boolean shadowMap) {
@@ -4671,8 +4672,7 @@ public final class GpuFoliageRenderer {
 		@Override
 		public VertexConsumer setNormal(float x, float y, float z) {
 			if (normalsDropped) {
-				// A shader pack lights by the normal whatever it is: it is given the one Sable gives such a quad, up.
-				delegate.setNormal(0.0F, meshedForShaderPack ? 1.0F : 0.0F, 0.0F);
+				delegate.setNormal(0.0F, 1.0F, 0.0F);
 			} else {
 				delegate.setNormal(x, y, z);
 			}
@@ -5252,7 +5252,7 @@ public final class GpuFoliageRenderer {
 	 * The level as a block of a sub-level is meshed from it where Sable shades its sub-levels as they are drawn: every
 	 * face at full shade, as Sable's own meshes have them. The block renderer asks for a quad's shade just before it
 	 * writes the quad, saying whether the quad takes any, which is noted for the vertex writer: one that takes none
-	 * is written with no normal, so the shader leaves it alone.
+	 * is written looking up.
 	 ^/
 	private static final class UnshadedLevel implements net.minecraft.world.level.BlockAndTintGetter {
 

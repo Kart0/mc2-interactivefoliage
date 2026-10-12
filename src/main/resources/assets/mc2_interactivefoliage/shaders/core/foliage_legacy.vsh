@@ -35,12 +35,13 @@ uniform vec4 SwayEdge;
 uniform ivec3 CameraBlockPos;
 uniform vec3 CameraOffset;
 // A sub-level's faces are shaded by where they look once it has turned: its quaternion, all zero for the world itself,
-// and the shade of a face looking down, up, along z and along x. A quad that takes no shade is meshed with no normal.
+// and the shade of a face looking down, up, along z and along x. A quad that takes no shade -- a plant's -- is meshed
+// looking up, so it is shaded as the top of the block it grows on.
 uniform vec4 mc2_SubLevelTurn;
 uniform vec4 mc2_SubLevelShade;
 
 float mc2_subLevelShade(vec3 normal) {
-    if (mc2_SubLevelTurn == vec4(0.0) || dot(normal, normal) < 0.25) {
+    if (mc2_SubLevelTurn == vec4(0.0)) {
         return 1.0;
     }
     vec3 axis = mc2_SubLevelTurn.xyz;
