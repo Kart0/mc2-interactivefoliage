@@ -85,6 +85,11 @@
    "about": "The foliage drawn through VulkanMod, which meshes and draws the chunks itself on Vulkan."
   },
   {
+   "id": "sable",
+   "label": "Sable",
+   "about": "The foliage of Sable's sub-levels -- a felled tree, a ship -- drawn, shaded and pushed where the sub-level is."
+  },
+  {
    "id": "snowrealmagic",
    "label": "Snow! Real Magic",
    "about": "Plants held inside Snow! Real Magic's snow: pushed by Sway, bent, drawn snowy on the CPU and the GPU, shaking snow off when touched."
@@ -140,7 +145,7 @@
    "fileInfo": {
     "gpu/GpuFoliageRenderer.java": {
      "kind": "java",
-     "lines": 4969,
+     "lines": 5309,
      "guard": "//? >=1.20.1 {"
     }
    }
@@ -165,7 +170,7 @@
    "fileInfo": {
     "gpu/GpuFoliageRenderer.java": {
      "kind": "java",
-     "lines": 4969,
+     "lines": 5309,
      "guard": "//? >=1.20.1 {"
     }
    }
@@ -190,7 +195,7 @@
    "fileInfo": {
     "gpu/GpuFoliageRenderer.java": {
      "kind": "java",
-     "lines": 4969,
+     "lines": 5309,
      "guard": "//? >=1.20.1 {"
     }
    }
@@ -224,7 +229,7 @@
    "fileInfo": {
     "gpu/GpuFoliageRenderer.java": {
      "kind": "java",
-     "lines": 4969,
+     "lines": 5309,
      "guard": "//? >=1.20.1 {"
     },
     "mixin/LevelPassMixin.java": {
@@ -250,7 +255,7 @@
    "fileInfo": {
     "gpu/GpuFoliageRenderer.java": {
      "kind": "java",
-     "lines": 4969,
+     "lines": 5309,
      "guard": "//? >=1.20.1 {"
     }
    }
@@ -272,7 +277,7 @@
    "fileInfo": {
     "gpu/GpuFoliageSplit.java": {
      "kind": "java",
-     "lines": 642,
+     "lines": 706,
      "guard": "//? >=1.20.1 {"
     }
    }
@@ -391,7 +396,7 @@
     },
     "gpu/GpuFoliageSplit.java": {
      "kind": "java",
-     "lines": 642,
+     "lines": 706,
      "guard": "//? >=1.20.1 {"
     }
    }
@@ -455,7 +460,7 @@
    "fileInfo": {
     "gpu/GpuFoliageInteraction.java": {
      "kind": "java",
-     "lines": 403,
+     "lines": 484,
      "guard": "//? >=1.20.1 {"
     }
    }
@@ -619,7 +624,7 @@
    "fileInfo": {
     "WavingWhitelist.java": {
      "kind": "java",
-     "lines": 445,
+     "lines": 450,
      "guard": "//? >=1.21.11 {"
     }
    }
@@ -663,12 +668,12 @@
    "fileInfo": {
     "shaders/core/foliage_legacy.json": {
      "kind": "shader",
-     "lines": 27,
+     "lines": 29,
      "guard": ""
     },
     "shaders/core/foliage_legacy.vsh": {
      "kind": "shader",
-     "lines": 198,
+     "lines": 214,
      "guard": ""
     },
     "shaders/core/foliage_legacy.fsh": {
@@ -819,7 +824,7 @@
    "fileInfo": {
     "gpu/LegacyTerrainShader.java": {
      "kind": "java",
-     "lines": 265,
+     "lines": 298,
      "guard": "//? >=1.20.1 && <1.21.11 {"
     }
    }
@@ -969,7 +974,7 @@
    "fileInfo": {
     "gpu/IrisCompat.java": {
      "kind": "java",
-     "lines": 258,
+     "lines": 267,
      "guard": "//? >=1.20.1 {"
     }
    }
@@ -997,7 +1002,7 @@
    "fileInfo": {
     "gpu/IrisFoliageShaders.java": {
      "kind": "java",
-     "lines": 831,
+     "lines": 836,
      "guard": "//? iris {"
     },
     "mixin/iris/IrisRenderingPipelineAccessor.java": {
@@ -1067,7 +1072,7 @@
     },
     "gpu/IrisFoliageShaders.java": {
      "kind": "java",
-     "lines": 831,
+     "lines": 836,
      "guard": "//? iris {"
     }
    }
@@ -1257,6 +1262,45 @@
      "guard": "//? >=1.20.1 {"
     }
    }
+  },
+  {
+   "id": "sable-bridge",
+   "label": "SableBridge",
+   "group": "sable",
+   "kind": "component",
+   "versions": [
+    "1.21.1"
+   ],
+   "files": [
+    "gpu/SableBridge.java"
+   ],
+   "summary": "A sub-level's blocks are kept in a plot of the same level, twenty million blocks away, and drawn where the sub-level is under a pose (position, rotation, the point of the plot it turns about). The bridge says whether a chunk column lies in a plot and gives a sub-level's pose, through Sable Companion (MIT, by name); the renderer does the rest with what it already has.",
+   "details": [
+    "Discovery: Sable builds a plot's sections with the game's own section compiler, with Sodium too (its only two renderers in 2.0.6: vanilla and Sodium reach-around), so they reach the foliage models as any chunk build. GpuFoliageSplit.decide notes a plot section whose build kept its foliage (PLOT_FOUND) whether or not the renderer has an area yet -- Sable builds as the world is first drawn and as a shader pack is switched, before the renderer's first frame after either -- and followSubLevels takes it up: owner, plot column counted as near, queued. From there the section changes hands as the world's do; the request to build again is one Sable answers for its own sections.",
+    "Drawing (drawSubLevels): with the camera put inside the plot (the pose undone), pose(p) - camera = R(p - cameraInPlot). So a sub-level's regions go through drawLegacy unchanged with that camera and the view times the rotation: offsets, sway and fog stay valid. No frustum culling, no wind edge (subLevelPass). Regions carry their sub-level (a plot is 128 chunks wide and starts where a region does); collectDraws takes the world's or one sub-level's.",
+    "Shade: where Sable's dynamic shading is on (SableBridge.shadesByFacing, an internal flag) it meshes sub-levels with no shade and shades in the shader by the turned normal. The renderer does the same: UnshadedLevel hands the block renderer full shade and notes per quad whether it takes any; one that takes none is written with no normal (up, under a shader pack, as Sable does), and mc2_subLevelShade in foliage_legacy.vsh and the LegacyTerrainShader splice applies Veil's block_brightness to the rest.",
+    "Pushes: Sway looks for plants around an entity where the entity is. pushSubLevelPlants turns each nearby entity's box into the plot (its eight corners through the pose undone, the box that holds them), gives it to a stand-in Marker that is in no level, and calls Sway's private SwayEngine.processBlock for every block the box reaches; Sway reads nothing of an entity but its box. The forces go through the same springs, and each pass sends the cells within 256 blocks of the camera it is drawn from.",
+    "Shader packs: the same passes inside the pack's terrain phase and, from drawShadow, into its shadow map; Iris works its inverse and normal matrices out from the model view as the program is applied. With Sodium on NeoForge the frame hook's stage fires again inside Iris's shadow pass with the sun's matrices: draw() returns while IrisCompat.renderingShadows(), or what nothing culled went onto the screen as the sun sees it.",
+    "Veil, which Sable brings, rebuilds a vanilla shader's program as it is applied: see GpuFoliageInteraction for the uniform block binding. Tested with Sable 2.0.6 and treephysics on NeoForge 1.21.1: vanilla, Sodium, Iris with BSL. Not drawn into Polytone's shadow map; a sub-level is followed for as long as it exists. The file mc2-foliage-sable in the game folder logs what is found and drawn."
+   ],
+   "fileInfo": {
+    "gpu/SableBridge.java": {
+     "kind": "java",
+     "lines": 161,
+     "guard": "//? >=1.20.1 {"
+    }
+   }
+  },
+  {
+   "id": "sable",
+   "label": "Sable",
+   "group": "external",
+   "kind": "mod",
+   "versions": [
+    "1.21.1"
+   ],
+   "summary": "Moving block structures with physics (sub-levels), by RyanHCode; bundles Veil and Sable Companion. Fabric and NeoForge, 1.21.1 only. In a Fabric dev run its entrypoint fails on an older night-config ahead of its own on the classpath: test in a launcher or on NeoForge.",
+   "fileInfo": {}
   },
   {
    "id": "beryl",
@@ -2166,6 +2210,26 @@
    "label": "needs"
   },
   {
+   "source": "renderer",
+   "target": "sable-bridge",
+   "label": "asks"
+  },
+  {
+   "source": "split",
+   "target": "sable-bridge",
+   "label": "finds plot sections through"
+  },
+  {
+   "source": "interaction",
+   "target": "sable-bridge",
+   "label": "pushes plot plants with"
+  },
+  {
+   "source": "sable-bridge",
+   "target": "sable",
+   "label": "reaches by name"
+  },
+  {
    "source": "level-pass",
    "target": "iris",
    "label": "view bobbing from"
@@ -2559,6 +2623,17 @@
     }
    },
    {
+    "label": "Sable sub-levels",
+    "cells": {
+     "1.20.1": "no Sable",
+     "1.21.1": "neoforge: done (2.0.6: drawn, shaded, pushed; vanilla, Sodium, shader packs) | fabric: same code, untested (Sable does not start in a dev run)",
+     "1.21.11": "no Sable",
+     "26.1.2": "no Sable",
+     "26.2": "no Sable",
+     "26.3": "no Sable"
+    }
+   },
+   {
     "label": "Snow! Real Magic",
     "cells": {
      "1.20.1": "fabric: done (SwayVariantModels, GPU plant + snowy variant, particles) | forge: done (Indigo mixins, vanilla and Embeddium, particles)",
@@ -2686,7 +2761,7 @@
   },
   "gpu/GpuFoliageInteraction.java": {
    "kind": "java",
-   "lines": 403,
+   "lines": 484,
    "guard": "//? >=1.20.1 {"
   },
   "gpu/GpuFoliageModel.java": {
@@ -2696,22 +2771,22 @@
   },
   "gpu/GpuFoliageRenderer.java": {
    "kind": "java",
-   "lines": 4969,
+   "lines": 5309,
    "guard": "//? >=1.20.1 {"
   },
   "gpu/GpuFoliageSplit.java": {
    "kind": "java",
-   "lines": 642,
+   "lines": 706,
    "guard": "//? >=1.20.1 {"
   },
   "gpu/IrisCompat.java": {
    "kind": "java",
-   "lines": 258,
+   "lines": 267,
    "guard": "//? >=1.20.1 {"
   },
   "gpu/IrisFoliageShaders.java": {
    "kind": "java",
-   "lines": 831,
+   "lines": 836,
    "guard": "//? iris {"
   },
   "gpu/IrisVertexExtension.java": {
@@ -2721,8 +2796,13 @@
   },
   "gpu/LegacyTerrainShader.java": {
    "kind": "java",
-   "lines": 265,
+   "lines": 298,
    "guard": "//? >=1.20.1 && <1.21.11 {"
+  },
+  "gpu/SableBridge.java": {
+   "kind": "java",
+   "lines": 161,
+   "guard": "//? >=1.20.1 {"
   },
   "gpu/SnowRealMagicCompat.java": {
    "kind": "java",
@@ -3001,7 +3081,7 @@
   },
   "WavingWhitelist.java": {
    "kind": "java",
-   "lines": 445,
+   "lines": 450,
    "guard": "//? >=1.21.11 {"
   },
   "shaders/core/foliage.fsh": {
@@ -3021,12 +3101,12 @@
   },
   "shaders/core/foliage_legacy.json": {
    "kind": "shader",
-   "lines": 27,
+   "lines": 29,
    "guard": ""
   },
   "shaders/core/foliage_legacy.vsh": {
    "kind": "shader",
-   "lines": 198,
+   "lines": 214,
    "guard": ""
   },
   "shaders/core/foliage_legacy_1_20.json": {

@@ -2158,6 +2158,13 @@ public final class GpuFoliageRenderer {
 	 * to read the camera, the cull frustum and the terrain's matrices from, so the hook hands them over.
 	 ^/
 	public static void draw(Vec3 camera, Frustum frustum, Matrix4f modelView, Matrix4f projection) {
+		// The moment the hooks mark comes round again while a shader pack's shadow map is drawn, where the chunks are
+		// drawn a second time: with Sodium on NeoForge, which fires the stage as it draws each of its layers. The
+		// matrices are the sun's then, and what belongs in the shadow map is drawn by drawShadow; drawn here as well it
+		// went onto the screen as the sun sees it, small and in the wrong place, wherever nothing culled it.
+		if (IrisCompat.renderingShadows()) {
+			return;
+		}
 		legacyModelView = modelView;
 		legacyProjection = projection;
 		drawFrame(camera, frustum);
@@ -2273,16 +2280,19 @@ public final class GpuFoliageRenderer {
 		//?} else {
 		/*//? iris {
 		if (meshedForShaderPack) {
-			if (anything) {
-				IrisCompat.inTerrainPhase(() -> drawLegacy(minecraft, camera, DRAWN, null, null));
-			}
+			IrisCompat.inTerrainPhase(() -> {
+				if (anything) {
+					drawLegacy(minecraft, camera, DRAWN, null, null);
+				}
+				drawSubLevels(minecraft, camera, legacyModelView, legacyProjection, false);
+			});
 			return;
 		}
 		//?}
 		if (anything) {
 			drawLegacy(minecraft, camera, DRAWN, null, null);
 		}
-		drawSubLevels(minecraft, camera);
+		drawSubLevels(minecraft, camera, legacyModelView, legacyProjection, false);
 		*///?}
 	}
 
@@ -2506,16 +2516,25 @@ public final class GpuFoliageRenderer {
 		if (!active || !meshedForShaderPack || !IrisCompat.hasShadowProgram() || minecraft.level == null) {
 			return;
 		}
-		if (collectDraws(null, null)) {
-			//? >=26.3 {
+		boolean anything = collectDraws(null, null);
+		//? >=26.3 {
+		if (anything) {
 			drawIntoShadowMap(minecraft, new Vec3(cameraX, cameraY, cameraZ), modelView, projection);
-			//?} elif >=1.21.11 {
-			/*submitDraws(minecraft, new Vec3(cameraX, cameraY, cameraZ), modelView, projection, null, null);
-			*///?} else {
-			/*IrisCompat.inTerrainPhase(() -> drawLegacy(minecraft, new Vec3(cameraX, cameraY, cameraZ), DRAWN, modelView,
-					projection));
-			*///?}
 		}
+		//?} elif >=1.21.11 {
+		/*if (anything) {
+			submitDraws(minecraft, new Vec3(cameraX, cameraY, cameraZ), modelView, projection, null, null);
+		}
+		*///?} else {
+		/*Vec3 camera = new Vec3(cameraX, cameraY, cameraZ);
+		IrisCompat.inTerrainPhase(() -> {
+			if (anything) {
+				drawLegacy(minecraft, camera, DRAWN, modelView, projection);
+			}
+			// A sub-level's foliage casts its shadow from where the sub-level is, as it is drawn there.
+			drawSubLevels(minecraft, camera, modelView, projection, true);
+		});
+		*///?}
 	}
 	//?}
 
@@ -3234,6 +3253,8 @@ public final class GpuFoliageRenderer {
 
 	/^* Set while a sub-level's foliage is drawn: from a camera in its plot, with no edge to the wind. ^/
 	private static boolean subLevelPass;
+	/^* While that is set, whether it is drawn into a shader pack's shadow map rather than onto the screen. ^/
+	private static boolean subLevelInShadow;
 	/^* Whether Sable shades its sub-levels by where their faces look, as last asked; see SableBridge.shadesByFacing. ^/
 	private static boolean subLevelShading;
 	/^* Set while a section of a sub-level is meshed with no shade in it. ^/
@@ -3261,8 +3282,7 @@ public final class GpuFoliageRenderer {
 			DIRTY.addAll(PLOT_OWNERS.keySet());
 		}
 		GpuFoliageSplit.forEachPlotFound(key -> {
-			// Through a shader pack a sub-level's foliage stays in Sable's meshes, which the pack draws.
-			if (meshedForShaderPack || PLOT_OWNERS.containsKey(key)) {
+			if (PLOT_OWNERS.containsKey(key)) {
 				return;
 			}
 			Object subLevel = SableBridge.subLevelAt(SectionPos.x(key), SectionPos.z(key));
@@ -3377,11 +3397,12 @@ public final class GpuFoliageRenderer {
 	 * it out in the shader, from the normal turned as the sub-level is, where its dynamic shading is on; the renderer
 	 * does the same then, so the leaves match the trunk they hang on.
 	 ^/
-	private static void drawSubLevels(Minecraft minecraft, Vec3 camera) {
-		if (SUB_LEVELS.isEmpty() || legacyModelView == null || legacyProjection == null) {
+	private static void drawSubLevels(Minecraft minecraft, Vec3 camera, Matrix4f view, Matrix4f projection,
+			boolean shadowMap) {
+		if (SUB_LEVELS.isEmpty() || view == null || projection == null) {
 			return;
 		}
-		boolean log = SableBridge.LOG && System.currentTimeMillis() - subLevelLoggedAt > 2000L;
+		boolean log = !shadowMap && SableBridge.LOG && System.currentTimeMillis() - subLevelLoggedAt > 2000L;
 		for (Object subLevel : SUB_LEVELS.keySet()) {
 			if (!SableBridge.pose(subLevel, POSE_POSITION, POSE_ORIENTATION, POSE_ROTATION_POINT)) {
 				continue;
@@ -3392,19 +3413,23 @@ public final class GpuFoliageRenderer {
 			POSE_ORIENTATION.transformInverse(inPlot).add(POSE_ROTATION_POINT);
 			if (log) {
 				ModTemplate.LOGGER.info("[Sable] sub-level {}: {} sections followed, {} regions drawn ({} cut out runs, "
-								+ "{} solid), at {}, camera in its plot {}",
+								+ "{} solid), at {}, turned {}, about {}, camera {} and in its plot {}, shader pack {}",
 						System.identityHashCode(subLevel), SUB_LEVELS.get(subLevel).size(), DRAWN.size(), drawsSize / 3,
-						opaqueDrawsSize / 3, POSE_POSITION, inPlot);
+						opaqueDrawsSize / 3, POSE_POSITION, POSE_ORIENTATION, POSE_ROTATION_POINT, camera, inPlot,
+						meshedForShaderPack);
 			}
 			if (!anything) {
 				continue;
 			}
-			Matrix4f modelView = new Matrix4f(legacyModelView).rotate(new org.joml.Quaternionf(POSE_ORIENTATION));
+			// A shader pack's program works its other matrices out from this one as it is applied.
+			Matrix4f modelView = new Matrix4f(view).rotate(new org.joml.Quaternionf(POSE_ORIENTATION));
 			subLevelPass = true;
+			subLevelInShadow = shadowMap;
 			try {
-				drawLegacy(minecraft, new Vec3(inPlot.x, inPlot.y, inPlot.z), DRAWN, modelView, legacyProjection);
+				drawLegacy(minecraft, new Vec3(inPlot.x, inPlot.y, inPlot.z), DRAWN, modelView, projection);
 			} finally {
 				subLevelPass = false;
+				subLevelInShadow = false;
 			}
 		}
 		if (log) {
@@ -3418,10 +3443,12 @@ public final class GpuFoliageRenderer {
 	 ^/
 	private static void drawLegacy(Minecraft minecraft, Vec3 camera, List<Region> drawn, Matrix4f shadowModelView,
 			Matrix4f shadowProjection) {
-		// In a shader pack's shadow pass the matrices are the sun's, as Iris hands them over.
-		boolean shadowPass = shadowModelView != null;
-		Matrix4f modelView = shadowPass ? shadowModelView : legacyModelView;
-		Matrix4f projection = shadowPass ? shadowProjection : legacyProjection;
+		// In a shader pack's shadow pass the matrices are the sun's, as Iris hands them over. A sub-level is drawn
+		// with matrices of its own in either pass, and which of the two it is is said apart.
+		boolean given = shadowModelView != null;
+		boolean shadowPass = subLevelPass ? subLevelInShadow : given;
+		Matrix4f modelView = given ? shadowModelView : legacyModelView;
+		Matrix4f projection = given ? shadowProjection : legacyProjection;
 		if (modelView == null || projection == null) {
 			return;
 		}
@@ -4644,7 +4671,8 @@ public final class GpuFoliageRenderer {
 		@Override
 		public VertexConsumer setNormal(float x, float y, float z) {
 			if (normalsDropped) {
-				delegate.setNormal(0.0F, 0.0F, 0.0F);
+				// A shader pack lights by the normal whatever it is: it is given the one Sable gives such a quad, up.
+				delegate.setNormal(0.0F, meshedForShaderPack ? 1.0F : 0.0F, 0.0F);
 			} else {
 				delegate.setNormal(x, y, z);
 			}

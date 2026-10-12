@@ -271,6 +271,11 @@ public final class IrisFoliageShaders {
 		}
 	}
 
+	/** Whether Iris is drawing the pack's shadow map right now. */
+	static boolean renderingShadows() {
+		return IrisApi.getInstance().isRenderingShadowPass();
+	}
+
 	static boolean shaderPackInUse() {
 		return IrisApi.getInstance().isShaderPackInUse();
 	}

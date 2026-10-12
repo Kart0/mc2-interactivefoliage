@@ -55,6 +55,15 @@ final class IrisCompat {
 		*///?}
 	}
 
+	/** Whether the pack's shadow map is being drawn right now, rather than the screen. */
+	static boolean renderingShadows() {
+		//? iris {
+		return IRIS && IrisFoliageShaders.renderingShadows();
+		//?} else {
+		/*return false;
+		*///?}
+	}
+
 	/** Whether the programs for the loaded pack are built; builds them the first time a pack is asked about. */
 	static boolean programsReady() {
 		//? iris {

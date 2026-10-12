@@ -84,6 +84,11 @@ public final class GpuFoliageSplit {
 	/**
 	 * Sections of a plot a chunk build met foliage in and kept it, for the renderer to take up: that build is how the
 	 * renderer learns a sub-level is there at all. Written by the meshing threads, emptied by the render thread.
+	 * <p>
+	 * They are noted whether or not the renderer has an area yet, and kept until it asks: Sable builds a sub-level's
+	 * sections as the world is first drawn and again as a shader pack is switched, which is before the renderer's
+	 * first frame after either, and a section noted only while there was an area was never heard of again -- its
+	 * foliage stayed in Sable's mesh for good.
 	 */
 	private static final Set<Long> PLOT_FOUND = ConcurrentHashMap.newKeySet();
 
@@ -111,7 +116,6 @@ public final class GpuFoliageSplit {
 			PLOT_COLUMNS.clear();
 			generation++;
 		}
-		PLOT_FOUND.clear();
 	}
 
 	/** Render thread: hands over each section of a plot a chunk build has met foliage in since last asked. */
@@ -287,9 +291,9 @@ public final class GpuFoliageSplit {
 		Area current = area;
 		boolean near = current != null && current.contains(sectionX, sectionZ);
 		// A sub-level's blocks are far from the player, in a plot of their own, and are the renderer's as near ones are.
-		boolean plot = !near && current != null && SableBridge.LOADED
+		boolean plot = !near && SableBridge.LOADED
 				&& (PLOT_COLUMNS.contains(columnKey(sectionX, sectionZ)) || SableBridge.inPlot(sectionX, sectionZ));
-		boolean leave = (near || plot) && GPU_READY.contains(sectionKey);
+		boolean leave = current != null && (near || plot) && GPU_READY.contains(sectionKey);
 		if (plot && !leave) {
 			PLOT_FOUND.add(sectionKey);
 		}
@@ -589,7 +593,6 @@ public final class GpuFoliageSplit {
 		REMESH_NOW.clear();
 		AWAITING_GROUP.clear();
 		PLOT_COLUMNS.clear();
-		PLOT_FOUND.clear();
 		generation++;
 	}
 
