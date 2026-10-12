@@ -526,7 +526,7 @@ public final class GpuFoliageRenderer {
 				.withDepthStencilState(DepthStencilState.DEFAULT);
 				//?} else {
 				/^.withDepthWrite(true)
-				.withDepthTestFunction(DepthTestFunction.LESS_DEPTH_TEST);
+				.withDepthTestFunction(DepthTestFunction.LEQUAL_DEPTH_TEST);
 				^///?}
 		if (cutout) {
 			builder.withShaderDefine("ALPHA_CUTOUT", 0.5F);
@@ -692,7 +692,7 @@ public final class GpuFoliageRenderer {
 				.withDepthStencilState(DepthStencilState.DEFAULT)
 				//?} else {
 				/^.withDepthWrite(true)
-				.withDepthTestFunction(DepthTestFunction.LESS_DEPTH_TEST)
+				.withDepthTestFunction(DepthTestFunction.LEQUAL_DEPTH_TEST)
 				^///?}
 				.build();
 	}
@@ -721,7 +721,7 @@ public final class GpuFoliageRenderer {
 				.withDepthStencilState(DepthStencilState.DEFAULT);
 				//?} else {
 				/^.withDepthWrite(true)
-				.withDepthTestFunction(DepthTestFunction.LESS_DEPTH_TEST);
+				.withDepthTestFunction(DepthTestFunction.LEQUAL_DEPTH_TEST);
 				^///?}
 		if (cutout) {
 			builder.withShaderDefine("ALPHA_CUTOUT", 0.5F);
