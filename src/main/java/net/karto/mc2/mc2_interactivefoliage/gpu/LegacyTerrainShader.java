@@ -76,14 +76,43 @@ final class LegacyTerrainShader {
 			    mc2_Position = mc2_sway(Position + ChunkOffset, ChunkOffset, mc2_CameraBlockPos, mc2_CameraOffset,
 			            mc2_GameTime, SwayCell, SwayWeights) - ChunkOffset;
 			    mc2_terrainMain();
+			%s}
+			""";
+
+	/^*
+	 * How a sub-level's foliage is shaded, for the shaders that read a normal and write the vertex's colour as the
+	 * game's own do; see the renderer's drawSubLevels. There are sub-levels on 1.21.1 alone.
+	 ^/
+	//? >=1.21.1 {
+	private static final String SUB_LEVEL_SHADE = """
+			// A sub-level's faces are shaded by where they look once it has turned: its quaternion, all zero for the world itself,
+			// and the shade of a face looking down, up, along z and along x. A quad that takes no shade is meshed with no normal.
+			uniform vec4 mc2_SubLevelTurn;
+			uniform vec4 mc2_SubLevelShade;
+
+			float mc2_subLevelShade(vec3 normal) {
+			    if (mc2_SubLevelTurn == vec4(0.0) || dot(normal, normal) < 0.25) {
+			        return 1.0;
+			    }
+			    vec3 axis = mc2_SubLevelTurn.xyz;
+			    vec3 turned = normal + 2.0 * cross(axis, cross(axis, normal) + mc2_SubLevelTurn.w * normal);
+			    return pow(clamp(-turned.y, 0.0, 1.0), 3.0) * mc2_SubLevelShade.x
+			            + pow(clamp(turned.y, 0.0, 1.0), 3.0) * mc2_SubLevelShade.y
+			            + turned.z * turned.z * mc2_SubLevelShade.z + turned.x * turned.x * mc2_SubLevelShade.w;
 			}
 			""";
+	//?} else {
+	/^private static final String SUB_LEVEL_SHADE = "";
+	^///?}
+	private static final Pattern NORMAL_INPUT = Pattern.compile("\\bin\\s+vec3\\s+Normal\\s*;");
+	private static final Pattern COLOUR_OUTPUT = Pattern.compile("\\bout\\s+vec4\\s+vertexColor\\s*;");
 
 	/^* The uniforms the mod sets, added to the cutout layer's own: name, type, how many values. ^/
 	private static final String[][] UNIFORMS = {
 			{"mc2_SwayIntensity", "float", "1"}, {"mc2_CalmSway", "float", "1"}, {"mc2_SwayEdge", "float", "4"},
 			{"mc2_Weather", "float", "4"}, {"mc2_CameraBlockPos", "int", "3"}, {"mc2_CameraOffset", "float", "3"},
-			{"mc2_GameTime", "float", "1"}, {"ChunkOffset", "float", "3"}};
+			{"mc2_GameTime", "float", "1"}, {"ChunkOffset", "float", "3"},
+			{"mc2_SubLevelTurn", "float", "4"}, {"mc2_SubLevelShade", "float", "4"}};
 
 	private static final ShaderInstance[] SHADERS = new ShaderInstance[LAYERS.length];
 	/^* Whether each shader is due to be built, as it is once after every resource reload. ^/
@@ -247,8 +276,12 @@ final class LegacyTerrainShader {
 		if (!input.find()) {
 			return null;
 		}
-		String declarations = input.group(1) + "in vec3 Position;\nvec3 mc2_Position;\n" + ADDITIONS + sway + "\n";
-		return renamed.substring(0, input.start()) + declarations + renamed.substring(input.end()) + SWAYED_MAIN;
+		boolean shaded = !SUB_LEVEL_SHADE.isEmpty() && NORMAL_INPUT.matcher(cutout).find()
+				&& COLOUR_OUTPUT.matcher(cutout).find();
+		String declarations = input.group(1) + "in vec3 Position;\nvec3 mc2_Position;\n" + ADDITIONS
+				+ (shaded ? SUB_LEVEL_SHADE : "") + sway + "\n";
+		return renamed.substring(0, input.start()) + declarations + renamed.substring(input.end())
+				+ SWAYED_MAIN.formatted(shaded ? "    vertexColor.rgb *= mc2_subLevelShade(Normal);\n" : "");
 	}
 
 	private static String readSway() throws IOException {

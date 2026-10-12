@@ -281,6 +281,11 @@ public final class WavingWhitelist {
 				"biomesoplenty:huge_clover_petal"
 
 		);
+		// No Mans Land
+		add(Group.GENERAL,
+				"nomansland:clover_patch"
+
+		);
 	}
 
 	// ==================================================================

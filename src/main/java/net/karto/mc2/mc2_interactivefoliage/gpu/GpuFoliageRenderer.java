@@ -809,6 +809,11 @@ public final class GpuFoliageRenderer {
 	 * sub-level with its sections; see SableBridge. Empty without Sable, and from 1.21.11 on, where there is none.
 	 */
 	private static final Long2ObjectOpenHashMap<Object> PLOT_OWNERS = new Long2ObjectOpenHashMap<>();
+	/**
+	 * Set as a section of a sub-level is meshed while the quad being written takes no shade: its vertices are written
+	 * with no normal, which is how the shader tells them from the ones it shades; see drawSubLevels.
+	 */
+	private static boolean normalsDropped;
 	private static final Map<Object, LongOpenHashSet> SUB_LEVELS = new java.util.IdentityHashMap<>();
 	/** Regions whose buffers no longer match their sections. */
 	private static final Set<Region> DIRTY_REGIONS = new LinkedHashSet<>();
@@ -3229,6 +3234,10 @@ public final class GpuFoliageRenderer {
 
 	/^* Set while a sub-level's foliage is drawn: from a camera in its plot, with no pushes and no edge to the wind. ^/
 	private static boolean subLevelPass;
+	/^* Whether Sable shades its sub-levels by where their faces look, as last asked; see SableBridge.shadesByFacing. ^/
+	private static boolean subLevelShading;
+	/^* Set while a section of a sub-level is meshed with no shade in it. ^/
+	private static boolean unshaded;
 	private static final Vector4f NO_WIND_EDGE = new Vector4f(-1.0E6F, -1.0E6F, 1.0E6F, 1.0E6F);
 	private static final org.joml.Vector3d POSE_POSITION = new org.joml.Vector3d();
 	private static final org.joml.Quaterniond POSE_ORIENTATION = new org.joml.Quaterniond();
@@ -3244,6 +3253,12 @@ public final class GpuFoliageRenderer {
 	private static void followSubLevels(Minecraft minecraft) {
 		if (!SableBridge.LOADED) {
 			return;
+		}
+		boolean shading = SableBridge.shadesByFacing();
+		if (shading != subLevelShading) {
+			// Sable builds its own meshes again as the setting changes, and so are the renderer's.
+			subLevelShading = shading;
+			DIRTY.addAll(PLOT_OWNERS.keySet());
 		}
 		GpuFoliageSplit.forEachPlotFound(key -> {
 			// Through a shader pack a sub-level's foliage stays in Sable's meshes, which the pack draws.
@@ -3290,6 +3305,11 @@ public final class GpuFoliageRenderer {
 	 * and moved to where the sub-level is; seen from the camera, that is the plot seen from where the camera would be
 	 * inside it, turned. So each sub-level's regions are drawn as the world's are, from that camera and with the view
 	 * turned as the sub-level is: the offsets, the sway and the fog all stay what they are for the world.
+	 * <p>
+	 * The shade of a face is the one thing that does not: the game works it out as a block is meshed, from where the
+	 * face looks then, and a felled tree's faces look elsewhere. Sable meshes its sub-levels with no shade and works
+	 * it out in the shader, from the normal turned as the sub-level is, where its dynamic shading is on; the renderer
+	 * does the same then, so the leaves match the trunk they hang on.
 	 ^/
 	private static void drawSubLevels(Minecraft minecraft, Vec3 camera) {
 		if (SUB_LEVELS.isEmpty() || legacyModelView == null || legacyProjection == null) {
@@ -3545,6 +3565,15 @@ public final class GpuFoliageRenderer {
 				(float) (cameraBlock.getZ() - camera.z));
 		shader.safeGetUniform("mc2_Weather").set(weather.x, weather.y, weather.z, weather.w);
 		shader.safeGetUniform("mc2_GameTime").set(RenderSystem.getShaderGameTime());
+		if (subLevelPass && subLevelShading) {
+			shader.safeGetUniform("mc2_SubLevelTurn").set((float) POSE_ORIENTATION.x, (float) POSE_ORIENTATION.y,
+					(float) POSE_ORIENTATION.z, (float) POSE_ORIENTATION.w);
+			shader.safeGetUniform("mc2_SubLevelShade").set(
+					minecraft.level.getShade(Direction.DOWN, true), minecraft.level.getShade(Direction.UP, true),
+					minecraft.level.getShade(Direction.NORTH, true), minecraft.level.getShade(Direction.EAST, true));
+		} else {
+			shader.safeGetUniform("mc2_SubLevelTurn").set(0.0F, 0.0F, 0.0F, 0.0F);
+		}
 		shader.apply();
 		// The pushes' block is tied to its binding again on the program now in use. A mod may build a shader's program
 		// anew as the game runs -- Veil, which Sable brings, does as the shader is applied -- and a new program reads
@@ -4551,7 +4580,11 @@ public final class GpuFoliageRenderer {
 
 		@Override
 		public VertexConsumer setNormal(float x, float y, float z) {
-			delegate.setNormal(x, y, z);
+			if (normalsDropped) {
+				delegate.setNormal(0.0F, 0.0F, 0.0F);
+			} else {
+				delegate.setNormal(x, y, z);
+			}
 			return this;
 		}
 
@@ -4768,6 +4801,11 @@ public final class GpuFoliageRenderer {
 			removeSection(key);
 			return;
 		}
+		normalsDropped = false;
+		//? <1.21.11 {
+		/*// A sub-level's faces are shaded as it is drawn, where Sable shades its own so; see drawSubLevels.
+		unshaded = subLevelShading && PLOT_OWNERS.containsKey(key);
+		*///?}
 		if (modelRenderer == null) {
 			// Same arguments the section compiler passes, so the geometry matches it exactly.
 			//? >=26.1.2 {
@@ -5107,12 +5145,71 @@ public final class GpuFoliageRenderer {
 		poseStack.translate(offset.x, offset.y, offset.z);
 		long seed = state.getSeed(pos);
 		noteSprites(state, model, random, seed);
+		// A sub-level's section is meshed with no shade in it; see UnshadedLevel.
+		net.minecraft.world.level.BlockAndTintGetter lit = unshaded ? new UnshadedLevel(level) : level;
 		if (smoothLighting) {
-			modelRenderer.tesselateWithAO(level, model, state, pos, poseStack, output, cull, random, seed,
+			modelRenderer.tesselateWithAO(lit, model, state, pos, poseStack, output, cull, random, seed,
 					OverlayTexture.NO_OVERLAY);
 		} else {
-			modelRenderer.tesselateWithoutAO(level, model, state, pos, poseStack, output, cull, random, seed,
+			modelRenderer.tesselateWithoutAO(lit, model, state, pos, poseStack, output, cull, random, seed,
 					OverlayTexture.NO_OVERLAY);
+		}
+		normalsDropped = false;
+	}
+
+	/^*
+	 * The level as a block of a sub-level is meshed from it where Sable shades its sub-levels as they are drawn: every
+	 * face at full shade, as Sable's own meshes have them. The block renderer asks for a quad's shade just before it
+	 * writes the quad, saying whether the quad takes any, which is noted for the vertex writer: one that takes none
+	 * is written with no normal, so the shader leaves it alone.
+	 ^/
+	private static final class UnshadedLevel implements net.minecraft.world.level.BlockAndTintGetter {
+
+		private final ClientLevel level;
+
+		UnshadedLevel(ClientLevel level) {
+			this.level = level;
+		}
+
+		@Override
+		public float getShade(Direction direction, boolean shade) {
+			normalsDropped = !shade;
+			return 1.0F;
+		}
+
+		@Override
+		public net.minecraft.world.level.lighting.LevelLightEngine getLightEngine() {
+			return level.getLightEngine();
+		}
+
+		@Override
+		public int getBlockTint(BlockPos pos, net.minecraft.world.level.ColorResolver resolver) {
+			return level.getBlockTint(pos, resolver);
+		}
+
+		@Override
+		public net.minecraft.world.level.block.entity.BlockEntity getBlockEntity(BlockPos pos) {
+			return level.getBlockEntity(pos);
+		}
+
+		@Override
+		public BlockState getBlockState(BlockPos pos) {
+			return level.getBlockState(pos);
+		}
+
+		@Override
+		public net.minecraft.world.level.material.FluidState getFluidState(BlockPos pos) {
+			return level.getFluidState(pos);
+		}
+
+		@Override
+		public int getHeight() {
+			return level.getHeight();
+		}
+
+		@Override
+		public int getMinBuildHeight() {
+			return level.getMinBuildHeight();
 		}
 	}
 	*///?}

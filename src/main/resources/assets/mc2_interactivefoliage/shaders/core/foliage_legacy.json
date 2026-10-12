@@ -21,6 +21,8 @@
         { "name": "CameraBlockPos", "type": "int", "count": 3, "values": [ 0, 0, 0 ] },
         { "name": "CameraOffset", "type": "float", "count": 3, "values": [ 0.0, 0.0, 0.0 ] },
         { "name": "Weather", "type": "float", "count": 4, "values": [ 0.0, 0.0, 0.0, 0.0 ] },
+        { "name": "mc2_SubLevelTurn", "type": "float", "count": 4, "values": [ 0.0, 0.0, 0.0, 0.0 ] },
+        { "name": "mc2_SubLevelShade", "type": "float", "count": 4, "values": [ 0.0, 0.0, 0.0, 0.0 ] },
         { "name": "AlphaCutout", "type": "float", "count": 1, "values": [ 0.1 ] }
     ]
 }

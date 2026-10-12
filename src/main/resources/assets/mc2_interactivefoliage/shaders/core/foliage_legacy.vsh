@@ -34,6 +34,21 @@ uniform vec4 SwayEdge;
 // What newer versions hand every shader: the camera's block, and that block's corner minus the camera.
 uniform ivec3 CameraBlockPos;
 uniform vec3 CameraOffset;
+// A sub-level's faces are shaded by where they look once it has turned: its quaternion, all zero for the world itself,
+// and the shade of a face looking down, up, along z and along x. A quad that takes no shade is meshed with no normal.
+uniform vec4 mc2_SubLevelTurn;
+uniform vec4 mc2_SubLevelShade;
+
+float mc2_subLevelShade(vec3 normal) {
+    if (mc2_SubLevelTurn == vec4(0.0) || dot(normal, normal) < 0.25) {
+        return 1.0;
+    }
+    vec3 axis = mc2_SubLevelTurn.xyz;
+    vec3 turned = normal + 2.0 * cross(axis, cross(axis, normal) + mc2_SubLevelTurn.w * normal);
+    return pow(clamp(-turned.y, 0.0, 1.0), 3.0) * mc2_SubLevelShade.x
+            + pow(clamp(turned.y, 0.0, 1.0), 3.0) * mc2_SubLevelShade.y
+            + turned.z * turned.z * mc2_SubLevelShade.z + turned.x * turned.x * mc2_SubLevelShade.w;
+}
 // The level's rain in x and its thunder in y, how far from the camera it blows in z and over how far it eases off in w.
 // See sway.glsl.
 uniform vec4 Weather;
@@ -193,5 +208,6 @@ void main() {
 
     vertexDistance = fog_distance(pos, FogShape);
     vertexColor = Color * minecraft_sample_lightmap(Sampler2, UV2);
+    vertexColor.rgb *= mc2_subLevelShade(Normal);
     texCoord0 = UV0;
 }

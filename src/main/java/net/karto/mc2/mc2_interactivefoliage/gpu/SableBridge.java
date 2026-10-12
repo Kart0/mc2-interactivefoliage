@@ -94,6 +94,31 @@ final class SableBridge {
 		}
 	}
 
+	private static Method shadesByFacing;
+	private static boolean shadesByFacingSought;
+
+	/**
+	 * Whether Sable shades a sub-level's faces by where they look once it has turned, rather than as they were
+	 * meshed: its dynamic shading setting. It builds its meshes with no shade in them then, and so does the renderer.
+	 * This one is not Sable Companion's to say; where it cannot be asked the shade stays in the mesh.
+	 */
+	static boolean shadesByFacing() {
+		if (!LOADED) {
+			return false;
+		}
+		try {
+			if (!shadesByFacingSought) {
+				shadesByFacingSought = true;
+				shadesByFacing = Class.forName("dev.ryanhcode.sable.render.dynamic_shade.SableDynamicDirectionalShading")
+						.getMethod("isEnabled");
+			}
+			return shadesByFacing != null && (boolean) shadesByFacing.invoke(null);
+		} catch (Throwable e) {
+			shadesByFacing = null;
+			return false;
+		}
+	}
+
 	private static void fail(Throwable cause) {
 		if (!failed) {
 			failed = true;
