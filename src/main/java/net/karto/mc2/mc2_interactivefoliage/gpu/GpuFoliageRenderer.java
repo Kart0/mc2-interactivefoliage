@@ -2457,7 +2457,7 @@ public final class GpuFoliageRenderer {
 				berylShadowPass = false;
 			}
 		}
-		*///?} elif >=1.21.1 {
+		*///?} elif >=1.21.1 && <1.21.11 {
 		/*// Before 1.21.11 the foliage is drawn through VulkanMod itself, into whatever Beryl has bound: its shadow map.
 		Minecraft minecraft = Minecraft.getInstance();
 		if (!active || meshedForShaderPack || minecraft.level == null || !VulkanBridge.drawsThroughItself()) {
@@ -4429,10 +4429,10 @@ public final class GpuFoliageRenderer {
 			this.regionOrigin = regionOrigin;
 		}
 
-		/^* The height of the block about to be tesselated, relative to the region. ^/
-		/^* The block's id for Beryl, which is not there before 1.21.1; see the writer above. ^/
+		/^* The block's id for Beryl, which is not there before 1.21.1 and so is never written; see the writer above. ^/
 		int lightBits;
 
+		/^* The height of the block about to be tesselated, relative to the region. ^/
 		void beginBlock(float blockY) {
 			this.blockY = blockY;
 		}
