@@ -353,6 +353,23 @@ public final class GpuFoliageInteraction {
 		GL30.glBindBufferBase(GL31.GL_UNIFORM_BUFFER, binding, legacyBuffer);
 	}
 
+	private static int legacyNoneBuffer;
+
+	/^*
+	 * Binds a block of no pushes at all where the foliage shader reads them, for what is drawn from another place
+	 * than the camera's -- a sub-level, whose plants are not where the pushes were worked out for.
+	 ^/
+	static void bindLegacyNone(int binding) {
+		if (legacyNoneBuffer == 0) {
+			legacyNoneBuffer = GlStateManager._glGenBuffers();
+			GL15.glBindBuffer(GL31.GL_UNIFORM_BUFFER, legacyNoneBuffer);
+			ByteBuffer none = MemoryUtil.memCalloc(LEGACY_BUFFER_SIZE);
+			GL15.glBufferData(GL31.GL_UNIFORM_BUFFER, none, GL15.GL_STATIC_DRAW);
+			MemoryUtil.memFree(none);
+		}
+		GL30.glBindBufferBase(GL31.GL_UNIFORM_BUFFER, binding, legacyNoneBuffer);
+	}
+
 	/^*
 	 * This frame's pushes laid out as the block of them is, in memory that stays where it is: for the uniform buffer
 	 * above, and for VulkanMod, which reads them from there itself. Render thread only.

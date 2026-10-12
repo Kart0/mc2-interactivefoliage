@@ -804,6 +804,12 @@ public final class GpuFoliageRenderer {
 	private static final Map<Long, Region> REGIONS = new HashMap<>();
 	/** Sections waiting to be meshed, by section key. */
 	private static final Set<Long> DIRTY = new LinkedHashSet<>();
+	/**
+	 * The sections of the plots whose foliage the renderer draws, each with the sub-level it belongs to, and each
+	 * sub-level with its sections; see SableBridge. Empty without Sable, and from 1.21.11 on, where there is none.
+	 */
+	private static final Long2ObjectOpenHashMap<Object> PLOT_OWNERS = new Long2ObjectOpenHashMap<>();
+	private static final Map<Object, LongOpenHashSet> SUB_LEVELS = new java.util.IdentityHashMap<>();
 	/** Regions whose buffers no longer match their sections. */
 	private static final Set<Region> DIRTY_REGIONS = new LinkedHashSet<>();
 
@@ -970,6 +976,8 @@ public final class GpuFoliageRenderer {
 	 */
 	private static final class Region {
 		final long key;
+		/** The sub-level whose plot the region lies in, as Sable's own object for it, or null in the world itself. */
+		Object subLevel;
 		final BlockPos origin;
 		final AABB bounds;
 		/** The region's blocks without padding, for asking whether it lies wholly inside the frustum. */
@@ -1946,6 +1954,8 @@ public final class GpuFoliageRenderer {
 		REGIONS.values().forEach(Region::free);
 		REGIONS.clear();
 		DIRTY.clear();
+		// Nothing rediscovers a sub-level's sections the way the chunks around the player are: they are queued again.
+		DIRTY.addAll(PLOT_OWNERS.keySet());
 		DIRTY_REGIONS.clear();
 		URGENT.clear();
 		URGENT_REGIONS.clear();
@@ -2070,6 +2080,8 @@ public final class GpuFoliageRenderer {
 
 	private static void putSection(long key, Section section) {
 		Region region = REGIONS.computeIfAbsent(regionKeyOf(key), Region::new);
+		// A plot is far wider than a region and starts where a region does, so a region is one sub-level's or none's.
+		region.subLevel = PLOT_OWNERS.get(key);
 		int slot = slotOf(key);
 		// A section that comes out the size it is on screen -- its light changed, as a rule, and nothing else -- is
 		// written over its own stretch of the region's buffer rather than the region uploaded whole: a region is up to
@@ -2210,6 +2222,9 @@ public final class GpuFoliageRenderer {
 			return;
 		}
 		updateNearArea(minecraft);
+		//? <1.21.11 {
+		/*followSubLevels(minecraft);
+		*///?}
 		followWindEdge();
 		followRain(minecraft);
 		// Near sections whose build is on screen still holding their foliage are asked for again; see
@@ -2244,20 +2259,25 @@ public final class GpuFoliageRenderer {
 				DIRTY_REGIONS.remove(entry.getValue());
 			}
 		}
-		if (!collectDraws(frustum, SodiumBridge.renderer())) {
-			return;
-		}
+		boolean anything = collectDraws(frustum, SodiumBridge.renderer());
 
 		//? >=1.21.11 {
-		submitDraws(minecraft, camera, null, null, null, null);
+		if (anything) {
+			submitDraws(minecraft, camera, null, null, null, null);
+		}
 		//?} else {
 		/*//? iris {
 		if (meshedForShaderPack) {
-			IrisCompat.inTerrainPhase(() -> drawLegacy(minecraft, camera, DRAWN, null, null));
+			if (anything) {
+				IrisCompat.inTerrainPhase(() -> drawLegacy(minecraft, camera, DRAWN, null, null));
+			}
 			return;
 		}
 		//?}
-		drawLegacy(minecraft, camera, DRAWN, null, null);
+		if (anything) {
+			drawLegacy(minecraft, camera, DRAWN, null, null);
+		}
+		drawSubLevels(minecraft, camera);
 		*///?}
 	}
 
@@ -2499,11 +2519,22 @@ public final class GpuFoliageRenderer {
 	 * foliage out of, inside the frustum and, with Sodium, among what it sees. Returns whether there is anything to draw.
 	 */
 	private static boolean collectDraws(Frustum frustum, Object sodium) {
+		return collectDraws(frustum, sodium, null);
+	}
+
+	/**
+	 * The same for the regions of one sub-level's plot, or with none for the world's own: a plot's are drawn apart,
+	 * each sub-level's where that sub-level is, so they are never among the world's.
+	 */
+	private static boolean collectDraws(Frustum frustum, Object sodium, Object subLevel) {
 		List<Region> drawn = DRAWN;
 		drawn.clear();
 		drawsSize = 0;
 		opaqueDrawsSize = 0;
 		for (Region region : REGIONS.values()) {
+			if (region.subLevel != subLevel) {
+				continue;
+			}
 			if (frustum != null && !frustum.isVisible(region.bounds)) {
 				continue;
 			}
@@ -3196,6 +3227,105 @@ public final class GpuFoliageRenderer {
 		}
 	}
 
+	/^* Set while a sub-level's foliage is drawn: from a camera in its plot, with no pushes and no edge to the wind. ^/
+	private static boolean subLevelPass;
+	private static final Vector4f NO_WIND_EDGE = new Vector4f(-1.0E6F, -1.0E6F, 1.0E6F, 1.0E6F);
+	private static final org.joml.Vector3d POSE_POSITION = new org.joml.Vector3d();
+	private static final org.joml.Quaterniond POSE_ORIENTATION = new org.joml.Quaterniond();
+	private static final org.joml.Vector3d POSE_ROTATION_POINT = new org.joml.Vector3d();
+	private static long subLevelLoggedAt;
+
+	/^*
+	 * Takes up the sections of a plot a chunk build has just met foliage in, and lets go of the sub-levels that are
+	 * no more. A sub-level is first heard of through that build -- Sable building its mesh, with the foliage still in
+	 * it -- and from there on its sections change hands as the world's do: meshed, uploaded, and Sable's mesh asked
+	 * for again without the foliage, by the request Sable answers for its own sections.
+	 ^/
+	private static void followSubLevels(Minecraft minecraft) {
+		if (!SableBridge.LOADED) {
+			return;
+		}
+		GpuFoliageSplit.forEachPlotFound(key -> {
+			// Through a shader pack a sub-level's foliage stays in Sable's meshes, which the pack draws.
+			if (meshedForShaderPack || PLOT_OWNERS.containsKey(key)) {
+				return;
+			}
+			Object subLevel = SableBridge.subLevelAt(SectionPos.x(key), SectionPos.z(key));
+			if (subLevel == null) {
+				return;
+			}
+			PLOT_OWNERS.put(key, subLevel);
+			SUB_LEVELS.computeIfAbsent(subLevel, found -> new LongOpenHashSet()).add(key);
+			GpuFoliageSplit.addPlotColumn(SectionPos.x(key), SectionPos.z(key));
+			DIRTY.add(key);
+			if (SableBridge.LOG) {
+				ModTemplate.LOGGER.info("[Sable] section {} {} {} of sub-level {} holds foliage: queued",
+						SectionPos.x(key), SectionPos.y(key), SectionPos.z(key), System.identityHashCode(subLevel));
+			}
+		});
+		var followed = SUB_LEVELS.entrySet().iterator();
+		while (followed.hasNext()) {
+			var entry = followed.next();
+			long any = entry.getValue().iterator().nextLong();
+			if (SableBridge.subLevelAt(SectionPos.x(any), SectionPos.z(any)) == entry.getKey()) {
+				continue;
+			}
+			for (long key : entry.getValue()) {
+				DIRTY.remove(key);
+				removeSection(key);
+				GpuFoliageSplit.forgetSection(key);
+				GpuFoliageSplit.removePlotColumn(SectionPos.x(key), SectionPos.z(key));
+				PLOT_OWNERS.remove(key);
+			}
+			if (SableBridge.LOG) {
+				ModTemplate.LOGGER.info("[Sable] sub-level {} is gone: {} sections let go",
+						System.identityHashCode(entry.getKey()), entry.getValue().size());
+			}
+			followed.remove();
+		}
+	}
+
+	/^*
+	 * Draws the foliage of each sub-level where the sub-level is. Sable draws a plot's sections turned about a point
+	 * and moved to where the sub-level is; seen from the camera, that is the plot seen from where the camera would be
+	 * inside it, turned. So each sub-level's regions are drawn as the world's are, from that camera and with the view
+	 * turned as the sub-level is: the offsets, the sway and the fog all stay what they are for the world.
+	 ^/
+	private static void drawSubLevels(Minecraft minecraft, Vec3 camera) {
+		if (SUB_LEVELS.isEmpty() || legacyModelView == null || legacyProjection == null) {
+			return;
+		}
+		boolean log = SableBridge.LOG && System.currentTimeMillis() - subLevelLoggedAt > 2000L;
+		for (Object subLevel : SUB_LEVELS.keySet()) {
+			if (!SableBridge.pose(subLevel, POSE_POSITION, POSE_ORIENTATION, POSE_ROTATION_POINT)) {
+				continue;
+			}
+			boolean anything = collectDraws(null, null, subLevel);
+			// Where the camera is in the plot: the pose undone.
+			org.joml.Vector3d inPlot = new org.joml.Vector3d(camera.x, camera.y, camera.z).sub(POSE_POSITION);
+			POSE_ORIENTATION.transformInverse(inPlot).add(POSE_ROTATION_POINT);
+			if (log) {
+				ModTemplate.LOGGER.info("[Sable] sub-level {}: {} sections followed, {} regions drawn ({} cut out runs, "
+								+ "{} solid), at {}, camera in its plot {}",
+						System.identityHashCode(subLevel), SUB_LEVELS.get(subLevel).size(), DRAWN.size(), drawsSize / 3,
+						opaqueDrawsSize / 3, POSE_POSITION, inPlot);
+			}
+			if (!anything) {
+				continue;
+			}
+			Matrix4f modelView = new Matrix4f(legacyModelView).rotate(new org.joml.Quaternionf(POSE_ORIENTATION));
+			subLevelPass = true;
+			try {
+				drawLegacy(minecraft, new Vec3(inPlot.x, inPlot.y, inPlot.z), DRAWN, modelView, legacyProjection);
+			} finally {
+				subLevelPass = false;
+			}
+		}
+		if (log) {
+			subLevelLoggedAt = System.currentTimeMillis();
+		}
+	}
+
 	/^*
 	 * Draws the queued runs the way vanilla draws its chunk layers before 1.21.11: the leaves drawn solid first, with the
 	 * solid layer's render state and shaders that keep every pixel, then everything else with the cutout layer's.
@@ -3253,7 +3383,11 @@ public final class GpuFoliageRenderer {
 				continue;
 			}
 			if (!uploaded) {
-				GpuFoliageInteraction.uploadLegacy(camera, INTERACTION_BINDING);
+				if (subLevelPass) {
+					GpuFoliageInteraction.bindLegacyNone(INTERACTION_BINDING);
+				} else {
+					GpuFoliageInteraction.uploadLegacy(camera, INTERACTION_BINDING);
+				}
 				uploaded = true;
 			}
 			drawLegacyRuns(minecraft, camera, drawn, shader, solid, modelView, projection, list, listSize);
@@ -3387,7 +3521,8 @@ public final class GpuFoliageRenderer {
 		^///?}
 		shader.safeGetUniform("SwayIntensity").set(swayIntensity());
 		shader.safeGetUniform("CalmSway").set(calmSway());
-		Vector4f edge = windEdgeFrom(camera);
+		// The wind eases off at the edge of the area around the player, which a sub-level's plot is nowhere near.
+		Vector4f edge = subLevelPass ? NO_WIND_EDGE : windEdgeFrom(camera);
 		shader.safeGetUniform("SwayEdge").set(edge.x, edge.y, edge.z, edge.w);
 		BlockPos cameraBlock = BlockPos.containing(camera);
 		shader.safeGetUniform("CameraBlockPos").set(cameraBlock.getX(), cameraBlock.getY(), cameraBlock.getZ());
@@ -4055,6 +4190,13 @@ public final class GpuFoliageRenderer {
 	 */
 	private static void deactivate(Minecraft minecraft) {
 		active = false;
+		// Sable's meshes take back the foliage of its sub-levels, as the chunk mesh does the world's below.
+		GpuFoliageSplit.clearPlots();
+		for (long key : PLOT_OWNERS.keySet()) {
+			rebuildChunkMesh(minecraft, SectionPos.x(key), SectionPos.y(key), SectionPos.z(key));
+		}
+		PLOT_OWNERS.clear();
+		SUB_LEVELS.clear();
 		if (GpuFoliageSplit.hasArea()) {
 			int centreX = GpuFoliageSplit.centreX();
 			int centreZ = GpuFoliageSplit.centreZ();
@@ -4196,8 +4338,10 @@ public final class GpuFoliageRenderer {
 			// only after all of that, with whatever the frame has left. A light carried through a forest asks for every
 			// section around the player every tick, and half of them are behind: rebuilt in the order they came, they
 			// held up the ones being looked at.
-			double distance = distanceSqTo(key, camera);
-			if (!inView(key, frustum, sodium)) {
+			// A sub-level's section is far away only by where its blocks are kept: it is among the first.
+			boolean plot = PLOT_OWNERS.containsKey(key);
+			double distance = plot ? 0.0D : distanceSqTo(key, camera);
+			if (!plot && !inView(key, frustum, sodium)) {
 				distance += OUT_OF_VIEW;
 			}
 			for (int slot = 0; slot < REBUILD_BUDGET; slot++) {
@@ -4281,6 +4425,10 @@ public final class GpuFoliageRenderer {
 		if (minecraft.player == null) {
 			return false;
 		}
+		// A sub-level's sections are kept for as long as it is followed, wherever its plot is.
+		if (PLOT_OWNERS.containsKey(key)) {
+			return true;
+		}
 		int limit = buildRadius();
 		int dx = SectionPos.x(key) - SectionPos.blockToSectionCoord(minecraft.player.getBlockX());
 		int dz = SectionPos.z(key) - SectionPos.blockToSectionCoord(minecraft.player.getBlockZ());
@@ -4292,6 +4440,10 @@ public final class GpuFoliageRenderer {
 	private static boolean regionWithinRange(Minecraft minecraft, long regionKey) {
 		if (minecraft.player == null) {
 			return false;
+		}
+		Region held = REGIONS.get(regionKey);
+		if (held != null && held.subLevel != null) {
+			return true;
 		}
 		int minX = SectionPos.x(regionKey) << REGION_WIDTH_SHIFT;
 		int minY = SectionPos.y(regionKey) << REGION_HEIGHT_SHIFT;
