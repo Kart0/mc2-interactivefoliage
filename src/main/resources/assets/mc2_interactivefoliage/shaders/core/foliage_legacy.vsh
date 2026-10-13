@@ -97,7 +97,7 @@ const float EDGE_EASE_BLOCKS = 6.0;
 // world's down: sublevel.glsl, where each is explained, and which this follows.
 #define WIND_DIRECTION (mc2_SubLevelDown == vec3(0.0) ? vec2(-1.0, 0.0) : mc2_SubLevelWind)
 const float SUB_LEVEL_BUFFET = 0.5;
-const float SUB_LEVEL_LOOSE = 0.25;
+const float SUB_LEVEL_LOOSE = 0.2;
 const float WIND_LEAN = 2.5;
 const float WIND_GUST = 0.4;
 const float STORM_STRENGTH = 2.0;

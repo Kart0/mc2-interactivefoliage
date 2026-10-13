@@ -39,7 +39,7 @@ const float MC2_SUB_LEVEL_BUFFET = 0.5;
 
 // How far what nothing pushes hangs -- a tree's leaves, and every block that only waves -- in units of how far the
 // tip of a plant that is pushed does: the same, so a sub-level's foliage hangs, lags and swings back as one.
-const float MC2_SUB_LEVEL_LOOSE = 0.25;
+const float MC2_SUB_LEVEL_LOOSE = 0.2;
 
 // What a sub-level adds to a vertex sway.glsl has moved.
 //

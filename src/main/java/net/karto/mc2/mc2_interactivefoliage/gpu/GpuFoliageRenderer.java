@@ -3330,7 +3330,7 @@ public final class GpuFoliageRenderer {
 	private static long subLevelLoggedAt;
 
 	/^* How far the tip of a plant lying on its side hangs, in blocks. ^/
-	private static final float SUB_LEVEL_DROOP = 0.9F;
+	private static final float SUB_LEVEL_DROOP = 1.0F;
 	/^*
 	 * How a sub-level's foliage follows it. Each sub-level tows a weight on a spring, kept where the world is rather
 	 * than where the plot is: the weight is pulled toward the sub-level and slowed by the air, so it runs on past a
