@@ -28,6 +28,7 @@ Biomes O' Plenty, Serene Shrubbery, No Man's Land, Farmer's Delight, Snow! Real 
   https://www.curseforge.com/minecraft/mc-mods/project-vibrant-journeys
 - [ ] Immersive Weathering -- jaydonthewarrior. Not answered yet.
   https://www.curseforge.com/minecraft/mc-mods/immersive-weathering-forge
+- [ ] Cobblemon -- asked for by the user, 2026-10-12.
 - [ ] Modded foliage in general -- StayStrange, Mysticpasta1. Ask which mods when they come back.
 
 ## Compatibility layers
@@ -40,6 +41,13 @@ Biomes O' Plenty, Serene Shrubbery, No Man's Land, Farmer's Delight, Snow! Real 
       LambDynamicLights on 26.3 needed no layer; these two are other mods and were never looked at.
 - [ ] Chunks Fade In -- RAPTORE, and a GitHub issue: the foliage should fade in with the chunk. Promised for the next
       update.
+- [ ] Chunk Animator -- asked for by the user, 2026-10-12: as with Chunks Fade In, which has a fork of the same
+      chunk animation, the foliage has to follow the chunk's animation, or the plant floats in place while its chunk
+      flies in. One layer may serve both.
+- [ ] Terrain Slabs on 1.21.1 (3.1.2) and 1.20.1 (4.0.3-beta) -- another design than 1.21.11 and later: no
+      OnTopHelper, the plant is lowered through BlockState.getOffset, which the mesher already reads. Read from the
+      jars, never seen in game: a "not a version the GPU renderer knows" warning is logged for nothing, and the sway
+      is weighed from half a block too high, so a plant on a slab likely sways less. 1.21.11 to 26.3 are fine.
 - [ ] Ecliptic Seasons -- Baronman: snow-covered plants, as Snow! Real Magic has. On the list.
 - [ ] Nvidium -- on the author's list; jars for 1.21.1 to 26.3 are in `versions/`. Deferred by the user until after
       2.2.0. The 26.3 issue reporter (cbbg crash) runs it and sees stutter.

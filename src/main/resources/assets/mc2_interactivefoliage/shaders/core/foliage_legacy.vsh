@@ -97,6 +97,7 @@ const float EDGE_EASE_BLOCKS = 6.0;
 // world's down: sublevel.glsl, where each is explained, and which this follows.
 #define WIND_DIRECTION (mc2_SubLevelDown == vec3(0.0) ? vec2(-1.0, 0.0) : mc2_SubLevelWind)
 const float SUB_LEVEL_BUFFET = 0.5;
+const float SUB_LEVEL_LOOSE = 0.25;
 const float WIND_LEAN = 2.5;
 const float WIND_GUST = 0.4;
 const float STORM_STRENGTH = 2.0;
@@ -234,9 +235,12 @@ void main() {
             pos.xz += mc2_subLevelLevel(buffet) * (SUB_LEVEL_BUFFET * buffetReach * headOn);
         }
         vec2 hang = mc2_SubLevelHang.xz * weights.y;
-        pos.xz += hang;
         float hung = length(hang);
         pos.y -= min(hung * hung, hung) * 0.5;
+        // What nothing pushes hangs whole wherever it sways, and a block hanging on leaves as the leaf beside it.
+        float loose = hanging ? leafWaves
+                : weights.y * 255.0 < 0.5 && weights.x * 1023.0 >= 0.5 ? 1.0 : 0.0;
+        pos.xz += mc2_SubLevelHang.xz * max(weights.y, loose * SUB_LEVEL_LOOSE);
     }
 
     gl_Position = ProjMat * ModelViewMat * vec4(pos, 1.0);

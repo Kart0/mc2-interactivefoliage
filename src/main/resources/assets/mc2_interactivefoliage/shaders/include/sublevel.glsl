@@ -37,11 +37,18 @@ vec2 mc2_subLevelLevel(vec2 offset) {
 // How hard rain's wind shakes a plant it blows straight down onto, in units of the calm sway's reach.
 const float MC2_SUB_LEVEL_BUFFET = 0.5;
 
+// How far what nothing pushes hangs -- a tree's leaves, and every block that only waves -- in units of how far the
+// tip of a plant that is pushed does: the same, so a sub-level's foliage hangs, lags and swings back as one.
+const float MC2_SUB_LEVEL_LOOSE = 0.25;
+
 // What a sub-level adds to a vertex sway.glsl has moved.
 //
 // It hangs: by how far a push moves it, which is Sway's own curve along the plant, so a plant droops the way it bends
-// when pushed, and what nothing pushes -- a tree's leaves -- keeps its place. Only the part of the hang across the
-// plant bends it: standing still it is all along the stalk and nothing moves, and upside down the same.
+// when pushed. What nothing pushes has no such curve, and hangs whole wherever it sways at all: a tree's leaves move
+// together, corners neighbouring leaves share alike, and stay where a block holds them still -- against the trunk --
+// so the canopy leans from its wood rather than leaving it. A block hanging on leaves hangs as the leaf beside it.
+// Only the part of the hang across the plant bends it: standing still it is all along the stalk and nothing moves,
+// and upside down the same.
 //
 // And where rain's wind meets the plant head on -- blowing along the stalk, with nothing left of it across to lean
 // the plant by -- the plant shakes a little all the same, to its own rhythm, so that the wind is seen to reach it.
@@ -62,11 +69,17 @@ vec3 mc2_subLevelBend(vec3 pos, float swayCell, float swayWeights, float gameTim
         vec2 shake = vec2(sin(phase + gameTime * MC2_FLUTTER_SPEED), sin(phase * 1.3 + gameTime * MC2_TUG_SPEED));
         pos.xz += mc2_subLevelLevel(shake) * (MC2_SUB_LEVEL_BUFFET * reach * headOn);
     }
-    vec2 hang = mc2_SubLevelHang.xz * weights.y;
-    pos.xz += hang;
-    // It bends rather than slides, as under a push: the further the tip hangs, the nearer the stalk it sits.
-    float hung = length(hang);
+    // It bends rather than slides, as under a push: the further the tip hangs, the nearer the stalk it sits. What
+    // nothing pushes has no stalk to bend, and only slides.
+    float hung = length(mc2_SubLevelHang.xz * weights.y);
     pos.y -= min(hung * hung, hung) * 0.5;
+    float loose = weights.y * 255.0 < 0.5 && weights.x * 1023.0 >= 0.5 ? 1.0 : 0.0;
+    if (mc2_unpackSteady(swayWeights) > 0.5 && weights.w < 0.5) {
+        // Hanging on leaves: the lowest of the wind's bits says whether the leaf beside it sways; see mc2_sway.
+        float bits = floor(weights.z * 15.0 + 0.5);
+        loose = bits - floor(bits / 2.0) * 2.0;
+    }
+    pos.xz += mc2_SubLevelHang.xz * max(weights.y, loose * MC2_SUB_LEVEL_LOOSE);
     return pos;
 }
 
