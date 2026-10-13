@@ -449,22 +449,37 @@ public final class GpuFoliageRenderer {
 	// shaders read, the block format with the mod's two values, and the depth state every block pipeline uses. The
 	// foliage is drawn into vanilla's own pass, which writes one colour target; a pipeline whose targets do not match
 	// the pass is refused.
-	private static final RenderPipeline PIPELINE = modernPipeline("pipeline/foliage", true);
+	private static final RenderPipeline PIPELINE = modernPipeline("pipeline/foliage", true, GpuFormat.RGBA8_UNORM);
 	/**
 	 * The same, keeping every pixel: for leaves drawn solid, as the game's Fast leaves are, the way vanilla's solid terrain
 	 * differs from its cutout terrain.
 	 */
-	private static final RenderPipeline OPAQUE_PIPELINE = modernPipeline("pipeline/foliage_opaque", false);
+	private static final RenderPipeline OPAQUE_PIPELINE = modernPipeline("pipeline/foliage_opaque", false,
+			GpuFormat.RGBA8_UNORM);
 
-	private static RenderPipeline modernPipeline(String location, boolean cutout) {
+	/**
+	 * A pipeline's colour target, written as the format the pass it is drawn into holds: the main target's, which is
+	 * vanilla's unless another mod allocates it with more bits.
+	 */
+	private static ColorTargetState colorTarget(GpuFormat format) {
+		return new ColorTargetState(ColorTargetState.DEFAULT.blendFunction(), format, ColorTargetState.DEFAULT.writeMask());
+	}
+
+	/** A pipeline's name, told apart by the format of its colour target where that is not vanilla's. */
+	private static Identifier pipelineLocation(String location, GpuFormat format) {
+		return Identifier.fromNamespaceAndPath(ModTemplate.MOD_ID, format == GpuFormat.RGBA8_UNORM ? location
+				: location + "/" + format.name().toLowerCase(java.util.Locale.ROOT));
+	}
+
+	private static RenderPipeline modernPipeline(String location, boolean cutout, GpuFormat format) {
 		RenderPipeline.Builder builder = RenderPipeline.builder()
-				.withLocation(Identifier.fromNamespaceAndPath(ModTemplate.MOD_ID, location))
+				.withLocation(pipelineLocation(location, format))
 				.withVertexShader(Identifier.fromNamespaceAndPath(ModTemplate.MOD_ID, "core/foliage_modern"))
 				.withFragmentShader(Identifier.fromNamespaceAndPath(ModTemplate.MOD_ID, "core/foliage_modern"))
 				.withVertexBinding(0, FOLIAGE_FORMAT)
 				.withPrimitiveTopology(PrimitiveTopology.QUADS)
 				.withDepthStencilState(DepthStencilState.DEFAULT)
-				.withColorTargetState(ColorTargetState.DEFAULT)
+				.withColorTargetState(colorTarget(format))
 				.withBindGroupLayout(BindGroupLayouts.GLOBALS)
 				.withBindGroupLayout(BindGroupLayouts.FOG)
 				.withBindGroupLayout(BindGroupLayouts.SAMPLER0)
@@ -544,22 +559,23 @@ public final class GpuFoliageRenderer {
 	 * The pipeline foliage is drawn with while Sodium draws the chunks and a copy of its chunk shaders reads the mod's
 	 * vertices: the shaders the chunks are drawn with then. See {@link SodiumFoliageShader}, which compiles it.
 	 */
-	private static final RenderPipeline SODIUM_PIPELINE = sodiumPipeline("pipeline/foliage_sodium");
+	private static final RenderPipeline SODIUM_PIPELINE = sodiumPipeline("pipeline/foliage_sodium", GpuFormat.RGBA8_UNORM);
 	/**
 	 * The same for the copy of Sodium's solid pass, which keeps every pixel: for leaves drawn as the game's Fast leaves
 	 * are. The alpha test is a define in the copy's own source, so the two pipelines differ only in which copy they hold.
 	 */
-	private static final RenderPipeline SODIUM_OPAQUE_PIPELINE = sodiumPipeline("pipeline/foliage_sodium_opaque");
+	private static final RenderPipeline SODIUM_OPAQUE_PIPELINE = sodiumPipeline("pipeline/foliage_sodium_opaque",
+			GpuFormat.RGBA8_UNORM);
 
-	private static RenderPipeline sodiumPipeline(String location) {
+	private static RenderPipeline sodiumPipeline(String location, GpuFormat format) {
 		return RenderPipeline.builder()
-				.withLocation(Identifier.fromNamespaceAndPath(ModTemplate.MOD_ID, location))
+				.withLocation(pipelineLocation(location, format))
 				.withVertexShader(SodiumFoliageShader.SHADER)
 				.withFragmentShader(SodiumFoliageShader.SHADER)
 				.withVertexBinding(0, FOLIAGE_FORMAT)
 				.withPrimitiveTopology(PrimitiveTopology.QUADS)
 				.withDepthStencilState(DepthStencilState.DEFAULT)
-				.withColorTargetState(ColorTargetState.DEFAULT)
+				.withColorTargetState(colorTarget(format))
 				.withBindGroupLayout(BindGroupLayouts.GLOBALS)
 				.withBindGroupLayout(BindGroupLayouts.FOG)
 				.withBindGroupLayout(BindGroupLayouts.PROJECTION)
@@ -579,19 +595,21 @@ public final class GpuFoliageRenderer {
 	 * {@link TerrainFoliageShader}, which compiles it. Vanilla's terrain snippet is private, so what it holds is listed:
 	 * the section's block and the terrain's own, and no transform, which the terrain's shaders do not read.
 	 */
-	private static final RenderPipeline TERRAIN_PIPELINE = terrainPipeline("pipeline/foliage_terrain", true);
+	private static final RenderPipeline TERRAIN_PIPELINE = terrainPipeline("pipeline/foliage_terrain", true,
+			GpuFormat.RGBA8_UNORM);
 	/** The same, keeping every pixel, as vanilla's solid terrain: for leaves drawn as the game's Fast leaves are. */
-	private static final RenderPipeline TERRAIN_OPAQUE_PIPELINE = terrainPipeline("pipeline/foliage_terrain_opaque", false);
+	private static final RenderPipeline TERRAIN_OPAQUE_PIPELINE = terrainPipeline("pipeline/foliage_terrain_opaque", false,
+			GpuFormat.RGBA8_UNORM);
 
-	private static RenderPipeline terrainPipeline(String location, boolean cutout) {
+	private static RenderPipeline terrainPipeline(String location, boolean cutout, GpuFormat format) {
 		RenderPipeline.Builder builder = RenderPipeline.builder()
-				.withLocation(Identifier.fromNamespaceAndPath(ModTemplate.MOD_ID, location))
+				.withLocation(pipelineLocation(location, format))
 				.withVertexShader(TerrainFoliageShader.VERTEX)
 				.withFragmentShader(TerrainFoliageShader.TERRAIN)
 				.withVertexBinding(0, FOLIAGE_FORMAT)
 				.withPrimitiveTopology(PrimitiveTopology.QUADS)
 				.withDepthStencilState(DepthStencilState.DEFAULT)
-				.withColorTargetState(ColorTargetState.DEFAULT)
+				.withColorTargetState(colorTarget(format))
 				.withBindGroupLayout(BindGroupLayouts.GLOBALS)
 				.withBindGroupLayout(BindGroupLayouts.FOG)
 				.withBindGroupLayout(BindGroupLayouts.SAMPLER0)
@@ -2626,6 +2644,38 @@ public final class GpuFoliageRenderer {
 
 	//? >=1.21.11 {
 	//? >=26.3 {
+	/** The pipelines foliage is drawn into the level with, all of one colour format. */
+	private record LevelPipelines(RenderPipeline own, RenderPipeline ownOpaque, RenderPipeline sodium,
+			RenderPipeline sodiumOpaque, RenderPipeline terrain, RenderPipeline terrainOpaque) {
+	}
+
+	private static final LevelPipelines LEVEL_PIPELINES = new LevelPipelines(PIPELINE, OPAQUE_PIPELINE, SODIUM_PIPELINE,
+			SODIUM_OPAQUE_PIPELINE, TERRAIN_PIPELINE, TERRAIN_OPAQUE_PIPELINE);
+	private static final Map<GpuFormat, LevelPipelines> LEVEL_PIPELINES_FOR = new java.util.EnumMap<>(GpuFormat.class);
+	private static boolean pipelineRefused;
+
+	/**
+	 * The pipelines for the format the level is drawn in. A pass refuses a pipeline whose colour format is not its
+	 * target's, and the main target is not always vanilla's eight bits: cbbg allocates it with sixteen, as floats,
+	 * while no shader pack is loaded. It gives the pipelines the game compiled a twin of that format as they are set,
+	 * but the copies of Sodium's shaders and the terrain's are compiled by the mod and it never sees them; so the mod
+	 * builds its own for whatever the main target holds.
+	 */
+	private static LevelPipelines levelPipelines(Minecraft minecraft) {
+		com.mojang.renderpearl.api.textures.GpuTexture color = minecraft.gameRenderer.mainRenderTarget().getColorTexture();
+		GpuFormat format = color == null ? GpuFormat.RGBA8_UNORM : color.getFormat();
+		if (format == GpuFormat.RGBA8_UNORM) {
+			return LEVEL_PIPELINES;
+		}
+		return LEVEL_PIPELINES_FOR.computeIfAbsent(format, wanted -> new LevelPipelines(
+				modernPipeline("pipeline/foliage", true, wanted),
+				modernPipeline("pipeline/foliage_opaque", false, wanted),
+				sodiumPipeline("pipeline/foliage_sodium", wanted),
+				sodiumPipeline("pipeline/foliage_sodium_opaque", wanted),
+				terrainPipeline("pipeline/foliage_terrain", true, wanted),
+				terrainPipeline("pipeline/foliage_terrain_opaque", false, wanted)));
+	}
+
 	/**
 	 * Prepares what {@link #collectDraws} worked out, for {@link #drawIntoLevelPass} to draw.
 	 * <p>
@@ -2644,13 +2694,14 @@ public final class GpuFoliageRenderer {
 		// level is drawn; the pipeline is compiled here all the same, since Iris builds on what the game compiled.
 		boolean shaderPack = meshedForShaderPack;
 		boolean sodium = !shaderPack && SodiumBridge.drawsChunks();
-		CompiledRenderPipeline sodiumPipeline = sodium ? SodiumFoliageShader.compiled(SODIUM_PIPELINE, true) : null;
-		CompiledRenderPipeline terrainPipeline = shaderPack || sodium ? null : TerrainFoliageShader.compiled(TERRAIN_PIPELINE);
+		LevelPipelines level = levelPipelines(minecraft);
+		CompiledRenderPipeline sodiumPipeline = sodium ? SodiumFoliageShader.compiled(level.sodium(), true) : null;
+		CompiledRenderPipeline terrainPipeline = shaderPack || sodium ? null : TerrainFoliageShader.compiled(level.terrain());
 		boolean sodiumShaders = sodiumPipeline != null;
 		boolean terrainShaders = terrainPipeline != null;
 		CompiledRenderPipeline pipeline = shaderPack ? compiledPipeline(shaderPackPipeline)
 				: sodiumShaders ? sodiumPipeline
-				: terrainShaders ? terrainPipeline : compiledPipeline(PIPELINE);
+				: terrainShaders ? terrainPipeline : compiledPipeline(level.own());
 		if (pipeline == null) {
 			return;
 		}
@@ -2660,8 +2711,8 @@ public final class GpuFoliageRenderer {
 		// cut out rather than not at all.
 		CompiledRenderPipeline solid = opaqueDrawsSize == 0 ? null
 				: shaderPack ? compiledPipeline(shaderPackOpaquePipeline)
-				: sodiumShaders ? SodiumFoliageShader.compiled(SODIUM_OPAQUE_PIPELINE, false)
-				: terrainShaders ? TerrainFoliageShader.compiled(TERRAIN_OPAQUE_PIPELINE) : compiledPipeline(OPAQUE_PIPELINE);
+				: sodiumShaders ? SodiumFoliageShader.compiled(level.sodiumOpaque(), false)
+				: terrainShaders ? TerrainFoliageShader.compiled(level.terrainOpaque()) : compiledPipeline(level.ownOpaque());
 		CompiledRenderPipeline opaquePipeline = solid != null ? solid : pipeline;
 		Region[] regions = DRAWN.toArray(new Region[0]);
 		AbstractTexture atlas = minecraft.getTextureManager().getTexture(TextureAtlas.LOCATION_BLOCKS);
@@ -2734,12 +2785,23 @@ public final class GpuFoliageRenderer {
 				// Asked for again here, as the level is drawn, which is when Iris hands back the pack's program in its
 				// place; the mod's swaying copy of that program then takes its place in turn.
 				boolean drawnSolid = kind == 0 && solid != null;
-				if (shaderPack) {
-					IrisCompat.setTerrainPhase(drawnSolid);
-					pass.setPipeline(IrisCompat.withFoliageProgram(RenderSystem.getCompiledPipeline(
-							drawnSolid ? shaderPackOpaquePipeline : shaderPackPipeline), drawnSolid));
-				} else {
-					pass.setPipeline(kind == 0 ? opaquePipeline : pipeline);
+				try {
+					if (shaderPack) {
+						IrisCompat.setTerrainPhase(drawnSolid);
+						pass.setPipeline(IrisCompat.withFoliageProgram(RenderSystem.getCompiledPipeline(
+								drawnSolid ? shaderPackOpaquePipeline : shaderPackPipeline), drawnSolid));
+					} else {
+						pass.setPipeline(kind == 0 ? opaquePipeline : pipeline);
+					}
+				} catch (IllegalStateException e) {
+					// The pass holds targets the pipeline was not built for -- another mod's, or a shader pack's in the
+					// frame it is switched in. The foliage is left out of the frame rather than the game ended.
+					if (!pipelineRefused) {
+						pipelineRefused = true;
+						ModTemplate.LOGGER.error("The level's pass refused the GPU foliage pipeline; the foliage it "
+								+ "holds is not drawn while it does", e);
+					}
+					return;
 				}
 				// Projection, fog and the globals are bound by vanilla as it opens the pass. The chunk shaders pick mip
 				// levels themselves, so they sample the atlas as the chunk mesh does: smoothly, between mip levels. The

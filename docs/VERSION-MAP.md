@@ -89,6 +89,7 @@ Meshes the foliage near the player on its own and draws it with the sway on the 
   - Pitfall: Never ask for a compiled pipeline inside the pass: PipelineCache.get compiles on demand, and does not remember failures (compiledPipeline remembers them per shader reload).
   - Pitfall: Every uniform a pipeline declares must be bound before a draw, or setupDraw dies on a null buffer.
   - Pitfall: The shared index buffer may only grow outside a pass: requestIndexCount while preparing, getBuffer() in the pass.
+  - Pitfall: A pass refuses a pipeline whose colour format is not its target's (FrontendRenderPass.setPipeline), and the main target is not always RGBA8: cbbg allocates it as RGBA16F while no shader pack is loaded, and swaps in a twin only for pipelines that went through PipelineCache -- never the Sodium and terrain copies, which the mod compiles on the device itself. That crashed 2.1.1 the frame a pack was turned off. levelPipelines builds all six for whatever format the main target holds; a pipeline refused all the same is logged once and the foliage left out of the frame.
   - Pitfall: Do not use DynamicGpuData.writeChunkSections: it shares storage with the MDI vertex buffer. Each region keeps its own ChunkSection UBO.
   - Files: `gpu/GpuFoliageRenderer.java`, `mixin/LevelPassMixin.java`
   - Links: draws from level-pass; uses sh-modern; follows terrain-shader; follows sodium-shader
