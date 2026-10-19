@@ -65,8 +65,6 @@ Biomes O' Plenty, Serene Shrubbery, No Man's Land, Farmer's Delight, Snow! Real 
       OnTopHelper, the plant is lowered through BlockState.getOffset, which the mesher already reads. Read from the
       jars, never seen in game: a "not a version the GPU renderer knows" warning is logged for nothing, and the sway
       is weighed from half a block too high, so a plant on a slab likely sways less. 1.21.11 to 26.3 are fine.
-- [ ] Polylights still to test: 26.2 (needs Fabric API 0.158 locally), the terrain-splice path without Sodium on
-      26.1.2/26.2, and 1.21.1 with Sodium. 26.1.2 with Sodium and 1.21.1 without Sodium were tested 2026-10-18.
 - [ ] Ecliptic Seasons -- Baronman: snow-covered plants, as Snow! Real Magic has. On the list.
 - [ ] Nvidium -- on the author's list; jars for 1.21.1 to 26.3 are in `versions/`. Deferred by the user until after
       2.2.0. The 26.3 issue reporter (cbbg crash) runs it and sees stutter.
@@ -120,3 +118,8 @@ Biomes O' Plenty, Serene Shrubbery, No Man's Land, Farmer's Delight, Snow! Real 
 - Blacklist and whitelist, vines and glow lichen included -- Baronman, Mhikusess.
 - Farmer's Delight plants -- Unsandboxed_Dev (never answered on the page).
 - cbbg crash on 26.3 when a shader pack is turned off -- GitHub issue, fixed in e3491eb for 2.2.0.
+- VulkanMod: GPU foliage vanished while a whole region was in view (over 65536 vertices in one draw, VulkanMod's
+  16-bit index buffer) -- 66f49c0, for 2.2.1.
+- Polytone's coloured lights (Polylights) on 26.1.2, 26.2 and 1.21.1, and its moved shadow map -- 12d68af and
+  d66ac6e, tested 2026-10-18. On 1.21.1 with Sodium cut-out cross plants cast no shadow into Polytone's map,
+  vanilla's torches included: Polytone 5.1.3's own.

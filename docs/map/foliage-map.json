@@ -1137,7 +1137,8 @@
    "summary": "Draws the GPU foliage into Polytone's shadow map once its terrain is in it, before the entities. Targets by name, not compiled against Polytone; the method is render or renderShadowMap depending on the release.",
    "details": [
     "Config is required:false and gated by PolytoneMixinPlugin; excluded from the jar on 1.20.1 and 26.3.",
-    "Polytone 5.1.3 (1.21.1), 6.8.1 (26.1.2) and 6.9.1 (26.2) moved the map to content.shaders.shadow: a static ShadowCasterRenderer.render is handed the ShadowMap, and ShadowMapSettings moved with it. ShadowCasterRendererMixin injects at the same renderEntities() call, takes the map as a @Coerce Object argument and reads shadowMatrix(), colorTextureView() and depthTextureView() by name. Both mixins are listed; each applies where its class exists."
+    "Polytone 5.1.3 (1.21.1), 6.8.1 (26.1.2) and 6.9.1 (26.2) moved the map to content.shaders.shadow: a static ShadowCasterRenderer.render is handed the ShadowMap, and ShadowMapSettings moved with it. ShadowCasterRendererMixin injects at the same renderEntities() call, takes the map as a @Coerce Object argument and reads shadowMatrix(), colorTextureView() and depthTextureView() by name. Both mixins are listed; each applies where its class exists.",
+    "Tested 2026-10-18 on 26.1.2, 26.2 and 1.21.1. On 1.21.1 with Sodium no cut-out cross plant casts into the map, the game's torches and the foliage's grass alike, while leaves and full blocks do: Polytone 5.1.3's own, since the foliage is drawn into the shadow framebuffer every frame."
    ],
    "fileInfo": {
     "mixin/polytone/ShadowMapRendererMixin.java": {
@@ -1174,7 +1175,8 @@
     "Polytone writes the face a vertex looks along above its light level (bits 8-10) in every BufferBuilder built in DefaultVertexFormat.BLOCK, the renderer's mesh among them: the Sodium copy and foliage.vsh keep the light to its own eight bits, and the Sodium copy hands the face on in _material_params bits 5-7 as Sodium's mesh carries it. Before that the clamp put the block light at its top: foliage looked unaffected by light.",
     "Polytone's code declares the game's Globals block under the game's names; the copy declares it under mc2_ names and a program may not hold it twice (link error, silent fall back to foliage.vsh). shareGlobals moves the copy's block up in place of Polytone's and #defines the game's names to the copy's, left defined since Polytone's macros read them where used.",
     "Without Sodium the terrain splice reads the terrain shader from the ShaderManager, already rewritten by Polytone (<=26.2). 1.21.1 (Polytone 5.1.3) patches every shader through GlslPreprocessor that reads minecraft_sample_lightmap(Sampler2, UV2): foliage_legacy.vsh is tinted with no work of ours. 26.3's Polytone has no coloured lights yet; 1.21.11's is abandoned.",
-    "Polytone 6.8.1/6.9.1 need Fabric Loader 0.19.5's MixinExtras in dev (crash in BaseSpawner with 0.19.2), and 6.9.1 Fabric API 0.158: local bumps only."
+    "Tested 2026-10-18: 26.1.2 with and without Sodium, 26.2 with Sodium, 1.21.1 with and without Sodium.",
+    "Polytone 6.8.1/6.9.1 need Fabric Loader 0.19.5's MixinExtras in dev (crash in BaseSpawner with 0.19.2), and 6.9.1 Fabric API 0.158 (0.160 with Architectury): local bumps only."
    ],
    "fileInfo": {
     "gpu/PolytoneColoredLight.java": {
