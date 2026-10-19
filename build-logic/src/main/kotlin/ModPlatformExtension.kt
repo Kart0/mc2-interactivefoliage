@@ -56,12 +56,15 @@ abstract class Dependency @Inject constructor(val name: String) {
 	abstract val fabricLikeVersionRange: Property<String>
 	abstract val forgeLikeVersionRange: Property<String>
 	abstract val environment: Property<String>
+	/** Forge and NeoForge: whether this mod loads BEFORE or AFTER the dependency, or NONE. */
+	abstract val ordering: Property<String>
 
 	init {
 		modid.convention(name)
 		fabricLikeVersionRange.convention("*")
 		forgeLikeVersionRange.convention("(,]")
 		environment.convention("both")
+		ordering.convention("NONE")
 	}
 
 	fun slug(slug: String) {

@@ -116,7 +116,8 @@ sealed class Loader(val id: String) {
 							side = it.environment.get().uppercase(Locale.getDefault()),
 							versionRange = it.forgeLikeVersionRange.get(),
 							mandatory = type == "required",
-							type = type
+							type = type,
+							ordering = it.ordering.get()
 						)
 					)
 				}

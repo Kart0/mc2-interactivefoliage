@@ -17,9 +17,13 @@ platform {
 		required("neoforge") {
 			forgeLikeVersionRange.set("[1,)")
 		}
+		// After Sway: each mod's model hooks run in load order, and the model wrapper that leaves the GPU renderer's
+		// foliage out of the chunk mesh has to go around Sway's. Left to chance, Forge's order changes with the number of
+		// mods installed, and the plants were drawn twice.
 		required("sway") {
 			slug("sway")
 			forgeLikeVersionRange.set("[1,)")
+			ordering.set("AFTER")
 		}
 	}
 }

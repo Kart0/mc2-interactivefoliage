@@ -62,7 +62,8 @@ data class ForgeDependency(
 	val side: String,
 	val versionRange: String,
 	val mandatory: Boolean,
-	val type: String
+	val type: String,
+	val ordering: String
 )
 
 @Serializable

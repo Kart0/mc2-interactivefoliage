@@ -94,10 +94,7 @@ Biomes O' Plenty, Serene Shrubbery, No Man's Land, Farmer's Delight, Snow! Real 
       2.1.1). No crash report from any. RAPTORE says turning the wind off stops them, which is the signature of the
       bug above: most likely the same one, fixed in 2.1.1. Not proven without a report; ask them to retry on 2.1.1
       or newer. FineARC gave a mod list (NeoForge, with Create Aeronautics, which runs on Sable).
-- [ ] Double plant on 1.20.1 Forge -- Beybok: a moving plant drawn over a still one, in a large modpack. Asked to
-      bisect the modpack; no news.
 - [ ] Dark waving foliage on 1.20.1 Forge -- Mysticpasta1: no shader or resource pack, a 1900-mod pack. No diagnosis.
-- [ ] Mods stop working past 81 mods -- mitzukishogunumu: never gave version or loader. Likely not ours.
 - [ ] Stutter on 26.3 with Nvidium, C2ME and AsyncParticles -- GitHub issue, same report as the cbbg crash. Ask for a
       spark profile on 2.2.0.
 
@@ -147,3 +144,7 @@ Biomes O' Plenty, Serene Shrubbery, No Man's Land, Farmer's Delight, Snow! Real 
   in the chunk mesh, still, while a pack is loaded (tested 2026-10-18). Updating Iris brings the sway back.
 - Crash on 1.20.1 Forge with Oculus when a pack's settings change -- MythicalMontie (Euphoria Patches,
   mclo.gs/f0vUufs): the shadow pass drew with the programs of the destroyed pack. Tested 2026-10-18. Not answered.
+- Plants drawn twice, one moving and one still, on Forge (and NeoForge) depending on the number of mods -- GitHub
+  issue 34 (ItsNonya, over 42 mods), Beybok (large modpack), and likely mitzukishogunumu ("past 81 mods"). Forge
+  orders the mods' model hooks by load order, which flipped with the mod count; the mod now loads after Sway.
+  Reproduced and tested 2026-10-19.

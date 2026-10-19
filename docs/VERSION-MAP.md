@@ -122,6 +122,7 @@ Takes the near foliage out of the chunk mesh, and hands it back and forth withou
   - Links: registered by neoforge-hooks; answers sodium
 - **ForgeFoliageModel** (<1.21.1, forge): Forge 1.20.1: decides in getModelData (vanilla and Embeddium call it for every block) and carries the answer in model data to getQuads. Sits outside Sway's wrapper.
   - Embeddium hands getModelData a generated WorldSliceLocal, not WorldSlice.
+  - Pitfall: It must wrap Sway's wrapper, so its ModifyBakingResult listener must run after Sway's. Each mod has its own mod bus: EventPriority orders listeners within one mod only, and across mods the load order decides. Forge breaks ties in that order through a HashMap, so it flipped as the mod count crossed ~48 or ~96 entries: Sway then wrapped this, never asked it, and every plant was drawn twice, a still one by the chunk mesh (GitHub issue 34; Beybok, mitzukishogunumu). Fixed by depending on Sway with ordering AFTER (2.2.1), on NeoForge as well. Reproduced in dev with ordering BEFORE.
   - Files: `platform/forge/ForgeFoliageModel.java`, `platform/forge/ForgeFoliageHooks.java`
   - Links: registered by forge-hooks; answers embeddium
 - **Mesh swap handover**: The GPU takes or gives back a section only once the chunk mesh that matches it is on screen, so plants never vanish or double for a frame.
@@ -422,6 +423,7 @@ Stonecutter, build-logic, access wideners, mixin configs and the dev-run traps.
   - Links: drives build-logic
 - **build-logic**: Loader.kt writes fabric.mod.json / neoforge.mods.toml and their mixin lists per version; ModPlatformPlugin excludes resources per version (shader sets, iris/polytone/pass mixin configs); Context.shaderPackSupport mirrors the iris constant. The NeoForge manifest names an access transformer where its file is not empty (26.3), and from 26.2 an iconFile, and a bannerFile once assets/<modid>/banner.png exists, in place of the logoFile those versions warn about.
   - Pitfall: The main mixins.json stays hand-written and empty: FletchingTable list generation once swept Iris/Polytone mixins into it. Check the built jar's mixin JSONs after touching mixin or build config.
+  - Pitfall: A dependency's ordering (BEFORE/AFTER/NONE) is written to mods.toml and neoforge.mods.toml; Sway is required with ordering AFTER on Forge and NeoForge, see ForgeFoliageModel.
   - Links: lists mixin-configs; applies shader-sets; applies access
 - **Mixin configs**: mixins.json (empty), gpu.mixins.json (>=1.20.1), iris.mixins.json (where shader pack support is compiled; IrisMixinPlugin), polytone.mixins.json (1.21.1-26.2; required:false), pass.mixins.json (26.3+), snowrealmagic.mixins.json (Forge; required:false), snowrealmagic_neoforge.mixins.json (NeoForge before 1.21.11; required:false), blockgetter.mixins.json (NeoForge 26.1.2+; BlockGetterMixinPlugin, required:false).
   - Links: gates iris-shaders; gates polytone-shadow; lists level-pass; lists (Forge) srm-forge-indigo; lists (NeoForge) srm-neoforge-render; lists (NeoForge 26.1.2+) blockgetter-fix
