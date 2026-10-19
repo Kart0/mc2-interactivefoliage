@@ -197,8 +197,9 @@ layout(std140) uniform FoliageInteraction {
     vec4 mc2_CellForce[MC2_MAX_CELLS];
 };
 
+// The light is its own eight bits: Polytone's coloured lights write the face above it in the game's block format.
 ivec2 mc2_light(ivec2 uv) {
-    return uv;
+    return uv & 255;
 }
 #endif
 

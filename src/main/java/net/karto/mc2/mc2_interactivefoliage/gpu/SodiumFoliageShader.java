@@ -283,12 +283,14 @@ final class SodiumFoliageShader {
 			    _vert_color = Color;
 			    _vert_tex_diffuse_coord = UV0;
 			    _vert_tex_diffuse_coord_bias = vec2(0.0);
-			    // Sodium keeps each light level half a texel inside the light map.
-			    _vert_tex_light_coord = vec2(clamp(UV2 + 8, 8, 248)) / 256.0;
+			    // Sodium keeps each light level half a texel inside the light map. The light is its own eight bits: Polytone's
+			    // coloured lights write the face above it, which is handed on below where Sodium's mesh carries it.
+			    _vert_tex_light_coord = vec2(clamp(ivec2(UV2.x & 255, UV2.y & 255) + 8, 8, 248)) / 256.0;
 			    // The only draw, so the first chunk's slot in Sodium's per-chunk data.
 			    _draw_id = 0u;
 			    // Sodium's cutout material: mipmapped, and cut out below half alpha.
 			    _material_params = 5u;
+			    _material_params |= uint((UV2.x >> 8) & 7) << 5u;
 			}
 			""";
 
@@ -326,7 +328,11 @@ final class SodiumFoliageShader {
 		if (!cutout && !id.equals(SHADER_OPAQUE)) {
 			return Minecraft.getInstance().getShaderManager().getShader(id, type);
 		}
-		String built = type == ShaderType.VERTEX ? vertex(cutout) : fragment(cutout);
+		String built = type == ShaderType.VERTEX
+				? PolytoneColoredLight.tintSodiumVertex(vertex(cutout),
+						Minecraft.getInstance().getShaderManager().getShader(TerrainFoliageShader.TERRAIN, ShaderType.VERTEX),
+						GLOBALS_BLOCK)
+				: fragment(cutout);
 		if (built == null) {
 			ModTemplate.LOGGER.warn("Sodium's chunk shaders in use can't be read by the GPU foliage renderer; foliage near "
 					+ "the player is drawn with the terrain's shaders, which may not match a resource pack's look");
