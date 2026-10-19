@@ -4,14 +4,31 @@ What players have asked for and what is still owed, so nothing gets lost between
 the CurseForge page as of 2026-10-12, the GitHub issues, and what was deferred while working. Tick an item off in the
 commit that finishes it, and add the date when the list is read against the comments again.
 
-## Before 2.2.0 ships
+## Where things stand
 
-- [ ] `deps.fabric-loader` back to `0.19.2` in `stonecutter.properties.toml`; decide whether the Fabric API bumps for
-      26.2 and 26.3 ship.
-- [ ] Smoke tests without VulkanMod or Sable, since shared shaders and the legacy draw changed after 2.1.1:
-      26.3, 1.21.11, 1.21.1 Fabric, 1.20.1.
-- [ ] Sable on Fabric in a launcher (only NeoForge was tested).
-- [x] Read MrKiddo's two Particle Rain logs (see Bugs): our own bug, already fixed in 2.1.1.
+2.2.0 was released on 2026-10-13 (tag `2.2.0`, on `main`; Modrinth and CurseForge): VulkanMod and Beryl on 1.21.1,
+1.21.11 and 26.1.2, Sable's sub-levels on 1.21.1, the cbbg crash on 26.3, and the light and relight work. Fabric
+Loader stays at 0.19.2 and the Fabric API floors as in 2.1.1; local bumps for test mods never ship.
+
+## Next, in order
+
+1. **Answer the players** (nothing to code):
+   - MrKiddo and the "random crashes" reports: the rain's NullPointerException was fixed in 2.1.1; ask them to update.
+   - The two cbbg reports on 26.3 (the GitHub issue, and the CurseForge user with Voxy and Polytone): fixed in 2.2.0.
+     Ask the first one for a spark profile if the stutter is still there.
+   - Unsandboxed_Dev: Farmer's Delight is supported.
+2. **A small drop of plants** (2.2.1): Regions Unexplored first, promised twice, then Oh The Biomes We've Gone,
+   Sizeable Foliage, Project: Vibrant Journeys, Cobblemon, Immersive Weathering. Block registration only; one mod can
+   go out at a time. Read the comments again first: new requests will have come in with 2.2.0.
+3. **Chunks Fade In and Chunk Animator**: one layer for both, the foliage following the chunk's animation. Promised
+   for "the next update" and asked for by the user.
+4. **Nvidium**: the jars are in `versions/`. Research first; it is the likely cause of the stutter reported on 26.3.
+5. **Colorful Lighting**, then **dynamic lights on 1.20.1 Forge**, then **Ecliptic Seasons**.
+6. What is left under "Deferred by us".
+
+Still to confirm from 2.2.0: Sable on Fabric in a launcher (only NeoForge was tested by hand), and that the test
+instances are back as wanted -- 1.21.1 Fabric and 1.21.11 Fabric were left set up for VulkanMod and Beryl (Sodium,
+Iris and Cubes Without Borders renamed to `.disabled`), and the cbbg and Nvidium jars lie untracked in `versions/`.
 
 ## Small drops: plants of other mods
 

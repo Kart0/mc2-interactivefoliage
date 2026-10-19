@@ -4375,29 +4375,41 @@ public final class GpuFoliageRenderer {
 				origin.getX() + SECTION_SIZE - 1, origin.getY() + SECTION_SIZE - 1, origin.getZ() + SECTION_SIZE - 1);
 	}
 
+	/**
+	 * The most vertices one draw takes: what sixteen-bit indices can count. VulkanMod has the game's shared index buffer
+	 * always made of sixteen-bit indices, however many vertices it is asked for, so a longer draw counted past the end
+	 * and the foliage went missing -- all of it, while a region wholly in view was drawn as one run. A longer run is
+	 * drawn in pieces this long, each from where the last stopped; a whole number of quads.
+	 */
+	private static final int MOST_VERTICES_A_DRAW = 65536;
+
 	private static void addDraw(int regionIndex, int firstVertex, int vertexCount) {
 		// A run of sections holding only solid leaves has nothing cut out to draw, and the other way round.
-		if (vertexCount <= 0) {
-			return;
+		while (vertexCount > 0) {
+			int piece = Math.min(vertexCount, MOST_VERTICES_A_DRAW);
+			if (drawsSize + 3 > draws.length) {
+				draws = Arrays.copyOf(draws, draws.length * 2);
+			}
+			draws[drawsSize++] = regionIndex;
+			draws[drawsSize++] = firstVertex;
+			draws[drawsSize++] = piece;
+			firstVertex += piece;
+			vertexCount -= piece;
 		}
-		if (drawsSize + 3 > draws.length) {
-			draws = Arrays.copyOf(draws, draws.length * 2);
-		}
-		draws[drawsSize++] = regionIndex;
-		draws[drawsSize++] = firstVertex;
-		draws[drawsSize++] = vertexCount;
 	}
 
 	private static void addOpaqueDraw(int regionIndex, int firstVertex, int vertexCount) {
-		if (vertexCount <= 0) {
-			return;
+		while (vertexCount > 0) {
+			int piece = Math.min(vertexCount, MOST_VERTICES_A_DRAW);
+			if (opaqueDrawsSize + 3 > opaqueDraws.length) {
+				opaqueDraws = Arrays.copyOf(opaqueDraws, opaqueDraws.length * 2);
+			}
+			opaqueDraws[opaqueDrawsSize++] = regionIndex;
+			opaqueDraws[opaqueDrawsSize++] = firstVertex;
+			opaqueDraws[opaqueDrawsSize++] = piece;
+			firstVertex += piece;
+			vertexCount -= piece;
 		}
-		if (opaqueDrawsSize + 3 > opaqueDraws.length) {
-			opaqueDraws = Arrays.copyOf(opaqueDraws, opaqueDraws.length * 2);
-		}
-		opaqueDraws[opaqueDrawsSize++] = regionIndex;
-		opaqueDraws[opaqueDrawsSize++] = firstVertex;
-		opaqueDraws[opaqueDrawsSize++] = vertexCount;
 	}
 
 	private static int indexCountFor(int vertexCount) {

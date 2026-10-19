@@ -295,7 +295,8 @@
        "Its shader converter (0.6.8's GLSLParser; the repository's dev branch has since replaced it) takes no arrays, structs or bools in a uniform block, so under the define MC2_NO_UNIFORM_ARRAYS foliage.vsh lays each vec4[128] out as 32 mat4 with the same bytes. It also drops the 'out' of a function's parameter, leaving the value undefined: no function in sway.glsl or the legacy vertex shaders hands a value back through a parameter. That one put every plant half a block off in height per block of north-south distance to the camera.",
        "It overwrites VertexConsumer.putBulkData and packs the colour with red and blue changed over, right for its own buffers only; the 1.21.1-1.21.11 vertex writer changes them back.",
        "It writes a non-mappable buffer through a staging copy, once a frame before the frame's draws run: such a buffer written twice in a frame shows every draw its last write.",
-       "Read the jar, not GitHub: decompile it and diff the converter's output against its input for every shader, compiling is not enough."
+       "Read the jar, not GitHub: decompile it and diff the converter's output against its input for every shader, compiling is not enough.",
+       "It overwrites VertexFormat.IndexType.least to answer SHORT always, so the game's shared sequential index buffer is sixteen-bit whatever it is asked for. A draw of more than 65536 vertices -- a region of birch leaves wholly in view, drawn as one run -- counted past the end and every GPU-drawn plant vanished for that view (2.2.0 report, reproduced on 1.21.11 with 0.6.8). addDraw/addOpaqueDraw split any run into pieces of at most 65536 vertices (MOST_VERTICES_A_DRAW), on every version."
      ]},
 
     {"id": "vulkanmod", "label": "VulkanMod", "group": "external", "kind": "mod", "loaders": ["fabric"], "versions": ["<26.2"],

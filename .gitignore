@@ -58,3 +58,6 @@ bin/
 devmods/
 versions/*/mods/
 versions/* mods/
+
+# Player reports, logs and screenshots: local only
+issues/
