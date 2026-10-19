@@ -273,6 +273,8 @@ Iris and Oculus: the foliage drawn through a shader pack's own programs, swaying
 - **Pack shadow map**: Plants cast swaying shadows. <26.1.2: ShadowRendererMixin at the point a callback would be. 26.1.2+: IrisApi.registerShadowRenderCallback. 26.3: plus assignPipelineShadow and drawIntoShadowMap in a pass of the mod's own.
   - 26.2: a pre-flipped depth pipeline (Iris only flips depth for pipelines it knows).
   - 26.3: Iris flips depth and disables cull for every pipeline in the shadow pass; the callback runs with no pass open, before addMainPass; fog must be bound by hand. Solid leaves are drawn there with the solid shadow copy.
+  - Iris 1.11.2 on 26.2 has no registerShadowRenderCallback (NoClassDefFoundError, GitHub issue 33): the LinkageError is caught, and with irisTooOld set ready() says no, so the foliage stays in the chunk mesh while a pack is loaded rather than sway with no shadow.
+  - The shadow pass runs before the terrain, where ready() builds the programs: in the first frame of a pack loaded again (its settings changed) the programs are the destroyed pack's (Oculus: 'Tried to use a destroyed GlResource'), so drawShadow draws only while Iris's pipeline is the programs' owner.
   - Files: `mixin/iris/ShadowRendererMixin.java`, `gpu/IrisFoliageShaders.java`
 - **IrisVertexExtension**: Keeps Iris from widening the mod's BLOCK-format meshing buffer when the mod meshes for its own pipeline (ImmediateState.skipExtension), and lets it while the mod meshes for a pack, raising ImmediateState.isRenderingLevel itself meanwhile: Iris widens only under it, and from 1.11.7 no longer holds it while a frame is extracted, which is when 26.3 meshes. 1.20.1's Iris/Oculus has no such switch.
   - Files: `gpu/IrisVertexExtension.java`

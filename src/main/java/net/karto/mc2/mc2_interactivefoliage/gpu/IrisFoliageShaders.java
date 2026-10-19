@@ -138,6 +138,12 @@ public final class IrisFoliageShaders {
 	private static IrisCompat.ShadowDraw foliageShadowDraw;
 	//? >=26.1.2 {
 	private static boolean shadowCallbackRegistered;
+	/**
+	 * Set when the Iris installed lacks what the renderer hands its foliage over to it by -- Iris 1.11.2 on 26.2 has no
+	 * shadow callback yet -- and the foliage is then left to the chunk mesh while a pack is loaded, as where the pack's
+	 * programs could not be built.
+	 */
+	private static boolean irisTooOld;
 	//?}
 	//? >=1.21.11 {
 	/**
@@ -221,11 +227,18 @@ public final class IrisFoliageShaders {
 		//? >=26.1.2 {
 		if (!shadowCallbackRegistered) {
 			shadowCallbackRegistered = true;
-			// Called by Iris in its shadow pass once the terrain is in the shadow map, with the sun's matrices and the camera
-			// it rendered from.
-			IrisApi.getInstance().registerShadowRenderCallback(
-					(modelView, projection, cameraX, cameraY, cameraZ, tickDelta) ->
-							drawShadow(modelView, projection, cameraX, cameraY, cameraZ));
+			try {
+				// Called by Iris in its shadow pass once the terrain is in the shadow map, with the sun's matrices and the
+				// camera it rendered from.
+				IrisApi.getInstance().registerShadowRenderCallback(
+						(modelView, projection, cameraX, cameraY, cameraZ, tickDelta) ->
+								drawShadow(modelView, projection, cameraX, cameraY, cameraZ));
+			} catch (LinkageError e) {
+				irisTooOld = true;
+				ModTemplate.LOGGER.warn("This Iris is older than the GPU renderer needs to draw foliage through shader packs; "
+						+ "while one is loaded, foliage near the player is left to the chunk mesh and does not sway. Update Iris "
+						+ "for it to sway: {}", e.toString());
+			}
 		}
 		//?}
 	}
@@ -262,11 +275,14 @@ public final class IrisFoliageShaders {
 	/**
 	 * Draws the foliage into the shadow map, in the middle of Iris's shadow pass once the terrain is in it. From 26.1.2
 	 * Iris calls this through its shadow render callback; before, it has none, and ShadowRendererMixin calls it at the same
-	 * point.
+	 * point. The shadow pass comes before the terrain, where the programs are built: in the first frame of a pack loaded
+	 * again -- its settings changed -- the programs are still the last pack's, whose images Iris has destroyed, and
+	 * nothing is drawn.
 	 */
 	public static void drawShadow(org.joml.Matrix4f modelView, org.joml.Matrix4f projection,
 			double cameraX, double cameraY, double cameraZ) {
-		if (owner != null && shadow != null && foliageShadowDraw != null) {
+		if (owner != null && shadow != null && foliageShadowDraw != null
+				&& Iris.getPipelineManager().getPipelineNullable() == owner) {
 			foliageShadowDraw.draw(modelView, projection, cameraX, cameraY, cameraZ);
 		}
 	}
@@ -286,6 +302,11 @@ public final class IrisFoliageShaders {
 	 * is ever used, and building here rather than as it loads never depends on which comes first.
 	 */
 	static boolean ready() {
+		//? >=26.1.2 {
+		if (irisTooOld) {
+			return false;
+		}
+		//?}
 		if (!configured || !(Iris.getPipelineManager().getPipelineNullable() instanceof IrisRenderingPipeline current)) {
 			// The pack was turned off: its programs go with it.
 			if (owner != null) {

@@ -1,7 +1,7 @@
 # Pending work
 
 What players have asked for and what is still owed, so nothing gets lost between versions. Source: the 82 comments on
-the CurseForge page as of 2026-10-12, the GitHub issues, and what was deferred while working. Tick an item off in the
+the CurseForge page as of 2026-10-12 (read again 2026-10-18), the GitHub issues, and what was deferred while working. Tick an item off in the
 commit that finishes it, and add the date when the list is read against the comments again.
 
 ## Where things stand
@@ -46,6 +46,10 @@ Biomes O' Plenty, Serene Shrubbery, No Man's Land, Farmer's Delight, Snow! Real 
 - [ ] Immersive Weathering -- jaydonthewarrior. Not answered yet.
   https://www.curseforge.com/minecraft/mc-mods/immersive-weathering-forge
 - [ ] Cobblemon -- asked for by the user, 2026-10-12.
+- [ ] Nature's Spirit -- MythicalMontie, 2026-10-15 (answered "already in the list").
+  https://www.curseforge.com/minecraft/mc-mods/natures-spirit
+- [ ] Neapolitan, its strawberry bushes -- RedBlueLion, GitHub issue 31. Also asks how to make a block sway through
+  the Sway API.
 - [ ] Modded foliage in general -- StayStrange, Mysticpasta1. Ask which mods when they come back.
 
 ## Compatibility layers
@@ -65,7 +69,10 @@ Biomes O' Plenty, Serene Shrubbery, No Man's Land, Farmer's Delight, Snow! Real 
       OnTopHelper, the plant is lowered through BlockState.getOffset, which the mesher already reads. Read from the
       jars, never seen in game: a "not a version the GPU renderer knows" warning is logged for nothing, and the sway
       is weighed from half a block too high, so a plant on a slab likely sways less. 1.21.11 to 26.3 are fine.
-- [ ] Ecliptic Seasons -- Baronman: snow-covered plants, as Snow! Real Magic has. On the list.
+- [ ] Ecliptic Seasons -- Baronman, and Dubk (2026-10-18, not answered): snow-covered plants, as Snow! Real Magic
+      has; the leaves sway under snow that does not. Dubk also runs Living Wind, which speeds the leaves up in rain.
+- [ ] MoreCulling and CullFewerLeaves -- 123happily, GitHub issue 27: the leaves the renderer waves are shaded
+      otherwise than the culled ones around, so the edge of the area shows as it moves between chunks.
 - [ ] Nvidium -- on the author's list; jars for 1.21.1 to 26.3 are in `versions/`. Deferred by the user until after
       2.2.0. The 26.3 issue reporter (cbbg crash) runs it and sees stutter.
 - [ ] Luxium -- on the author's list.
@@ -80,6 +87,9 @@ Biomes O' Plenty, Serene Shrubbery, No Man's Land, Farmer's Delight, Snow! Real 
       `isVisible` from the shadow callback just before. Rain's shelter check walked the layout last uploaded, which
       could name a slot emptied since; it only runs while it rains with the weather wind on, hence "wind off fixes
       it". Fixed by 74e8cce, which is in 2.1.1. Owed: tell him to update, and tick this when he confirms.
+- [ ] GitHub issues to close: 26 and 28 (rain crash, fixed in 2.1.1), 18 (Sable, 2.2.0), 33 (2.2.1), 11 (1.21.10 was
+      never a supported version). Issue 23 (NeoForge 1.21.1, on 2.0.0 with Particle Rain and AeroWeather): ask to
+      retry on 2.2.1. Issue 20: the licence differs between Modrinth, GitHub and fabric.mod.json; the user decides.
 - [ ] Random crashes since 2.0 -- emurp, lev08962, imessentiallyalex, FineARC, Quantum2001 (24-27 Sep, before
       2.1.1). No crash report from any. RAPTORE says turning the wind off stops them, which is the signature of the
       bug above: most likely the same one, fixed in 2.1.1. Not proven without a report; ask them to retry on 2.1.1
@@ -91,7 +101,17 @@ Biomes O' Plenty, Serene Shrubbery, No Man's Land, Farmer's Delight, Snow! Real 
 - [ ] Stutter on 26.3 with Nvidium, C2ME and AsyncParticles -- GitHub issue, same report as the cbbg crash. Ask for a
       spark profile on 2.2.0.
 
+- [ ] Leaves and foliage half transparent with Iris and Complementary, 26.2 and 26.3 -- strolbor, GitHub issue 30,
+      confirmed by two more. Gone without the mod. Not looked at yet.
+- [ ] Grass and ferns invisible near the player on PojavLauncher (Android, 26.3 Fabric with Sodium) -- wihxjie,
+      GitHub issue 29. Flowers are fine. Likely the mobile GL driver; not looked at.
+- [ ] GPU mode: plants do not react to the player -- axtrough and AkselGlyholt, GitHub issue 22, a modlist
+      (pastebin). The mod behind it not found.
+
 ## Features asked for
+
+- [ ] Waving intensity below 0.5 -- itsMarkiS, GitHub issue 32: wants it subtler. The minimum is
+      FoliageSettings.MIN_WAVING_INTENSITY and the screen's MIN_INTENSITY.
 
 - [ ] Blacklist by block state -- Baronman: for example snowy grass still while plain grass waves.
 - [ ] Interactive leaves -- Bora, for mods like Passable Foliage. Answered "probably not".
@@ -123,3 +143,7 @@ Biomes O' Plenty, Serene Shrubbery, No Man's Land, Farmer's Delight, Snow! Real 
 - Polytone's coloured lights (Polylights) on 26.1.2, 26.2 and 1.21.1, and its moved shadow map -- 12d68af and
   d66ac6e, tested 2026-10-18. On 1.21.1 with Sodium cut-out cross plants cast no shadow into Polytone's map,
   vanilla's torches included: Polytone 5.1.3's own.
+- Crash on 26.2 with Iris 1.11.2 (GitHub issue 33), whose shadow callback is newer: with that Iris the foliage stays
+  in the chunk mesh, still, while a pack is loaded (tested 2026-10-18). Updating Iris brings the sway back.
+- Crash on 1.20.1 Forge with Oculus when a pack's settings change -- MythicalMontie (Euphoria Patches,
+  mclo.gs/f0vUufs): the shadow pass drew with the programs of the destroyed pack. Tested 2026-10-18. Not answered.
