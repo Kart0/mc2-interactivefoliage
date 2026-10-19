@@ -65,9 +65,6 @@ Biomes O' Plenty, Serene Shrubbery, No Man's Land, Farmer's Delight, Snow! Real 
       OnTopHelper, the plant is lowered through BlockState.getOffset, which the mesher already reads. Read from the
       jars, never seen in game: a "not a version the GPU renderer knows" warning is logged for nothing, and the sway
       is weighed from half a block too high, so a plant on a slab likely sways less. 1.21.11 to 26.3 are fine.
-- [ ] Polytone shadow map with Polytone 6.8.1 (26.1.2) and 6.9.1 (26.2): ShadowMapRendererMixin no longer applies,
-      its target net.mehvahdjukaar.polytone.content.shaders.ShadowMapRenderer is gone (warning in the log). Find where
-      the new Polytone draws its shadow map and hook there again.
 - [ ] Polylights still to test: 26.2 (needs Fabric API 0.158 locally), the terrain-splice path without Sodium on
       26.1.2/26.2, and 1.21.1 with Sodium. 26.1.2 with Sodium and 1.21.1 without Sodium were tested 2026-10-18.
 - [ ] Ecliptic Seasons -- Baronman: snow-covered plants, as Snow! Real Magic has. On the list.

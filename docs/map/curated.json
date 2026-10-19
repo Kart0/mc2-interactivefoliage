@@ -278,9 +278,10 @@
      "summary": "Iris on Forge 1.20.1, mod id oculus (Forge ignores the iris id it provides). Same code as Iris 1.7."},
 
     {"id": "polytone-shadow", "label": "ShadowMapRendererMixin", "group": "polytone", "kind": "hook", "versions": [">=1.21.1", "<26.3"],
-     "files": ["mixin/polytone/ShadowMapRendererMixin.java", "mixin/polytone/PolytoneMixinPlugin.java"],
+     "files": ["mixin/polytone/ShadowMapRendererMixin.java", "mixin/polytone/ShadowCasterRendererMixin.java", "mixin/polytone/PolytoneMixinPlugin.java"],
      "summary": "Draws the GPU foliage into Polytone's shadow map once its terrain is in it, before the entities. Targets by name, not compiled against Polytone; the method is render or renderShadowMap depending on the release.",
-     "details": ["Config is required:false and gated by PolytoneMixinPlugin; excluded from the jar on 1.20.1 and 26.3."]},
+     "details": ["Config is required:false and gated by PolytoneMixinPlugin; excluded from the jar on 1.20.1 and 26.3.",
+       "Polytone 5.1.3 (1.21.1), 6.8.1 (26.1.2) and 6.9.1 (26.2) moved the map to content.shaders.shadow: a static ShadowCasterRenderer.render is handed the ShadowMap, and ShadowMapSettings moved with it. ShadowCasterRendererMixin injects at the same renderEntities() call, takes the map as a @Coerce Object argument and reads shadowMatrix(), colorTextureView() and depthTextureView() by name. Both mixins are listed; each applies where its class exists."]},
 
     {"id": "polytone-lights", "label": "PolytoneColoredLight", "group": "polytone", "kind": "compat", "versions": [">=26.1.2", "<26.3"],
      "files": ["gpu/PolytoneColoredLight.java"],

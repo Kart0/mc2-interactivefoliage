@@ -283,7 +283,8 @@ The foliage in Polytone's shadow map.
 
 - **ShadowMapRendererMixin** (>=1.21.1 <26.3): Draws the GPU foliage into Polytone's shadow map once its terrain is in it, before the entities. Targets by name, not compiled against Polytone; the method is render or renderShadowMap depending on the release.
   - Config is required:false and gated by PolytoneMixinPlugin; excluded from the jar on 1.20.1 and 26.3.
-  - Files: `mixin/polytone/ShadowMapRendererMixin.java`, `mixin/polytone/PolytoneMixinPlugin.java`
+  - Polytone 5.1.3 (1.21.1), 6.8.1 (26.1.2) and 6.9.1 (26.2) moved the map to content.shaders.shadow: a static ShadowCasterRenderer.render is handed the ShadowMap, and ShadowMapSettings moved with it. ShadowCasterRendererMixin injects at the same renderEntities() call, takes the map as a @Coerce Object argument and reads shadowMatrix(), colorTextureView() and depthTextureView() by name. Both mixins are listed; each applies where its class exists.
+  - Files: `mixin/polytone/ShadowMapRendererMixin.java`, `mixin/polytone/ShadowCasterRendererMixin.java`, `mixin/polytone/PolytoneMixinPlugin.java`
   - Links: calls drawPolytoneShadow renderer; hooks polytone
 - **PolytoneColoredLight** (>=26.1.2 <26.3): Polytone's coloured lights (Polylights: 6.8 on 26.1.2, 6.9 on 26.2) on the GPU foliage. Polytone rewrites the game's and Sodium's chunk vertex shaders as they load, and binds its light volume to any GL program that reads it as the program is set on a pass (RenderPassMixin), whoever built it. The Sodium copy is compiled by the renderer and never loads that way, so it is handed to Polytone's public LightShaderPatcher.patchSodiumChunkShader, by name, while the game's terrain shader shows Polytone's rewrite (_polyColoredLightmap).
   - Polytone writes the face a vertex looks along above its light level (bits 8-10) in every BufferBuilder built in DefaultVertexFormat.BLOCK, the renderer's mesh among them: the Sodium copy and foliage.vsh keep the light to its own eight bits, and the Sodium copy hands the face on in _material_params bits 5-7 as Sodium's mesh carries it. Before that the clamp put the block light at its top: foliage looked unaffected by light.
@@ -492,6 +493,6 @@ The Minecraft versions the mod is built for.
 - `mc2_interactivefoliage.iris.mixins.json` (plugin IrisMixinPlugin): IrisRenderingPipelineAccessor, ShaderCreatorMixin
 - `mc2_interactivefoliage.mixins.json`: empty
 - `mc2_interactivefoliage.pass.mixins.json`: LevelPassMixin
-- `mc2_interactivefoliage.polytone.mixins.json` (plugin PolytoneMixinPlugin, not required): ShadowMapRendererMixin
+- `mc2_interactivefoliage.polytone.mixins.json` (plugin PolytoneMixinPlugin, not required): ShadowCasterRendererMixin, ShadowMapRendererMixin
 - `mc2_interactivefoliage.snowrealmagic.mixins.json` (not required): IndigoBlockPositionMixin, IndigoBlockRenderMixin
 - `mc2_interactivefoliage.snowrealmagic_neoforge.mixins.json` (not required): SnowRenderApiMixin
